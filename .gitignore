@@ -3,3 +3,10 @@ venv/
 #pycharm
 .idea/
 __pycache__/
+
+
+#pypi
+build/
+dist/
+phd_tester.egg-info/
+
