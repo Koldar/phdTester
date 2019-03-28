@@ -309,6 +309,8 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
         else:
             raise TypeError(f"invalid type {type(image_filename_no_extension)}! Only str or KS001 are accepted!")
 
+        logging.info(f"saving image {image_filename_no_extension}")
+
         if self.use_provided_fig is not None:
             mat_ax = self.use_provided_fig
         else:
@@ -380,6 +382,17 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
             )
             lines.append(line)
             labels.append(p.label.text)
+
+            # if the curve has labels, we need to plot them
+            if p.has_some_labels():
+                for index, (x, (y, label)) in filter(lambda ax: ax[0] in range(start_marker, len(p), marker_step), enumerate(zip(self.xaxis.axis, p.values_and_labels()))):
+                    mat_ax.annotate(
+                        label,
+                        xy=(x, y), xytext=(0, 10),
+                        textcoords='offset points', ha='right', va='bottom',
+                        # bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+                        # arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+                    )
 
         # we need to save the actual data we're printing?
         if save_raw_data:

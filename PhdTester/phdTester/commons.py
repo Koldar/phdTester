@@ -1,12 +1,208 @@
 import abc
+import cProfile
 import inspect
+import io
 import logging
 import multiprocessing
+import os
+import pstats
 import re
+import shutil
 import subprocess
-
+from io import StringIO
 from multiprocessing import Process
 from typing import Any, Iterable, Callable, Union, Dict, Tuple, List
+
+import pandas
+
+
+class SlottedClass(object):
+
+    __slots__ = ()
+
+
+def time_profile(sort: List[str], limit: int = None):
+    """
+
+    :param sort: sort the outcome according to a statistic. Allowed values are:
+     - name: sort over the function name
+     - cumulative: sort over the functions which took more time during all its calls.
+     - time: sort over the function which took more time per call
+    :param limit:
+    :return:
+    """
+
+    def decorator(func):
+        pr = cProfile.Profile()
+
+        def wrapped(*args, **kwargs):
+            pr.enable()
+            func(*args, **kwargs)
+            pr.disable()
+
+            s = io.StringIO()
+            ps = pstats.Stats(pr, stream=s).sort_stats(*sort)
+            ps.print_stats(limit)
+            print(s.getvalue())
+
+        return wrapped
+
+    return decorator
+
+
+def expand_string(string: str, to_replace: List[Tuple[str, str]]) -> str:
+    """
+    Within string replace a character in the first value of a pair to the second value of a pair.
+    If the string contains the character in the second value, the character will be doubled.
+
+    :param string:
+    :param to_replace: the mapping between character to replace and what are the substitutes. Mapping
+    must be unique. The mapping ordered **is important**.
+
+    :return: the string replaced
+    """
+
+    # keys must be unique
+    if len(set(map(lambda x: x[0], to_replace))) < len(to_replace):
+        raise ValueError(f"2 keys are the same!")
+    # vlaues must be uniqye
+    if len(set(map(lambda x: x[1], to_replace))) < len(to_replace):
+        raise ValueError(f"2 values are the same!")
+
+    # clean the string from any replacement character
+    for i, (_, replacement) in enumerate(to_replace):
+        if replacement in string:
+            # replacement will be "XX" or "XXX" or "XXXX" but we endure it will never be "X"
+            string = string.replace(replacement, replacement * (i+2))
+
+    # ok, now we're sure that string does not contain single replacement characters
+    for i, (to_replace_char, replacement) in enumerate(to_replace):
+        if re.search(to_replace_char * 2, string) is not None:
+            raise ValueError(f"value to replace {to_replace} is present twice contigouosly in string {string}!")
+        if to_replace_char in string:
+            string = string.replace(to_replace_char, replacement)
+
+    return string
+
+
+def dexpand_string(string: str, to_replace: List[Tuple[str, str]]) -> str:
+    """
+    inverse operation of expand_string
+
+    :param string: output of expand_string
+    :param to_replace: the same variable passed to expand_string
+    :return:
+    """
+
+    # keys must be unique
+    if len(set(map(lambda x: x[0], to_replace))) < len(to_replace):
+        raise ValueError(f"2 keys are the same!")
+    # vlaues must be uniqye
+    if len(set(map(lambda x: x[1], to_replace))) < len(to_replace):
+        raise ValueError(f"2 values are the same!")
+
+    for i, (to_replace, replacement) in enumerate(to_replace):
+        # perform the replacement -> to_replace
+        string = re.sub("[^" + replacement + "]?" + replacement + "[^" + replacement + "]?", to_replace, string)
+
+    for i, (to_replace, replacement) in enumerate(to_replace):
+        # replace "XXX" to single "X"
+        string = re.sub(replacement * i, replacement, string)
+
+    return string
+
+
+def get_ks001_extension(filename: str, pipe: str = "|") -> str:
+    """
+    get extension of filename
+
+    filename extension is the string going from the end till the last dictionary separator.
+
+    For example |a=5_b=2|.csv will return "csv"
+    For example |a=5_b=2|.original.csv will return "original.csv"
+    For example |a=5_b=2|csv will lead to UB
+
+    :param filename: the filename to check. Implicitly under KS001 format
+    :param pipe: the character used by KS001 to divide dictionaries
+    :return: the extension. May contain multiple "."
+    """
+
+    return filename[filename.rfind(pipe)+2:]
+
+
+def get_ks001_basename_no_extension(filename: str, pipe: str = "|") -> str:
+    filename = os.path.basename(filename)
+    return filename[0: filename.rfind(pipe)+1]
+
+
+def convert_pandas_csv_row_in_dict(pandas_csv) -> Dict[str, Any]:
+    """
+    Convert a row of a csv read with `pandas.read_csv` into a dictionary
+
+    :param pandas_csv: the row to convert
+    :return: a dictionary
+    """
+    return pandas_csv.to_dict('records')[0]
+
+
+def convert_pandas_data_frame_in_dict(panda_dataframe: pandas.DataFrame) -> Dict[str, List[float]]:
+    d = panda_dataframe.to_dict('series')
+    return {k: list(d[k]) for k in d}
+
+
+def get_filenames_in_paths(afrom: str, allowed_extensions: Iterable[str] = None) -> Iterable[Tuple[str, str]]:
+    for abs_path in get_filenames(afrom, allowed_extensions=allowed_extensions):
+        yield (abs_path, get_ks001_extension(abs_path))
+
+
+def remove_filenames_in_path(afrom: str, allowed_extensions: Iterable[str] = None):
+    """
+    Remove all the filenames in the directory having as extension the given ones
+
+    :param afrom: the directory where we need to remove files from
+    :param allowed_extensions: the extension of the files we need to remove
+    :return:
+    """
+    for abs_path in get_filenames(afrom, allowed_extensions=allowed_extensions):
+        try:
+            os.remove(abs_path)
+        except OSError:
+            pass
+
+
+def move_filenames_to(afrom: str, ato: str, allowed_extensions: Iterable[str] = None) -> Iterable[str]:
+    """
+    Move all the file which can be found in `afrom` to `ato` directory.
+    :param afrom: the directory where to look for files
+    :param ato: the directory where to move the files to
+    :param allowed_extensions: if present we will move **all** the files which have these extensions
+    :return: the list of absolute paths just moved
+    """
+    result = []
+    for abs_path in get_filenames(afrom, allowed_extensions=allowed_extensions):
+        to_abs_path = os.path.relpath(abs_path, afrom)
+        logging.debug(f"relpath is {to_abs_path}")
+        new_path = os.path.abspath(os.path.join(ato, to_abs_path))
+        logging.debug(f"new abs path us {to_abs_path}")
+        shutil.move(abs_path, new_path)
+        result.append(new_path)
+    return result
+
+
+def get_filenames(directory: str, allowed_extensions: Iterable[str] = None) -> Iterable[str]:
+    """
+    get all the absolute paths of the filenames inside the gtiven directory
+
+    :param directory: the directory where to look for
+    :param allowed_extensions: the externsion we care aboud. File not having the given extension will be ignored
+    :return: list of absolute paths representing the interesting filenames
+    """
+
+    for f in os.listdir(directory):
+        # check if extension is compliant
+        if allowed_extensions is not None and f.split('.')[-1] not in allowed_extensions:
+            continue
+        yield os.path.abspath(os.path.join(directory, f))
 
 
 def inputs_not_none(*inputs: str):
@@ -88,6 +284,14 @@ def str_2_bool(s: str) -> bool:
         raise ValueError(f"cannot convert {s} into boolean!")
 
 
+def get_file_extension(f: str) -> str:
+    return f.split('.')[-1]
+
+
+def list_with_extension(path: str, extension: str) -> List[str]:
+    return [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)) and get_file_extension(f) == extension]
+
+
 def safe_eval(s: str) -> Any:
     """
     Execute a python string evaluating a mathematical expression
@@ -104,7 +308,11 @@ def safe_eval(s: str) -> Any:
     # add any needed builtins back in.
     safe_dict['abs'] = abs
     safe_dict['range'] = range
+    safe_dict['map'] = map
+    safe_dict['list_with_extension'] = list_with_extension
+    safe_dict['sorted'] = sorted
 
+    logging.info(f"string is {s}")
     return eval(s, {"__builtins__": None}, safe_dict)
 
 
@@ -347,16 +555,19 @@ def convert_named_dict_to_alias_dict(d: Dict[str, Any], aliases: Dict[str, str])
 
 class AbstractCsvReader(abc.ABC):
 
-    def __init__(self, csv_filename: str):
-        self._csv_filename = csv_filename
+    def __init__(self):
         self.header = []
 
+    @abc.abstractmethod
     def __enter__(self):
-        self._csv_file = open(self._csv_filename, 'r')
-        return self
+        pass
 
+    @abc.abstractmethod
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._csv_file.close()
+        pass
+
+    @abc.abstractmethod
+    def line_iterator(self) -> Iterable[str]:
         pass
 
     @abc.abstractmethod
@@ -380,7 +591,7 @@ class AbstractCsvReader(abc.ABC):
     def __iter__(self):
         is_next_header = True
         sep = ","
-        for i, line in enumerate(self._csv_file):
+        for i, line in enumerate(self.line_iterator()):
             if line.startswith('sep='):
                 sep = self.handle_separation(i, line)
             else:
@@ -396,10 +607,57 @@ class AbstractCsvReader(abc.ABC):
                     yield result
 
 
-class UnknownCsvReader(AbstractCsvReader):
+class AbstractFileCsvReader(AbstractCsvReader, abc.ABC):
 
-    def __init__(self, csv_filename: str, ):
-        AbstractCsvReader.__init__(self, csv_filename)
+    def __init__(self, csv_filename: str):
+        AbstractCsvReader.__init__(self)
+        self._csv_filename = csv_filename
+        self.header = []
+
+    def __enter__(self):
+        self._csv_file = open(self._csv_filename, 'r')
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._csv_file.close()
+        pass
+
+    def line_iterator(self) -> Iterable[str]:
+        return self._csv_file
+
+
+class UnknownStringCsvReader(AbstractCsvReader):
+
+    def __init__(self, it: Iterable[str]):
+        AbstractCsvReader.__init__(self)
+        self.it = it
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    def line_iterator(self) -> Iterable[str]:
+        return self.it
+
+    def handle_separation(self, i: int, line: str) -> str:
+        pass
+
+    def handle_header(self, i: int, line: List[str], sep: str):
+        self.header = line
+
+    def handle_legit_line(self, i: int, line: List[str], sep: str) -> Any:
+        result = {}
+        for j, h in enumerate(self.header):
+            result[h] = line[j]
+        return result
+
+
+class UnknownCsvReader(AbstractFileCsvReader):
+
+    def __init__(self, csv_filename: str):
+        AbstractFileCsvReader.__init__(self, csv_filename=csv_filename)
         self.header = []
 
     def handle_separation(self, i: int, line: str) -> str:
@@ -415,7 +673,7 @@ class UnknownCsvReader(AbstractCsvReader):
         return result
 
 
-class CsvReader(AbstractCsvReader):
+class CsvReader(AbstractFileCsvReader):
     """
     Utility class used to read a csv file using an iterator.
     This allows to use few memory
@@ -433,7 +691,7 @@ class CsvReader(AbstractCsvReader):
     """
 
     def __init__(self, csv_filename: str, types: List[type], delimiter=','):
-        AbstractCsvReader.__init__(self, csv_filename)
+        AbstractFileCsvReader.__init__(self, csv_filename=csv_filename)
         self._delimiter = delimiter
         self.header = []
         self._types = types
@@ -466,6 +724,80 @@ class CsvReader(AbstractCsvReader):
         return result
 
 
+class AbstractCsvWriter(abc.ABC):
+
+    def __init__(self, separator: str):
+        self.separator_handled = False
+        self.header_handled = False
+        self._row = 0
+        self.separator = separator
+
+    @abc.abstractmethod
+    def __enter__(self):
+        pass
+
+    @abc.abstractmethod
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    @abc.abstractmethod
+    def _write_separator(self):
+        pass
+
+    @abc.abstractmethod
+    def _write_header(self):
+        pass
+
+    @abc.abstractmethod
+    def _write_row(self, i: int, row: List[str]):
+        pass
+
+    def write(self, row: Union[str, List[Any]]):
+        if not self.separator_handled:
+            self._write_separator()
+            self.separator_handled = True
+        if not self.header_handled:
+            self._write_header()
+            self.header_handled = True
+
+        if isinstance(row, str):
+            row = list(row.split(self.separator))
+        elif isinstance(row, list):
+            row = list(map(str, row))
+        else:
+            raise TypeError(f"row must be either a string or a list")
+        self._write_row(self._row, row)
+        self._row += 1
+
+
+class StringCsvWriter(AbstractCsvWriter):
+
+    def __init__(self, separator: str, header: List[str]):
+        super().__init__(separator=separator)
+        self.header = header
+        self._csv = StringIO()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    def _write_separator(self):
+        pass
+
+    def _write_header(self):
+        self._csv.write(self.separator.join(self.header) + "\n")
+
+    def _write_row(self, i: int, row: List[str]):
+        self._csv.write(self.separator.join(row) + "\n")
+
+    def get_string(self) -> str:
+        return self._csv.getvalue()
+
+
+
+# TODO remove
 # class KS001:
 #     """
 #     A convention used to name output file such that you can easily tell what was the configurqation used to create the

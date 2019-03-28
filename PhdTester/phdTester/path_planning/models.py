@@ -1,7 +1,9 @@
 from typing import Iterable, List, Dict
 
+from phdTester import commons, constants
 from phdTester.default_models import AbstractStuffUnderTest, AbstractTestingEnvironment, AbstractTestContextMask, \
-    AbstractStuffUnderTestMask, AbstractTestEnvironmentMask, AbstractTestingGlobalSettings, AbstractTestContext
+    AbstractStuffUnderTestMask, AbstractTestEnvironmentMask, AbstractTestingGlobalSettings, AbstractTestContext, \
+    AbstractCSVRow
 from phdTester.ks001.ks001 import KS001
 from phdTester.model_interfaces import ITestContext, ICsvRow, ITestContextMaskOption, IStuffUnderTestMask, \
     ITestEnvironmentMask
@@ -33,6 +35,17 @@ class PathFindingPaths(ImportantPaths):
     def get_scenario_absfilename(self, filename: str) -> str:
         return self.get_input(self.scenario_subdir, filename)
 
+    def get_csv_mainoutput_basename(self, test: ITestContext) -> str:
+        ks = test.to_ks001() + KS001.get_from({"type": "mainOutput"})
+        return ks.dump_str(
+            use_key_alias=True,
+            use_value_alias=True,
+            colon=constants.SEP_COLON,
+            pipe=constants.SEP_PIPE,
+            underscore=constants.SEP_PAIRS,
+            equal=constants.SEP_KEYVALUE,
+        )
+
     def get_csv_mainoutput_name_just_generated(self, test: ITestContext) -> str:
         ks = test.to_ks001() + KS001.get_from({"type": "mainOutput"})
         return self.generate_cwd_file(ks, extension="csv")
@@ -49,6 +62,10 @@ class PathFindingPaths(ImportantPaths):
         ks = test.to_ks001() + KS001.get_from({"type": "mainOutput"})
         return self.generate_csv_file(ks, extension='csv')
 
+    def get_anytime_csv_name(self, test: "ITestContext", query: int) -> str:
+        ks = test.to_ks001() + KS001.get_from(label="anytime", d={"type": "anytime", "query": query})
+        return self.generate_csv_file(ks, extension='csv')
+
     def get_maps_per_query_of(self, tc: ITestContext) -> Iterable[str]:
         """
         get all the files inside CWD directory ending with "graph" compliant with the tc.te specification
@@ -59,17 +76,34 @@ class PathFindingPaths(ImportantPaths):
         :param tc: the context involved
         :return:
         """
-        image_dict = KS001()
-        image_dict.add(i=0, dict=tc.te)
 
-        for filename, ks001 in image_dict.get_phddictionaries_compliant_from_directory(
-            index=0,
-            directory=self.get_cwd_dir(),
-            allowed_extensions=["graph"],
-            alias_name_dict=tc.get_alias_name_dict()
-        ):
-            if ks001.has_key_in_dict(i=1, k="query"):
-                yield self.get_cwd(filename)
+        tmp = tc.te.to_ks001()
+        # image_dict.add(i=0, dict=tc.te)
+
+        for abs_path in commons.get_filenames(self.get_cwd(), allowed_extensions=["graph"]):
+            ks = KS001.parse_filename(
+                filename=abs_path,
+                key_alias=tc.key_alias,
+                value_alias=tc.value_alias,
+                colon=constants.SEP_COLON,
+                pipe=constants.SEP_PIPE,
+                underscore=constants.SEP_PAIRS,
+                equal=constants.SEP_KEYVALUE,
+            )
+            if tmp not in ks:
+                continue
+
+            if ks.has_key_in(place=1, k="query"):
+                yield self.get_cwd(abs_path)
+
+        # for filename, ks001 in image_dict.get_phddictionaries_compliant_from_directory(
+        #     index=0,
+        #     directory=self.get_cwd_dir(),
+        #     allowed_extensions=["graph"],
+        #     alias_name_dict=tc.get_alias_name_dict()
+        # ):
+        #     if ks001.has_key_in_dict(i=1, k="query"):
+        #         yield self.get_cwd(filename)
 
 
 class PathFindingTestContext(AbstractTestContext):
@@ -88,7 +122,7 @@ class PathFindingTestContext(AbstractTestContext):
 
 class PathFindingStuffUnderTest(AbstractStuffUnderTest):
 
-    def __init__(self, algorithm: str = None, heuristic: str = None, enable_upperbound: bool = None, enable_earlystop: bool = None, landmark_number: int = None, use_bound: bool = None, bound: float = None):
+    def __init__(self, algorithm: str = None, heuristic: str = None, enable_upperbound: bool = None, enable_earlystop: bool = None, landmark_number: int = None, use_bound: bool = None, bound: float = None, use_anytime: bool = None, anytime_bound: float = None):
         AbstractStuffUnderTest.__init__(self)
         self.algorithm: str = algorithm
         self.heuristic: str = heuristic
@@ -97,6 +131,8 @@ class PathFindingStuffUnderTest(AbstractStuffUnderTest):
         self.landmark_number: int = landmark_number
         self.use_bound: bool = use_bound
         self.bound: float = bound
+        self.use_anytime: bool = use_anytime
+        self.anytime_bound: float = anytime_bound
 
     @property
     def key_alias(self) -> Dict[str, str]:
@@ -108,6 +144,8 @@ class PathFindingStuffUnderTest(AbstractStuffUnderTest):
             "landmark_number": "ln",
             "use_bound": "ub",
             "bound": "b",
+            "use_anytime": "ua",
+            "anytime_bound": "ab",
         }
 
     @property
@@ -132,6 +170,15 @@ class PathFindingStuffUnderTest(AbstractStuffUnderTest):
                     val.append(f"w={(1+ self.bound):2.1f}")
                 else:
                     raise ValueError(f"invalid algorithm {self.algorithm}")
+
+            # anytime
+            if self.anytime_bound:
+                if self.algorithm == path_finding_constants.ALG_ASTAR:
+                    val.append(f"anytime")
+                elif self.algorithm == path_finding_constants.ALG_WASTAR:
+                    val.append(f"anytime={self.anytime_bound:2.1f}")
+                else:
+                    raise ValueError(f"invalid algorithm {self.algorithm}!")
 
             # heuristic
             if self.heuristic in [path_finding_constants.HEU_CPD_CACHE, path_finding_constants.HEU_CPD_NO_CACHE]:
@@ -208,9 +255,17 @@ class PathFindingTestingGlobalSettings(AbstractTestingGlobalSettings):
         self.generate_images_only_for: List[str] = None
         self.generate_only_latex: bool = None
         self.ignore_unperturbated_paths: bool = None
+        self.output_directory: str = None
+        self.image_set: str = None
+        self.arango_user: str = None
+        self.arango_password: str = None
+        self.arango_host: str = None
+        self.arango_port: int = None
+        self.arango_dbname: str = None
 
 
-class PathFindingCsvRow(ICsvRow):
+
+class PathFindingCsvRow(AbstractCSVRow):
 
     def __init__(self):
         ICsvRow.__init__(self)
@@ -222,6 +277,16 @@ class PathFindingCsvRow(ICsvRow):
         self.expanded_nodes: int = None
         self.heuristic_time: int = None
         self.has_original_path_perturbated: bool = None
+
+
+class PathFindingAnyboundCsvRow(AbstractCSVRow):
+
+    def __init__(self):
+        ICsvRow.__init__(self)
+        self.solution_id: int = None
+        self.solution_cost: int = None
+        self.solution_time: int = None
+        self.is_optimal: bool = None
 
 
 class PathFindingTestContextMask(AbstractTestContextMask):
@@ -249,6 +314,8 @@ class PathFindingStuffUnderTestMask(AbstractStuffUnderTestMask):
         self.landmark_number: ITestContextMaskOption = None
         self.use_bound: ITestContextMaskOption = None
         self.bound: ITestContextMaskOption = None
+        self.use_anytime: ITestContextMaskOption = None
+        self.anytime_bound: ITestContextMaskOption = None
 
 
 class PathFindingTestEnvironmentMask(AbstractTestEnvironmentMask):

@@ -109,7 +109,15 @@ class ISinglePlot(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def __getitem__(self, item) -> float:
+    def __getitem__(self, item: int) -> Tuple[float, str]:
+        pass
+
+    @abc.abstractmethod
+    def values_and_labels(self) -> Iterable[Tuple[float, Optional[str]]]:
+        pass
+
+    @abc.abstractmethod
+    def has_some_labels(self) -> bool:
         pass
 
     @property

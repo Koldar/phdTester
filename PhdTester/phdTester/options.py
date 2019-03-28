@@ -1,9 +1,70 @@
-from typing import Any, List
+from typing import Any, List, Union
 
 from phdTester import commons
-from phdTester.common_types import IntList, BoolList, FloatList, StrList, Int, Str, Float, Bool, PercentageInt, \
-    PercentageIntList
-from phdTester.model_interfaces import IOptionNode, OptionBelonging, OptionNodeKind
+from phdTester.model_interfaces import IOptionNode, OptionBelonging, OptionNodeKind, IOptionType
+
+
+class Int(IOptionType):
+    pass
+
+
+class Str(IOptionType):
+    pass
+
+
+class Float(IOptionType):
+    pass
+
+
+class Bool(IOptionType):
+    pass
+
+
+class PercentageInt(IOptionType, str):
+    """
+    A string which ends with a percentage symbol.
+
+    Allowed values are "5", "5%" or "5.3%".
+    The regex is:
+
+    \d+|\d+%|\d+.\d+%
+    """
+    pass
+
+
+class IntList(IOptionType, list):
+    """
+    A list of integers
+    """
+    pass
+
+
+class BoolList(list):
+    """
+    A list of booleans
+    """
+    pass
+
+
+class FloatList(IOptionType, list):
+    """
+    A list of floats
+    """
+    pass
+
+
+class StrList(IOptionType, list):
+    """
+    A list of strings
+    """
+    pass
+
+
+class PercentageIntList(IOptionType, list):
+    """
+    A list of evaluatable integers
+    """
+    pass
 
 
 class FlagNode(IOptionNode):
@@ -102,19 +163,19 @@ class ValueNode(IOptionNode):
                             default=self.default_value,
                             )
 
-    def _parse_int(self, value: str) -> str:
+    def _parse_int(self, value: str) -> Union[str, int]:
         if isinstance(value, str):
             if commons.is_percentage(value):
                 # e.g., "5%"
                 return str(value)
             elif commons.is_number(value):
                 # e.g., "5"
-                return str(value)
+                return int(value)
             else:
                 raise TypeError(f"PercentageInt (when str) can either be a percentage or an int!")
         elif isinstance(value, int):
             # e.g., 5
-            return str(value)
+            return int(value)
         else:
             raise TypeError(f"PercentageInt can either be a str or an int")
 

@@ -1,31 +1,53 @@
-import logging
+import cProfile
 import logging
 import os
 import re
-import shutil
 import subprocess
 import time
+from io import StringIO
 from typing import Dict, Any, List, Tuple
 
+import pandas as pd
+
 from phdTester import commons, masks
-from phdTester.common_types import PercentageInt, IntList, Bool, Int, Float, Str
+from phdTester import constants
+from phdTester.common_types import KS001Str, PathStr
 from phdTester.commons import run_process
+from phdTester.datasources import arangodb_sources, filesystem_sources
 from phdTester.default_models import SimpleTestContextRepo
-from phdTester.exceptions import ValueToIgnoreError
-from phdTester.image_computer import aggregators, curves_changers
+from phdTester.image_computer import aggregators, curves_changers, function_splitters, csv_filters
 from phdTester.ks001.ks001 import KS001
 from phdTester.model_interfaces import ITestingEnvironment, IUnderTesting, ITestContextRepo, \
-    ITestContextMask, IStuffUnderTestMask, ITestEnvironmentMask
+    ITestContextMask, IStuffUnderTestMask, ITestEnvironmentMask, ICsvRow, IFunction2D, \
+    IDataSource, ICsvResourceManager
+from phdTester.options import Str, Bool, Int, Float, PercentageInt, IntList
 from phdTester.options_builder import OptionGraph, OptionBuilder
-from phdTester.path_planning import constants
 from phdTester.path_planning.constants import *
 from phdTester.path_planning.models import PathFindingStuffUnderTest, PathFindingTestingEnvironment, PathFindingPaths, \
     PathFindingTestContext, PathFindingTestingGlobalSettings, PathFindingCsvRow, PathFindingTestContextMask, \
-    PathFindingStuffUnderTestMask, PathFindingTestEnvironmentMask
+    PathFindingStuffUnderTestMask, PathFindingTestEnvironmentMask, PathFindingAnyboundCsvRow
 from phdTester.report_generator.latex_visitor import LatexVisitor
 from phdTester.report_generator.nodes import LatexDocument, LatexSection, LatexText, LatexUnorderedList, \
     LatexSubSection, LatexSimpleImage, LatexSubSubSection, LatexParagraph
 from phdTester.specific_research_field import AbstractSpecificResearchFieldFactory, IgnoreCSVRowError
+
+
+def generate_csv_path_from_test_context(tc: "PathFindingTestContext") -> PathStr:
+    if tc.te.map_filename is None:
+        raise ValueError(f"map filename cannot be none!")
+
+    mp = tc.te.map_filename.replace(".", '')
+    return f"csvs/{mp}"
+
+
+def generate_csv_paths(tcm: "PathFindingTestContextMask") -> PathStr:
+    if tcm.te.map_filename is None:
+        raise ValueError(f"tcm cannot be None!")
+    if not tcm.te.map_filename.represents_a_well_specified_value():
+        raise ValueError(f"mask must represents a well specified value!")
+
+    mp = tcm.te.map_filename.get_well_specified_value().replace(".", '')
+    return f"csvs/{mp}"
 
 
 class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
@@ -70,6 +92,26 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
 
     def generate_test_context_repo(self, paths: "PathFindingTestContext", settings: "PathFindingTestingGlobalSettings") -> "SimpleTestContextRepo":
         return SimpleTestContextRepo()
+
+    def _generate_filesystem_datasource(self, settings: "PathFindingTestingGlobalSettings") -> "filesystem_sources.FileSystem":
+        result = filesystem_sources.FileSystem(root=settings.output_directory)
+        result.register_resource_manager('csv', filesystem_sources.CsvFileSystem())
+        result.register_resource_manager('graph', filesystem_sources.BinaryFileSystem())
+        result.register_resource_manager('graph.info.txt', filesystem_sources.BinaryFileSystem())
+
+        return result
+
+    def _generate_datasource(self, settings: "PathFindingTestingGlobalSettings") -> "IDataSource":
+        result = arangodb_sources.ArangoDB(
+            host=settings.arango_host,
+            port=settings.arango_port,
+            username=settings.arango_user,
+            password=settings.arango_password,
+            database_name=settings.arango_dbname,
+        )
+
+        result.register_resource_manager('csv', arangodb_sources.CsvArangoDB())
+        return result
 
     def generate_option_graph(self) -> OptionGraph:
         return OptionBuilder(
@@ -119,11 +161,19 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
         ).add_under_testing_value(
             name="use_bound",
             option_type=Bool,
-            ahelp="""Python list of whether the algorithm should have be switched to bounded mode"""
+            ahelp="""Python list of whether the algorithm should have be switched to bounded mode. Use a single value please"""
         ).add_under_testing_value(
             name="bound",
             option_type=Float,
             ahelp="""Python list of the bounds to use for the bounded algorithms"""
+        ).add_under_testing_value(
+            name="use_anytime",
+            option_type=Bool,
+            ahelp="""Python list of whether the algorithm should have be switched to anytime mode. Use a single value please"""
+        ).add_under_testing_value(
+            name="anytime_bound",
+            option_type=Float,
+            ahelp="""Python list of the bounds to use for the anytime algorithms"""
         ).add_environment_multiplexer(
             name="perturbation_mode",
             possible_values=[MODE_ADD, MODE_ASSIGN, MODE_TIMES],
@@ -195,6 +245,34 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
             If this flag is enabled, the tester will generate images where we consider only paths 
             which have been perturbated at least once. This should make the problem much more challenging
             """
+        ).add_settings_value(
+            name="output_directory",
+            option_type=Str,
+            ahelp="folder which will contain all the generated files of this tester",
+        ).add_settings_value(
+            name="arango_user",
+            option_type=Str,
+            ahelp="name of the user we will use to connect to the arango database",
+        ).add_settings_value(
+            name="arango_password",
+            option_type=Str,
+            ahelp="""password of the arango use "arango_user" """
+        ).add_settings_value(
+            name="arango_host",
+            option_type=Str,
+            ahelp="""Ip or domain host where the arango db is located"""
+        ).add_settings_value(
+            name="arango_port",
+            option_type=Int,
+            ahelp="Port we need to use to connect to the arangodb"
+        ).add_settings_value(
+            name="arango_dbname",
+            option_type=Str,
+            ahelp="Name of the arango db we need to use to save files and stuff generated by the tester"
+        ).add_settings_value(
+            name="image_set",
+            option_type=Str,
+            ahelp="""set of images to generate. Allowed values are "optimal" or "anytime" """
         ).option_can_be_used_only_when_other_string_satisfy(
             "scenario_file",
             "map_filename",
@@ -215,6 +293,8 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
         ).option_value_allows_other_option(
             "use_bound", [True], "bound",
         ).option_value_allows_other_option(
+            "use_anytime", [True], "anytime_bound",
+        ).option_value_allows_other_option(
             "perturbation_kind",
             [KIND_RANDOM_TERRAIN, KIND_RANDOM, KIND_RANDOM_OPTIMAL, KIND_PATH_RANDOM_ON_OPTIMAL, KIND_RATIO_PATH, KIND_RATIO_AREA],
             "perturbation_range"
@@ -228,12 +308,24 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
             "perturbation_kind", [KIND_RATIO_AREA], "area_radius"
         ).option_value_allows_other_option(
             "perturbation_kind", [KIND_RATIO_PATH, KIND_RATIO_AREA], "optimal_path_ratio"
+        ).option_values_mutually_exclusive_when(
+            "algorithm", [ALG_ASTAR],
+            "heuristic", [HEU_DIFFERENTIAL_HEURISTIC],
+            {"use_anytime": [True]},
+        ).option_values_mutually_exclusive_when(
+            "algorithm", [ALG_WASTAR],
+            "anytime_bound", [0.0],
+            {"use_anytime": [True]},
+        ).option_values_mutually_exclusive_when(
+            "algorithm", [ALG_WASTAR],
+            "heuristic", [HEU_CPD_CACHE],
+            {"use_anytime": [True], "anytime_bound": [1.0]}
         ).get_option_graph()
 
     def generate_paths(self, settings: PathFindingTestingGlobalSettings) -> PathFindingPaths:
         return PathFindingPaths(
             input_dir=os.path.curdir,
-            output_dir="build",
+            output_dir=settings.output_directory,
             tmp_subdir=settings.tmp_directory,
             csv_subdir=settings.csv_directory,
             scenario_subdir=settings.scenario_directory,
@@ -245,44 +337,57 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
     def generate_output_directory_structure(self, paths: PathFindingPaths, settings: PathFindingTestingGlobalSettings):
         pass
 
+    def _get_query_row(self, filename: str, query_id: int) -> "PathFindingCsvRow":
+        df = pd.read_csv(filename)
+        row = df.loc[df['ExperimentId'] == query_id]
+        logging.debug(f"row is {row}")
+        row = row.to_dict('records')[0]
+        result = self.get_csv_row(d=row, csv_ks=KS001.get_from(d={"type": "mainOutput"}))
+        assert isinstance(result, PathFindingCsvRow)
+        return result
+
+    def generate_csvs(self, paths: PathFindingPaths, settings: "PathFindingTestingGlobalSettings", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
+        pass
+
+
     def generate_plots(self, paths: PathFindingPaths, settings: PathFindingTestingGlobalSettings, under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
 
-        def get_query_id(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_query_id(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             return csv_row.experiment_id
 
-        def get_heuristic_ratio(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_heuristic_ratio(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
-            if tc.ut.algorithm == constants.ALG_DIJKSTRA_EARLYSTOP:
+            if tc.ut.algorithm == ALG_DIJKSTRA_EARLYSTOP:
                 # Dijkstra does not have heuristic
                 return float(0)
             else:
                 return float((csv_row.heuristic_time + 0.0)/csv_row.us_time)
 
-        def get_expanded_nodes(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_expanded_nodes(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             return csv_row.expanded_nodes
 
-        def get_us_time(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_us_time(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             return csv_row.us_time
 
-        def get_original_path_length(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_original_path_length(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             return csv_row.path_original_cost
 
-        def get_is_perturbated_path(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_is_perturbated_path(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if csv_row.path_revised_cost != csv_row.path_original_cost:
                 return 1
             else:
                 return 0
 
-        def get_density(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_density(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             if isinstance(tc.te.perturbation_density, str):
@@ -292,7 +397,7 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
             else:
                 raise TypeError(f"density can be either int or str")
 
-        def get_optimal_path_ratio(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_optimal_path_ratio(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             lb, ub, lb_included, ub_included = commons.parse_range(tc.te.optimal_path_ratio)
@@ -300,7 +405,7 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
                 raise ValueError(f"The interval does not represent a single value! lb={lb}. ub={ub}, lb_included={lb_included}, ub_included={ub_included}")
             return lb
 
-        def get_sequence_length(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_sequence_length(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             lb, ub, lb_included, ub_included = commons.parse_range(tc.te.sequence_length)
@@ -308,7 +413,7 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
                 raise ValueError(f"The interval does not represent a single value! lb={lb}. ub={ub}, lb_included={lb_included}, ub_included={ub_included}")
             return lb
 
-        def get_upperbound_of_0_optimal_path_ratio(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_upperbound_of_0_optimal_path_ratio(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             lb, ub, lb_included, ub_included = commons.parse_range(tc.te.sequence_length)
@@ -318,7 +423,7 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
             else:
                 raise ValueError(f"The interval does not represent an interval of type [0;x]! lb={lb}. ub={ub}, lb_included={lb_included}, ub_included={ub_included}")
 
-        def get_upperbound_optimal_path_ratio(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_upperbound_optimal_path_ratio(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             lb, ub, lb_included, ub_included = commons.parse_range(tc.te.sequence_length)
@@ -328,7 +433,7 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
             else:
                 raise ValueError(f"The interval does not represent an interval of type [0;x]! lb={lb}. ub={ub}, lb_included={lb_included}, ub_included={ub_included}")
 
-        def get_area_radius(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_area_radius(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             lb, ub, lb_included, ub_included = commons.parse_range(tc.te.area_radius)
@@ -336,16 +441,120 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
                 raise ValueError(f"The interval does not represent a single value! lb={lb}. ub={ub}, lb_included={lb_included}, ub_included={ub_included}")
             return lb
 
-        def get_solution_cost(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        def get_solution_cost(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow):
             if settings.ignore_unperturbated_paths and csv_row.path_original_cost == csv_row.path_revised_cost:
                 raise IgnoreCSVRowError()
             return csv_row.path_revised_cost
 
+        def get_optimal_first_solution_cost(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow) -> int:
+
+            query = int(csv_row.experiment_id)
+            anytime_csv = self.paths.get_csv(self.paths.get_anytime_csv_name(tc, query))
+            # now read the first line
+            anytime_csv = pd.read_csv(anytime_csv, nrows=1)
+            anytime_row: PathFindingAnyboundCsvRow = self.get_csv_row(commons.convert_pandas_csv_row_in_dict(anytime_csv), csv_ks=KS001.get_from(d={"type": "anytime"}))
+            return anytime_row.solution_cost
+
+        def get_optimal_first_solution_ratio(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow) -> float:
+            first_solution = get_optimal_first_solution_cost(tc, csv_path, csv_ks001, index, csv_row)
+            return first_solution / float(csv_row.path_revised_cost)
+
+        def get_optimal_first_solution_time(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingCsvRow) -> float:
+            query = int(csv_row.experiment_id)
+            anytime_csv = self.paths.get_csv(self.paths.get_anytime_csv_name(tc, query))
+            # now read the first line
+            anytime_csv = pd.read_csv(anytime_csv, nrows=1)
+            anytime_row: PathFindingAnyboundCsvRow = self.get_csv_row(commons.convert_pandas_csv_row_in_dict(anytime_csv), csv_ks=KS001.get_from(d={"type": "anytime"}))
+            return anytime_row.solution_time
+
+        def get_anytime_queryid(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingAnyboundCsvRow) -> int:
+            ks = KS001.parse_filename(csv_ks001,
+                                      key_alias=tc.key_alias,
+                                      value_alias=tc.value_alias,
+                                      colon=constants.SEP_COLON,
+                                      pipe=constants.SEP_PIPE,
+                                      underscore=constants.SEP_PAIRS,
+                                      equal=constants.SEP_KEYVALUE,
+                                      )
+            query = int(ks["anytime"]["query"])
+            return query
+
+        def get_anytime_solution_id(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingAnyboundCsvRow) -> int:
+            return csv_row.solution_id
+
+        def get_anytime_solution_cost(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingAnyboundCsvRow) -> int:
+            return csv_row.solution_cost
+
+        def get_anytime_solution_time(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingAnyboundCsvRow) -> int:
+            return csv_row.solution_time
+
+        def get_anytime_optimalsolution_cost(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingAnyboundCsvRow) -> int:
+            # anytime csv have the last of their row holding the optimal value
+            # todo remove
+            # csv_manager: "ICsvResourceManager" = self.datasource.get_manager_of('csv')
+            # last_line = csv_manager.tail(self.datasource, csv_path, csv_ks001, 'csv', 1)
+            # csv = StringIO(self.datasource.get(csv_path, csv_name, 'csv'))
+            # last_line = pd.read_csv(csv).tail(1)
+            last_line = commons.convert_pandas_csv_row_in_dict(csv_content.tail(1))
+            last_line = self.get_csv_row(last_line, csv_ks=KS001.get_from(d={"type": "anytime"}))
+            assert isinstance(last_line, PathFindingAnyboundCsvRow)
+            if not last_line.is_optimal:
+                raise ValueError(f"csv {csv_ks001} dioes not contain an optimal path at the end of the anytime routine!")
+            return last_line.solution_cost
+
+        def get_anytime_optimalsolutionratio(tc: "PathFindingTestContext", csv_path: PathStr, csv_ks001: KS001Str, csv_content: pd.DataFrame, index: int, csv_row: PathFindingAnyboundCsvRow) -> float:
+            # if the optimal solution take 0 us (because start == goal) then we need to avoid division by 0. Here
+            # here the optimal solution ratio is by default 1
+            optimal_solution_cost = get_anytime_optimalsolution_cost(tc, csv_path, csv_ks001, csv_content, index, csv_row)
+            if optimal_solution_cost == 0:
+                return 1
+            return float(csv_row.solution_cost) / optimal_solution_cost
+
+        # TODO remove
+        # def get_anytime_pathlength(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingAnyboundCsvRow) -> int:
+        #     ks = KS001.parse_filename(
+        #         filename=csv_name,
+        #         key_alias=tc.key_alias,
+        #         value_alias=tc.value_alias,
+        #         colon=constants.SEP_COLON,
+        #         pipe=constants.SEP_PIPE,
+        #         underscore=constants.SEP_PAIRS,
+        #         equal=constants.SEP_KEYVALUE,
+        #     )
+        #     query_id = int(ks["anytime"]["query"])
+        #
+        #     mainoutput_csv = self.paths.get_csv_mainoutput_name(tc)
+        #     logging.debug(f"involved mainoutput is {mainoutput_csv}")
+        #     logging.debug(f"query is is {query_id} (type {type(query_id)})")
+        #     row: "PathFindingCsvRow" = self._get_query_row(mainoutput_csv, query_id)
+        #     return row.path_revised_cost
+
+        # TODO remove
+        # def get_anytime_solutioncostfactor(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingAnyboundCsvRow) -> float:
+        #     optimal_path = get_anytime_pathlength(tc, csv_name, index, csv_row)
+        #     bound = get_anytime_solution_cost(tc, csv_name, index, csv_row)
+        #
+        #     return bound/float(optimal_path)
+
+        # TODO remove
+        # def get_mainoutput_first_solution_time(tc: "PathFindingTestContext", csv_name: str, index: int, csv_row: PathFindingCsvRow):
+        #     ks = KS001.parse_filename(
+        #         filename=csv_name,
+        #         key_alias=tc.key_alias,
+        #         value_alias=tc.value_alias,
+        #         colon=constants.SEP_COLON,
+        #         pipe=constants.SEP_PIPE,
+        #         underscore=constants.SEP_PAIRS,
+        #         equal=constants.SEP_KEYVALUE,
+        #     )
+
         def set_params_mask_as_current_test_environment(te: "PathFindingTestingEnvironment", tcm: "ITestContextMask", name: str, visited: List["ITestContextMask"]) -> Dict[str, Any]:
             if te.perturbation_density is not None:
                 if isinstance(te.perturbation_density, str):
-                    if "%" in te.perturbation_density:
-                        raise ValueToIgnoreError()
+                    # todo readd
+                    # if "%" in te.perturbation_density:
+                    #     raise ValueToIgnoreError()
+                    pass
                 elif isinstance(te.perturbation_density, int):
                     pass
                 else:
@@ -357,355 +566,817 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
 
         # ############################# query ###########################################
 
-        @run_process()
-        def time_over_query():
-            tcm = self.generate_test_context_mask()
-            tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+        if settings.image_set == "optimal":
 
-            self.generate_batch_of_plots(
-                xaxis_name="Query Id [#]",
-                yaxis_name="time to complete query [us]",
-                title="Performance over query id (times SORTED)",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_query_id,
-                get_y_value=get_us_time,
-                aggregator=aggregators.SingleAggregator(),
-                image_suffix="single_time_over_query",
-                user_tcm=tcm,
-                mask_options=None,
-                # curve_changer=curves_changers.SortCrescentYValues(),
-            )
+            def time_over_query_sort_all():
+                tcm = self.generate_test_context_mask()
+                tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(False)
+                tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(False)
 
-        @run_process()
-        def avg_partialtime_over_query():
-            tcm = self.generate_test_context_mask()
-            tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+                self.generate_curves_csvs(
+                    get_x_value=get_query_id,
+                    get_y_value=get_us_time,
+                    y_aggregator=aggregators.SingleAggregator(),
+                    user_tcm=tcm,
+                    ks001_to_add=KS001.get_from({"type": 'single_time_over_query'}),
+                    use_format='wide',
+                    csv_dest_data_source=self.filesystem_datasource,
+                    csv_dest_path='csvs',
+                    path_function=generate_csv_paths,
+                    curve_changer=[
+                        curves_changers.SortAll(),
+                    ],
+                    csv_filter=[
+                        csv_filters.NeedsKeyMapping(KS001.get_from(d={"type": "mainOutput"})),
+                    ],
+                    data_source=self.datasource,
+                )
 
-            self.generate_batch_of_plots(
-                xaxis_name="Query Id [#]",
-                yaxis_name="avg heuristic/total time[ratio]",
-                title="Partial time over query id",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_query_id,
-                get_y_value=get_heuristic_ratio,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_partialtime_over_query",
-                user_tcm=tcm,
-                mask_options=None,
-                curve_changer=curves_changers.LowCurveRemoval(threshold=0, threshold_included=False),  # disjkstra is always 0
-            )
+                # TODO remove
+                # self.generate_batch_of_plots(
+                #     xaxis_name="Query Id [#]",
+                #     yaxis_name="time to complete query [us]",
+                #     title="Performance over query id (times SORTED)",
+                #     subtitle_function=generate_subtitle,
+                #     get_x_value=get_query_id,
+                #     get_y_value=get_us_time,
+                #     y_aggregator=aggregators.SingleAggregator(),
+                #     image_suffix="single_time_over_query",
+                #     path_function=generate_csv_paths,
+                #     user_tcm=tcm,
+                #     mask_options=None,
+                #     curve_changer=[
+                #         curves_changers.SortAll(),
+                #     ],
+                #     csv_filter=[
+                #         csv_filters.NeedsKeyMapping(KS001.get_from(d={"type": "mainOutput"})),
+                #     ],
+                # )
 
-        @run_process()
-        def avg_expandednodes_over_query():
-            tcm = self.generate_test_context_mask()
-            tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+            def time_over_query_sort_over_cpd_search():
+                tcm = self.generate_test_context_mask()
+                tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(False)
+                tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(False)
 
-            self.generate_batch_of_plots(
-                xaxis_name="Query Id [#]",
-                yaxis_name="avg expanded nodes [#]",
-                title="Expanded nodes over query id",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_query_id,
-                get_y_value=get_expanded_nodes,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_expandednodes_over_query",
-                user_tcm=tcm,
-                mask_options=None,
-            )
+                self.generate_batch_of_plots(
+                    xaxis_name="Query Id [#]",
+                    yaxis_name="time to complete query [us]",
+                    title="Performance over query id (times SORTED)",
+                    subtitle_function=generate_subtitle,
+                    get_x_value=get_query_id,
+                    get_y_value=get_us_time,
+                    y_aggregator=aggregators.SingleAggregator(),
+                    image_suffix="single_time_over_query_sorted_over_cpd_search",
+                    path_function=generate_csv_paths,
+                    user_tcm=tcm,
+                    mask_options=None,
+                    curve_changer=[
+                        curves_changers.SortRelativeTo("A* cache ES"),
+                    ],
+                    csv_filter=[
+                        csv_filters.NeedsKeyMapping(KS001.get_from(d={"type": "mainOutput"})),
+                    ],
+                )
 
-        @run_process()
-        def perturbatedPaths_over_query():
-            tcm = self.generate_test_context_mask()
+            def avg_partialtime_over_query():
 
-            self.generate_batch_of_plots(
-                xaxis_name="Query Id [#]",
-                yaxis_name="Perturbated path [#]",
-                title="Optimal perturbated paths over query id",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_query_id,
-                get_y_value=get_is_perturbated_path,
-                aggregator=aggregators.SingleAggregator(),
-                image_suffix="single_perturbatedPaths_over_query",
-                user_tcm=tcm,
-                mask_options=None,
-            )
+                tcm = self.generate_test_context_mask()
+                tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(False)
 
-        @run_process()
-        def solutioncost_over_query():
-            tcm = self.generate_test_context_mask()
-            tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+                self.generate_batch_of_plots(
+                    xaxis_name="Query Id [#]",
+                    yaxis_name="avg heuristic/total time[ratio]",
+                    title="Partial time over query id",
+                    subtitle_function=generate_subtitle,
+                    get_x_value=get_query_id,
+                    get_y_value=get_heuristic_ratio,
+                    y_aggregator=aggregators.MeanAggregator(),
+                    image_suffix="avg_partialtime_over_query",
+                    path_function=generate_csv_paths,
+                    user_tcm=tcm,
+                    mask_options=None,
+                    curve_changer=[
+                        #curves_changers.LowCurveRemoval(threshold=0, threshold_included=False),
+                    ],
+                    csv_filter=[
+                        csv_filters.NeedsKeyMapping(KS001.get_from(d={"type": "mainOutput"})),
+                    ]
+                    # disjkstra is always 0
+                )
 
-            self.generate_batch_of_plots(
-                xaxis_name="Query Id [#]",
-                yaxis_name="solution cost [us]",
-                title="Solution quality over query id",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_query_id,
-                get_y_value=get_solution_cost,
-                aggregator=aggregators.SingleAggregator(),
-                image_suffix="solutioncost_over_query",
-                user_tcm=tcm,
-                mask_options=None,
-            )
+            #time_over_query_sort_over_cpd_search()
+            #avg_partialtime_over_query()
+            time_over_query_sort_all()
 
-        # ########################### path lengths ###############################
+        elif settings.image_set == "anytime":
 
-        @run_process()
-        def avg_time_over_pathLengths():
-            tcm = self.generate_test_context_mask()
+            @commons.time_profile(["cumulative"], limit=20)
+            def anytime_avg_solutionratio_over_time():
+                tcm = self.generate_test_context_mask()
+                tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(False)
+                tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(True)
+                # tcm.te.map_filename = masks.NeedsNotToBeInSet(["hrt201n.map", "dustwallowkeys.map", "maze512-1-4.map"])
 
-            self.generate_batch_of_plots(
-                xaxis_name="Original path length [#]",
-                yaxis_name="avg time per query [us]",
-                title="Average time a query needs to compute optimal revised path",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_original_path_length,
-                get_y_value=get_us_time,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_time_over_pathLengths",
-                user_tcm=tcm,
-                mask_options=None,
-            )
+                # quantizations = [30, 100, 300, 1000, 3000, 10000, 30000, 100000, 300000]
 
-        @run_process()
-        def avg_perturbatedPaths_over_pathLengths():
-            tcm = self.generate_test_context_mask()
+                def quantizations(x: float) -> Tuple[float, float]:
+                    # we want to generate quantization levels like [0, 30], [30, 100], [100, 300], [300, 1000], [1000, 3000]
+                    power = 1
+                    previous = 0
+                    if x == 0:
+                        return 0, 30
+                    while True:
+                        if previous < x <= 3*(10**power):
+                            return previous, 3*(10**power)
+                        if 3*(10**power) < x <= 10**(power+1):
+                            return 3*(10**power), 10**(power+1)
+                        previous = 10**(power+1)
+                        power += 1
 
-            self.generate_batch_of_plots(
-                xaxis_name="Original path length [#]",
-                yaxis_name="avg Revised paths [#]",
-                title="Number of perturbated paths in scenario over the original path length",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_original_path_length,
-                get_y_value=get_is_perturbated_path,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_perturbatedPaths_over_pathLengths",
-                user_tcm=tcm,
-                mask_options=None,
-            )
 
-        # ############################## sequence length ##############################
+                def get_group_name(i: int, name: str, f: "IFunction2D") -> str:
+                    tc = self.generate_test_context()
+                    tc.populate_from_ks001_index(0, name)
 
-        @run_process()
-        def avg_time_over_sequencelength():
-            tcm = self.generate_test_context_mask()
-            tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_PATH)
-            tcm.te.sequence_length = masks.TestContextMaskNeedsNotNull()
-            tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+                    return tc.ut.get_label()
 
-            self.generate_batch_of_plots(
-                xaxis_name="Length of perturbation on optimal path[#]",
-                yaxis_name="avg time [us]",
-                title="Average of query time over length of perturbation over the optimal path",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_upperbound_optimal_path_ratio,
-                get_y_value=get_us_time,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_time_over_sequencelength",
-                user_tcm=tcm,
-                mask_options=set_params_mask_as_current_test_environment,
-            )
+                def limit(ks: KS001) -> bool:
+                    if not ks.has_key_in(place="anytime", key="query"):
+                        return False
+                    return int(ks.get_value_of_key_in(place="anytime", key="query")) < 5
 
-        @run_process()
-        def avg_solutioncost_over_sequencelength():
-            tcm = self.generate_test_context_mask()
-            tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
-            tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_PATH)
-            tcm.te.sequence_length = masks.TestContextMaskNeedsNotNull()
+                def convert_axis(name: str, x: float, y:float) -> float:
+                    # we want to generate quantization levels like [0, 30], [30, 100], [100, 300], [300, 1000], [1000, 3000]
+                    power = 1
+                    previous = 0
+                    result = 0
+                    if x == 0:
+                        return 0
+                    while True:
+                        if previous < x <= 3 * (10 ** power):
+                            return result
+                        if 3 * (10 ** power) < x <= 10 ** (power + 1):
+                            return result + 1
+                        previous = 10 ** (power + 1)
+                        power += 1
+                        result += 2
 
-            self.generate_batch_of_plots(
-                xaxis_name="Length of perturbation on optimal path[#]",
-                yaxis_name="avg solution cost [us]",
-                title="Average of solution quality over length of perturbation over optimal path",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_upperbound_optimal_path_ratio,
-                get_y_value=get_solution_cost,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_solutioncost_over_sequencelength",
-                user_tcm=tcm,
-                mask_options=None,
-            )
+                self.generate_curves_csvs(
+                    get_x_value=get_anytime_solution_time,
+                    get_y_value=get_anytime_optimalsolutionratio,
+                    ks001_to_add=KS001.get_from(label="autogenerated", d={"type": "gnuplot", "name": "anytime_avg_solutionratio_over_time"}),
+                    y_aggregator=aggregators.MinAggregator(),  # in the csvs if a bound is revised in 0 us we took the minimum
+                    x_aggregator=aggregators.SumAggregator(),
+                    user_tcm=tcm,
+                    use_format='wide',
+                    csv_dest_data_source=self.filesystem_datasource,
+                    csv_dest_path='csvs',
+                    path_function=generate_csv_paths,
+                    mask_options=set_params_mask_as_current_test_environment,
+                    csv_filter=[
+                        csv_filters.NameContains(f"type{constants.SEP_KEYVALUE}anytime"),
+                        #csv_filters.NumberBound(20),
+                        # csv_filters.NameContains(f"ln{constants.SEP_KEYVALUE}12"),
+                        # csv_filters.KeyMappingCondition(lambda ks: ks["anytime"]["query"] > 1150),
+                        # csv_filters.NameContains(f"a{constants.SEP_KEYVALUE}A*"),
+                        # csv_filters.NameContains(f"h{constants.SEP_KEYVALUE}{HEU_CPD_CACHE}"),
+                    ],
+                    curve_changer=[
+                        curves_changers.QuantizeXAxis(quantization_step=quantizations, aggregator=aggregators.MinAggregator()),
+                        curves_changers.RepeatPreviousValueOrFirstOneToFillCurve(value=float('+inf')),
+                        curves_changers.StatisticalGrouper(
+                            get_group_name_f=get_group_name,
+                            track_max=True,
+                            track_mean=True,
+                            track_min=True,
+                            percentile_watched=25,
+                            ignore_infinities=True,
+                        ),
+                        curves_changers.RemapInvalidValues(value=10),
+                        curves_changers.TransformX(convert_axis),
+                        curves_changers.Print(log_function=logging.critical),
+                        curves_changers.CheckSameAxis(),
 
-        @run_process()
-        def samplevariance_solutioncost_over_sequencelength():
-            tcm = self.generate_test_context_mask()
-            tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
-            tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_PATH)
-            tcm.te.sequence_length = masks.TestContextMaskNeedsNotNull()
+                    ],
+                    function_splitter=function_splitters.SpitBasedOnCsv(),
+                )
 
-            self.generate_batch_of_plots(
-                xaxis_name="Length of perturbation on optimal path[#]",
-                yaxis_name="sample variance solution cost [us]",
-                title="Sample variance of solution quality over length of perturbation over optimal path",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_upperbound_optimal_path_ratio,
-                get_y_value=get_solution_cost,
-                aggregator=aggregators.SampleVarianceAggregator(),
-                image_suffix="samplevariance_solutioncost_over_sequencelength",
-                user_tcm=tcm,
-                mask_options=None,
-            )
 
-        # ############################ area radius ################################
+            def anytime_avg_time_over_solutionid():
+                tcm = self.generate_test_context_mask()
+                tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(False)
+                tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(True)
 
-        @run_process()
-        def avg_time_over_arearadius():
-            tcm = self.generate_test_context_mask()
-            tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_AREA)
-            tcm.te.area_radius = masks.TestContextMaskNeedsNotNull()
-            tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+                def get_group_name(i: int, name: str, f: "IFunction2D") -> str:
+                    tc = self.generate_test_context()
+                    tc.populate_from_ks001_index(0, name)
 
-            self.generate_batch_of_plots(
-                xaxis_name="Radius of perturbated area[#]",
-                yaxis_name="avg time [us]",
-                title="Average of query time over perturbated area radius over the optimal path",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_area_radius,
-                get_y_value=get_us_time,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_time_over_arearadius",
-                user_tcm=tcm,
-                mask_options=set_params_mask_as_current_test_environment,
-            )
+                    return tc.ut.get_label()
 
-        @run_process()
-        def avg_solution_cost_over_arearadius():
-            tcm = self.generate_test_context_mask()
-            tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
-            tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_AREA)
-            tcm.te.area_radius = masks.TestContextMaskNeedsNotNull()
+                def limit(ks: KS001) -> bool:
+                    if not ks.has_key_in(place="anytime", key="query"):
+                        return False
+                    return int(ks.get_value_of_key_in(place="anytime", key="query")) < 5
 
-            self.generate_batch_of_plots(
-                xaxis_name="Radius of perturbated area[#]",
-                yaxis_name="avg solution cost [us]",
-                title="Average solution quality over perturbated area radius over optimal path",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_area_radius,
-                get_y_value=get_solution_cost,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_solutioncost_over_arearadius",
-                user_tcm=tcm,
-                mask_options=None,
-            )
+                self.generate_curves_csvs(
+                    get_x_value=get_anytime_solution_id,
+                    get_y_value=get_anytime_solution_time,
+                    ks001_to_add=KS001.get_from(label="autogenerated", d={"type": "gnuplot", "name": "anytime_avg_time_over_solutionid"}),
+                    y_aggregator=aggregators.SingleAggregator(),
+                    user_tcm=tcm,
+                    use_format='wide',
+                    csv_dest_data_source=self.filesystem_datasource,
+                    csv_dest_path='csvs',
+                    mask_options=set_params_mask_as_current_test_environment,
+                    csv_filter=[
+                        csv_filters.NameContains(f"type{constants.SEP_KEYVALUE}anytime"),
+                    ],
+                    curve_changer=[
+                        # curves_changers.RepeatValueToFillCurve(value=0.0),
+                        # curves_changers.CheckSameAxis(),
+                        curves_changers.StatisticalGrouper(
+                            get_group_name_f=get_group_name,
+                            track_min=True, track_max=True, track_mean=True, percentile_watched=25),
+                    ],
+                    function_splitter=function_splitters.SpitBasedOnCsv(),
+                )
 
-        @run_process()
-        def samplevariance_solution_cost_over_arearadius():
-            tcm = self.generate_test_context_mask()
 
-            tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
-            tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_AREA)
-            tcm.te.area_radius = masks.TestContextMaskNeedsNotNull()
+            def anytime_avg_solutionquality_over_solutionid():
+                tcm = self.generate_test_context_mask()
+                tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(False)
+                tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(True)
 
-            self.generate_batch_of_plots(
-                xaxis_name="Radius of perturbated area[#]",
-                yaxis_name="sample variance solution cost [us]",
-                title="Solution quality over perturbated area radius over optimal path",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_area_radius,
-                get_y_value=get_solution_cost,
-                aggregator=aggregators.SampleVarianceAggregator(),
-                image_suffix="samplevariance_solutioncost_over_arearadius",
-                user_tcm=tcm,
-                mask_options=None,
-            )
+                def get_group_name(i: int, name: str, f: "IFunction2D") -> str:
+                    tc = self.generate_test_context()
+                    tc.populate_from_ks001_index(0, name)
 
-        # ############################ edges altered ####################################
+                    return tc.ut.get_label()
 
-        @run_process()
-        def avg_partialtime_over_edgesaltered():
-            tcm = self.generate_test_context_mask()
-            tcm.te.perturbation_density = masks.TestContextMaskNeedsToFollowPattern(r"\d+")
+                def limit(ks: KS001) -> bool:
+                    if not ks.has_key_in(place="anytime", key="query"):
+                        return False
+                    return int(ks.get_value_of_key_in(place="anytime", key="query")) < 5
 
-            self.generate_batch_of_plots(
-                xaxis_name="Edges altered [#]",
-                yaxis_name="avg heuristic/total time [ratio]",
-                title="Average Heuristic total time ratio over perturbation number",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_density,
-                get_y_value=get_heuristic_ratio,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_partialtime_over_edgesaltered",
-                user_tcm=tcm,
-                mask_options=set_params_mask_as_current_test_environment,
-                curve_changer=curves_changers.LowCurveRemoval(threshold=0, threshold_included=False),
-                # disjkstra is always 0
-            )
+                self.generate_curves_csvs(
+                    get_x_value=get_anytime_solution_id,
+                    get_y_value=get_anytime_optimalsolutionratio,
+                    ks001_to_add=KS001.get_from(label="autogenerated",
+                                                d={"type": "gnuplot", "name": "anytime_avg_solutionratio_over_solutionid"}),
+                    y_aggregator=aggregators.SingleAggregator(),
+                    user_tcm=tcm,
+                    use_format='wide',
+                    csv_dest_data_source=self.filesystem_datasource,
+                    csv_dest_path='csvs',
+                    mask_options=set_params_mask_as_current_test_environment,
+                    csv_filter=[
+                        csv_filters.NameContains(f"type{constants.SEP_KEYVALUE}anytime"),
+                    ],
+                    curve_changer=[
+                        curves_changers.StatisticalGrouper(
+                            get_group_name_f=get_group_name,
+                            track_min=True, track_max=True, track_mean=True, percentile_watched=25),
+                    ],
+                    function_splitter=function_splitters.SpitBasedOnCsv(),
+                )
 
-        @run_process()
-        def avg_expandednodes_over_edgesaltered():
-            tcm = self.generate_test_context_mask()
-            tcm.te.perturbation_density = masks.TestContextMaskNeedsToFollowPattern(r"\d+")
 
-            self.generate_batch_of_plots(
-                xaxis_name="Edge altered [#]",
-                yaxis_name="avg expanded nodes [#]",
-                title="Average expanded nodes over perturbations",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_density,
-                get_y_value=get_expanded_nodes,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_expandednodes_over_edgesaltered",
-                user_tcm=tcm,
-                mask_options=set_params_mask_as_current_test_environment,
-            )
+            anytime_avg_solutionratio_over_time()
+            # run_process.start_and_wait()
 
-        @run_process()
-        def sum_perturbatedPaths_over_edgesaltered():
-            tcm = self.generate_test_context_mask()
-            tcm.te.perturbation_density = masks.TestContextMaskNeedsToFollowPattern(r"\d+")
+        else:
+            raise ValueError(f"invalid image_set {settings.image_set}! Only optimal or anytime accepted!")
 
-            self.generate_batch_of_plots(
-                xaxis_name="Edges altered [#]",
-                yaxis_name="sum perturbated paths [#]",
-                title="Sum of all perturbated optimal paths over perturbation number",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_density,
-                get_y_value=get_is_perturbated_path,
-                aggregator=aggregators.SumAggregator(),
-                image_suffix="sum_perturbatedPaths_over_edgesaltered",
-                user_tcm=tcm,
-                mask_options=set_params_mask_as_current_test_environment,
-            )
+        #
+        # @run_process()
+        # def avg_partialtime_over_query():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Query Id [#]",
+        #         yaxis_name="avg heuristic/total time[ratio]",
+        #         title="Partial time over query id",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_query_id,
+        #         get_y_value=get_heuristic_ratio,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_partialtime_over_query",
+        #         user_tcm=tcm,
+        #         mask_options=None,
+        #         curve_changer=curves_changers.LowCurveRemoval(threshold=0, threshold_included=False),
+        #         # disjkstra is always 0
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def avg_expandednodes_over_query():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Query Id [#]",
+        #         yaxis_name="avg expanded nodes [#]",
+        #         title="Expanded nodes over query id",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_query_id,
+        #         get_y_value=get_expanded_nodes,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_expandednodes_over_query",
+        #         user_tcm=tcm,
+        #         mask_options=None,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def perturbatedPaths_over_query():
+        #     tcm = self.generate_test_context_mask()
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Query Id [#]",
+        #         yaxis_name="Perturbated path [#]",
+        #         title="Optimal perturbated paths over query id",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_query_id,
+        #         get_y_value=get_is_perturbated_path,
+        #         y_aggregator=aggregators.SingleAggregator(),
+        #         image_suffix="single_perturbatedPaths_over_query",
+        #         user_tcm=tcm,
+        #         mask_options=None,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def solutioncost_over_query():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Query Id [#]",
+        #         yaxis_name="solution cost [us]",
+        #         title="Solution quality over query id",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_query_id,
+        #         get_y_value=get_solution_cost,
+        #         y_aggregator=aggregators.SingleAggregator(),
+        #         image_suffix="solutioncost_over_query",
+        #         user_tcm=tcm,
+        #         mask_options=None,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # # ########################### path lengths ###############################
+        #
+        # @run_process()
+        # def avg_time_over_pathLengths():
+        #     tcm = self.generate_test_context_mask()
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Original path length [#]",
+        #         yaxis_name="avg time per query [us]",
+        #         title="Average time a query needs to compute optimal revised path",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_original_path_length,
+        #         get_y_value=get_us_time,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_time_over_pathLengths",
+        #         user_tcm=tcm,
+        #         mask_options=None,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def avg_perturbatedPaths_over_pathLengths():
+        #     tcm = self.generate_test_context_mask()
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Original path length [#]",
+        #         yaxis_name="avg Revised paths [#]",
+        #         title="Number of perturbated paths in scenario over the original path length",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_original_path_length,
+        #         get_y_value=get_is_perturbated_path,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_perturbatedPaths_over_pathLengths",
+        #         user_tcm=tcm,
+        #         mask_options=None,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # # ############################## sequence length ##############################
+        #
+        # @run_process()
+        # def avg_time_over_sequencelength():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_PATH)
+        #     tcm.te.sequence_length = masks.TestContextMaskNeedsNotNull()
+        #     tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Length of perturbation on optimal path[#]",
+        #         yaxis_name="avg time [us]",
+        #         title="Average of query time over length of perturbation over the optimal path",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_upperbound_optimal_path_ratio,
+        #         get_y_value=get_us_time,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_time_over_sequencelength",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def avg_solutioncost_over_sequencelength():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+        #     tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_PATH)
+        #     tcm.te.sequence_length = masks.TestContextMaskNeedsNotNull()
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Length of perturbation on optimal path[#]",
+        #         yaxis_name="avg solution cost [us]",
+        #         title="Average of solution quality over length of perturbation over optimal path",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_upperbound_optimal_path_ratio,
+        #         get_y_value=get_solution_cost,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_solutioncost_over_sequencelength",
+        #         user_tcm=tcm,
+        #         mask_options=None,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def samplevariance_solutioncost_over_sequencelength():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+        #     tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_PATH)
+        #     tcm.te.sequence_length = masks.TestContextMaskNeedsNotNull()
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Length of perturbation on optimal path[#]",
+        #         yaxis_name="sample variance solution cost [us]",
+        #         title="Sample variance of solution quality over length of perturbation over optimal path",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_upperbound_optimal_path_ratio,
+        #         get_y_value=get_solution_cost,
+        #         y_aggregator=aggregators.SampleVarianceAggregator(),
+        #         image_suffix="samplevariance_solutioncost_over_sequencelength",
+        #         user_tcm=tcm,
+        #         mask_options=None,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # # ############################ area radius ################################
+        #
+        # @run_process()
+        # def avg_time_over_arearadius():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_AREA)
+        #     tcm.te.area_radius = masks.TestContextMaskNeedsNotNull()
+        #     tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Radius of perturbated area[#]",
+        #         yaxis_name="avg time [us]",
+        #         title="Average of query time over perturbated area radius over the optimal path",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_area_radius,
+        #         get_y_value=get_us_time,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_time_over_arearadius",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def avg_solution_cost_over_arearadius():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+        #     tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_AREA)
+        #     tcm.te.area_radius = masks.TestContextMaskNeedsNotNull()
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Radius of perturbated area[#]",
+        #         yaxis_name="avg solution cost [us]",
+        #         title="Average solution quality over perturbated area radius over optimal path",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_area_radius,
+        #         get_y_value=get_solution_cost,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_solutioncost_over_arearadius",
+        #         user_tcm=tcm,
+        #         mask_options=None,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def samplevariance_solution_cost_over_arearadius():
+        #     tcm = self.generate_test_context_mask()
+        #
+        #     tcm.ut.use_bound = masks.TestContextMaskNeedToHaveValue(True)
+        #     tcm.te.perturbation_kind = masks.TestContextMaskNeedToHaveValue(constants.KIND_RATIO_AREA)
+        #     tcm.te.area_radius = masks.TestContextMaskNeedsNotNull()
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Radius of perturbated area[#]",
+        #         yaxis_name="sample variance solution cost [us]",
+        #         title="Solution quality over perturbated area radius over optimal path",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_area_radius,
+        #         get_y_value=get_solution_cost,
+        #         y_aggregator=aggregators.SampleVarianceAggregator(),
+        #         image_suffix="samplevariance_solutioncost_over_arearadius",
+        #         user_tcm=tcm,
+        #         mask_options=None,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # # ############################ edges altered ####################################
+        #
+        # @run_process()
+        # def avg_partialtime_over_edgesaltered():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.te.perturbation_density = masks.TestContextMaskNeedsToFollowPattern(r"\d+")
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Edges altered [#]",
+        #         yaxis_name="avg heuristic/total time [ratio]",
+        #         title="Average Heuristic total time ratio over perturbation number",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_density,
+        #         get_y_value=get_heuristic_ratio,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_partialtime_over_edgesaltered",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,
+        #         curve_changer=curves_changers.LowCurveRemoval(threshold=0, threshold_included=False),
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #         # disjkstra is always 0
+        #     )
+        #
+        # @run_process()
+        # def avg_expandednodes_over_edgesaltered():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.te.perturbation_density = masks.TestContextMaskNeedsToFollowPattern(r"\d+")
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Edge altered [#]",
+        #         yaxis_name="avg expanded nodes [#]",
+        #         title="Average expanded nodes over perturbations",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_density,
+        #         get_y_value=get_expanded_nodes,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_expandednodes_over_edgesaltered",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def sum_perturbatedPaths_over_edgesaltered():
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.te.perturbation_density = masks.TestContextMaskNeedsToFollowPattern(r"\d+")
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Edges altered [#]",
+        #         yaxis_name="sum perturbated paths [#]",
+        #         title="Sum of all perturbated optimal paths over perturbation number",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_density,
+        #         get_y_value=get_is_perturbated_path,
+        #         y_aggregator=aggregators.SumAggregator(),
+        #         image_suffix="sum_perturbatedPaths_over_edgesaltered",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def sum_time_over_edgesAltered():
+        #     # by customising the tcm on this way we're overwriting the
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.te.perturbation_density = masks.TestContextMaskNeedsToFollowPattern(r"\d+")
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Edge altered [#]",
+        #         yaxis_name="sum time per query [us]",
+        #         title="time to complete the whole scenario over perturbation",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_density,
+        #         get_y_value=get_us_time,
+        #         y_aggregator=aggregators.SumAggregator(),
+        #         image_suffix="sum_time_over_edgesaltered",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
+        #
+        # @run_process()
+        # def avg_time_over_edgesAltered():
+        #     # by customising the tcm on this way we're overwriting the
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.te.perturbation_density = masks.TestContextMaskNeedsToFollowPattern(r"\d+")
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Edge altered [#]",
+        #         yaxis_name="avg time per query [us]",
+        #         title="time to complete the whole scenario over perturbation",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_density,
+        #         get_y_value=get_us_time,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="avg_time_over_edgesaltered",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,
+        #         filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #     )
 
-        @run_process()
-        def sum_time_over_edgesAltered():
-            # by customising the tcm on this way we're overwriting the
-            tcm = self.generate_test_context_mask()
-            tcm.te.perturbation_density = masks.TestContextMaskNeedsToFollowPattern(r"\d+")
+        # @run_process()
+        # def anytime_avg_time_over_solutionid():
+        #     # by customising the tcm on this way we're overwriting the
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Solution found [#]",
+        #         yaxis_name="avg time for detect a solution [us]",
+        #         title="Average time to detect a solution over the solution finding",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_anytime_solution_id,
+        #         get_y_value=get_anytime_solution_time,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="anytime_avg_time_over_solutionid",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,
+        #         filter_ks001=KS001.get_from(d={"type": "anytime"}),
+        #     )
+        #
+        # @run_process()
+        # def anytime_avg_solutioncost_over_solutionid():
+        #     # by customising the tcm on this way we're overwriting the
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Solution found [#]",
+        #         yaxis_name="avg solution cost [#]",
+        #         title="Average solution cost over the solution finding",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_anytime_solution_id,
+        #         get_y_value=get_anytime_solution_cost,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="anytime_avg_solutioncost_over_solutionid",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,
+        #         filter_ks001=KS001.get_from(d={"type": "anytime"}),
+        #     )
 
-            self.generate_batch_of_plots(
-                xaxis_name="Edge altered [#]",
-                yaxis_name="sum time per query [us]",
-                title="time to complete the whole scenario over perturbation",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_density,
-                get_y_value=get_us_time,
-                aggregator=aggregators.SumAggregator(),
-                image_suffix="sum_time_over_edgesaltered",
-                user_tcm=tcm,
-                mask_options=set_params_mask_as_current_test_environment,
-            )
+        #TODO this is good
+        #@run_process()
+        #def anytime_avg_solutionratio_over_solutionid():
+        #    # by customising the tcm on this way we're overwriting the
+        #    tcm = self.generate_test_context_mask()
+        #    tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #    def global_csv(name: str, ks: KS001, tc: "ITestContext") -> str:
+        #        return self.paths.get_csv_mainoutput_name(tc)
+        #
+        #    value = 1e5
+        #    self.generate_batch_of_plots(
+        #        xaxis_name="Ratio solution found over optimal [#]",
+        #        yaxis_name="solution found [#]",
+        #        title="Average solution cost over time required to find it",
+        #        subtitle_function=generate_subtitle,
+        #        get_x_value=get_anytime_solution_id,
+        #        get_y_value=get_anytime_solutioncostfactor,
+        #        get_label_value=get_anytime_solution_time,
+        #        y_aggregator=aggregators.MeanAggregator(),
+        #        label_aggregator=aggregators.SumAggregator(),
+        #        label_to_string=lambda x: f"{x:2.0f}",
+        #        image_suffix="anytime_avg_solutionratio_over_solutionid",
+        #        user_tcm=tcm,
+        #        mask_options=set_params_mask_as_current_test_environment,
+        #        csv_filter=[
+        #            # csv_filters.SizeBound(min_required_size=3),
+        #            csv_filters.IsOnTopOfGlobalIndex(
+        #                top_percentage=0.1,
+        #                relation_column_name="ExperimentId",
+        #                column_name="NodesExpanded",
+        #                get_ks_field=lambda ks: ks["anytime"]["query"],
+        #                get_global_csv=global_csv,
+        #            ),
+        #            # csv_filters.NumberBound(max_accepted=5),  # FIXME remove
+        #        ],
+        #        filter_ks001=KS001.get_from(d={"type": "anytime"}),
+        #        curve_changer=[
+        #            curves_changers.RepeatEndToFillCurve(),
+        #            #curves_changers.Print(log_function=logging.info),
+        #            curves_changers.CheckSameAxis(),
+        #            curves_changers.MergeCurves(
+        #                y_aggregator=aggregators.MeanAggregator(),
+        #                label_aggregator=aggregators.MeanAggregator(),
+        #                label="A*"
+        #            ),
+        #        ],
+        #        function_splitter=function_splitters.SpitBasedOnCsv(),
+        #    )
 
-        @run_process()
-        def avg_time_over_edgesAltered():
-            # by customising the tcm on this way we're overwriting the
-            tcm = self.generate_test_context_mask()
-            tcm.te.perturbation_density = masks.TestContextMaskNeedsToFollowPattern(r"\d+")
+        # TODO good
+        #@run_process()
+        #def anytime_avg_solutionratio_over_queryid():
+        #    # by customising the tcm on this way we're overwriting the
+        #    tcm = self.generate_test_context_mask()
+        #    tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #    def global_csv(name: str, ks: KS001, tc: "ITestContext") -> str:
+        #        return self.paths.get_csv_mainoutput_name(tc)
+        #
+        #    self.generate_batch_of_plots(
+        #        xaxis_name="Query Id [us]",
+        #        yaxis_name="first solution over optimal[#]",
+        #        title="First solution factor over queries in scenario",
+        #        subtitle_function=generate_subtitle,
+        #        get_x_value=get_query_id,
+        #        get_y_value=get_optimal_first_solution_ratio,
+        #        y_aggregator=aggregators.SingleAggregator(),
+        #        image_suffix="anytime_avg_solutionratio_over_queryid",
+        #        user_tcm=tcm,
+        #        mask_options=set_params_mask_as_current_test_environment,  # FIXME isn't a better way to handle this?
+        #        filter_ks001=KS001.get_from(d={"type": "mainOutput"}),
+        #        curve_changer=[
+        #            curves_changers.SortRelativeTo(baseline="A* anytime cache ES"),
+        #        ]
+        #    )
 
-            self.generate_batch_of_plots(
-                xaxis_name="Edge altered [#]",
-                yaxis_name="avg time per query [us]",
-                title="time to complete the whole scenario over perturbation",
-                subtitle_function=generate_subtitle,
-                get_x_value=get_density,
-                get_y_value=get_us_time,
-                aggregator=aggregators.MeanAggregator(),
-                image_suffix="avg_time_over_edgesaltered",
-                user_tcm=tcm,
-                mask_options=set_params_mask_as_current_test_environment,
-            )
+        # TODO this is good
+        # @run_process()
+        # def anytime_avg_solutiontime_over_queryid():
+        #     # by customising the tcm on this way we're overwriting the
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #     def global_csv(name: str, ks: KS001, tc: "ITestContext") -> str:
+        #         return self.paths.get_csv_mainoutput_name(tc)
+        #
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Query Id [#]",
+        #         yaxis_name="first solution time[us]",
+        #         title="First solution time over queries in scenario",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_query_id,
+        #         get_y_value=get_optimal_first_solution_time,
+        #         y_aggregator=aggregators.SingleAggregator(),
+        #         image_suffix="anytime_avg_solutiontime_over_queryid",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,  # FIXME isn't a better way to handle this?
+        #         csv_filter=[
+        #           csv_filters.NeedsKeyMapping(KS001.get_from(d={"type": "mainOutput"}))
+        #         ],
+        #         curve_changer=[
+        #             curves_changers.SortRelativeTo(baseline="A* anytime cache ES"),
+        #         ]
+        #     )
 
-        run_process.start_and_wait()
+        # @run_process()
+        # def anytime_avg_solutioncost_over_pathLength():
+        #     # by customising the tcm on this way we're overwriting the
+        #     tcm = self.generate_test_context_mask()
+        #     tcm.ut.use_anytime = masks.TestContextMaskNeedToHaveValue(True)
+        #
+        #     def new_function(function_name: str, column_name: str, column_value: Any, short_column_name: str):
+        #         return f"{function_name} {short_column_name}={str(column_value)}"
+        #
+        #     value = 1e5
+        #     self.generate_batch_of_plots(
+        #         xaxis_name="Optimal solution cost [#]",
+        #         yaxis_name="avg solution cost [#]",
+        #         title="Average solution cost over the solution finding",
+        #         subtitle_function=generate_subtitle,
+        #         get_x_value=get_anytime_solution_id,
+        #         get_y_value=get_anytime_solution_cost,
+        #         y_aggregator=aggregators.MeanAggregator(),
+        #         image_suffix="anytime_avg_solutioncost_over_pathLength",
+        #         user_tcm=tcm,
+        #         mask_options=set_params_mask_as_current_test_environment,
+        #         filter_ks001=KS001.get_from(d={"type": "anytime"}),
+        #         curve_changer=curves_changers.RepeatEndToFillCurve(),
+        #         function_splitter=function_splitters.GroupOnCSVValue(
+        #             f=get_anytime_pathlength,
+        #             group_size=value,
+        #             new_name=lambda function_name, val: f"{function_name} cost in {str(val)}*{value:1.0e}",
+        #         ),
+        #         # function_splitter=GroupOnCSVSingleValueSplitter(
+        #         #     csv_column_name="path_revised_cost",
+        #         #     csv_column_cast=str,
+        #         #     new_name=functools.partial(new_function, short_column_name="sol cost")
+        #         # )
+        #     )
+
+        # run_process.start_and_wait()
 
     def __get_number_of_queries_in_scenario(self, scenario_filename: str) -> int:
         """
@@ -735,20 +1406,20 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
         image_dict = KS001()
         uts_to_show = []
         alg: PathFindingStuffUnderTest = self.generate_under_testing()
-        alg.algorithm = constants.ALG_ASTAR
-        alg.heuristic = constants.HEU_CPD_CACHE
+        alg.algorithm = ALG_ASTAR
+        alg.heuristic = HEU_CPD_CACHE
         alg.enable_earlystop = True
         alg.enable_upperbound = False
         uts_to_show.append(alg)
 
         alg: PathFindingStuffUnderTest = self.generate_under_testing()
-        alg.algorithm = constants.ALG_ASTAR
-        alg.heuristic = constants.HEU_DIFFERENTIAL_HEURISTIC
+        alg.algorithm = ALG_ASTAR
+        alg.heuristic = HEU_DIFFERENTIAL_HEURISTIC
         alg.landmark_number = 5
         uts_to_show.append(alg)
 
         alg: PathFindingStuffUnderTest = self.generate_under_testing()
-        alg.algorithm = constants.ALG_DIJKSTRA_EARLYSTOP
+        alg.algorithm = ALG_DIJKSTRA_EARLYSTOP
         uts_to_show.append(alg)
 
         densities_to_show = [1, 2901]
@@ -1230,13 +1901,25 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
         if self.__previous_test_context_tested is not None:
             if self.__previous_test_context_tested.te != test.te:
                 # we need to remove the old perturbated maps only if they were generated
-                if self.__previous_test_context_tested.te.perturbation_kind in [constants.KIND_RATIO_PATH, constants.KIND_RATIO_AREA]:
+                if self.__previous_test_context_tested.te.perturbation_kind in [KIND_RATIO_PATH, KIND_RATIO_AREA]:
                     # ok, we need to remove all the previous perturbated maps dependent on query
                     # ok, to reduce space consumption we need to remove all the perturbated maps depending on a single query.
                     # we have created maps depending on query. Remove them
-                    for f in list(paths.get_maps_per_query_of(self.__previous_test_context_tested)):
-                        os.remove(f)
-                        os.remove(f"{f}.info.txt")
+
+                    # TODO recheck!!!!
+                    self.filesystem_datasource.remove_suchthat(
+                        from_path="cwd",
+                        data_type='csv',
+                        filters=[csv_filters.NameContains("query#")],
+                    )
+                    # TODO remove
+                    # for f in os.listdir(self.paths.get_cwd_dir()):
+                    #     if re.search("query#", f):
+                    #         os.remove(os.path.join(self.paths.get_cwd_dir(), f))
+
+                    # for f in list(paths.get_maps_per_query_of(self.__previous_test_context_tested)):
+                    #     os.remove(f)
+                    #     os.remove(f"{f}.info.txt")
             elif self.__previous_test_context_tested.te == test.te:
                 # ok, we already have generated the perturbated maps dependent on query. Return immediately
                 return
@@ -1264,36 +1947,36 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
             f'--validate_changes',
         ])
 
-        if test.te.perturbation_kind in [constants.KIND_RANDOM, constants.KIND_RANDOM_OPTIMAL, constants.KIND_PATH_RANDOM_ON_OPTIMAL]:
+        if test.te.perturbation_kind in [KIND_RANDOM, KIND_RANDOM_OPTIMAL, KIND_PATH_RANDOM_ON_OPTIMAL]:
 
             arguments.extend([
                 f'--map_perturbation="{test.te.perturbation_kind}"',
                 f'--perturbation_density="{test.te.perturbation_density}"',
             ])
-            if test.te.perturbation_kind in [constants.KIND_PATH_RANDOM_ON_OPTIMAL]:
+            if test.te.perturbation_kind in [KIND_PATH_RANDOM_ON_OPTIMAL]:
                 arguments.extend([
                     f'--perturbation_sequence="{test.te.sequence_length}"',
                 ])
 
-        elif test.te.perturbation_kind in [constants.KIND_RANDOM_TERRAIN]:
+        elif test.te.perturbation_kind in [KIND_RANDOM_TERRAIN]:
             arguments.extend([
                 f'--map_perturbation="{test.te.perturbation_kind}"',
                 f'--terrain_to_perturbate_set="{test.te.terrains_to_alter}"',
                 f'--terrain_to_perturbate_number={len(test.te.terrains_to_alter)}',
             ])
 
-        elif test.te.perturbation_kind in [constants.KIND_RATIO_PATH, constants.KIND_RATIO_AREA]:
+        elif test.te.perturbation_kind in [KIND_RATIO_PATH, KIND_RATIO_AREA]:
             arguments.extend([
                 f'--generate_perturbations_per_query',
                 f'--location_chooser="RATIO_ON_OPTIMAL_PATH"',
                 f'--optimal_path_ratio="{test.te.optimal_path_ratio}"',
             ])
-            if test.te.perturbation_kind in [constants.KIND_RATIO_AREA]:
+            if test.te.perturbation_kind in [KIND_RATIO_AREA]:
                 arguments.extend([
                     f'--perturbation_radius_range="{test.te.area_radius}"',
                     f'--map_perturbation="QUERY_RANDOM_AREA"',
                 ])
-            elif test.te.perturbation_kind in [constants.KIND_RATIO_PATH]:
+            elif test.te.perturbation_kind in [KIND_RATIO_PATH]:
                 arguments.extend([
                     f'--perturbation_sequence="{test.te.sequence_length}"',
                     f'--map_perturbation="QUERY_RANDOM_OPTIMAL_PATH"',
@@ -1349,30 +2032,57 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
                 f"--use_bounds",
             ])
 
+        if test.ut.use_anytime:
+            arguments.extend([
+                f"--test_anytime_algorithms",
+            ])
+
         logging.debug(f"doing the test!")
-        if test.ut.algorithm == constants.ALG_DIJKSTRA_EARLYSTOP:
+        if test.ut.algorithm == ALG_DIJKSTRA_EARLYSTOP:
+            if test.ut.use_anytime:
+                raise ValueError(f"dijkstra cannot be used for anytime!")
+            if test.ut.use_bound:
+                raise ValueError(f"dijkstra cannot be used for bounded search!")
             program = ["DynamicPathFindingTester"] + arguments
-        elif test.ut.algorithm in [constants.ALG_ASTAR, constants.ALG_WASTAR]:
+        elif test.ut.algorithm in [ALG_ASTAR, ALG_WASTAR]:
 
             if test.ut.use_bound:
-                if test.ut.algorithm == constants.ALG_ASTAR:
+                # bounded version
+                if test.ut.algorithm == ALG_ASTAR:
                     arguments.extend([
                         f"--bounded={test.ut.bound}",
                         f"--h_weight=1.0",
                     ])
-                elif test.ut.algorithm == constants.ALG_WASTAR:
+                elif test.ut.algorithm == ALG_WASTAR:
                     arguments.extend([
                         # if the bound is 0.2, the weight needs to be 1.2 since h_weight directly multiply h
                         f"--h_weight={1 + test.ut.bound}"
                     ])
                 else:
                     raise ValueError(f"invalid algorithm {test.ut.algorithm}!")
+            elif test.ut.use_anytime:
+                # anytime version: A* is our algorithm CPD search
+                if test.ut.algorithm == ALG_ASTAR:
+                    arguments.extend([
+                        f"--anytime_bound=100.0",
+                        f"--h_weight={1+test.ut.anytime_bound}",
+                    ])
+
+                elif test.ut.algorithm == ALG_WASTAR:
+                    arguments.extend([
+                        f"--anytime_bound={test.ut.anytime_bound}",
+                        f"--h_weight={1+test.ut.anytime_bound}",
+                    ])
+                else:
+                    raise ValueError(f"invalid algorithm {test.ut.algorithm}!")
+
             else:
-                if test.ut.algorithm == constants.ALG_ASTAR:
+                # optimal version
+                if test.ut.algorithm == ALG_ASTAR:
                     arguments.extend([
                         f"--h_weight=1.0"
                     ])
-                elif test.ut.algorithm == constants.ALG_WASTAR:
+                elif test.ut.algorithm == ALG_WASTAR:
                     raise ValueError(f"WA* cannot be used for unbounded search!")
                 else:
                     raise ValueError(f"invalid algorithm {test.ut.algorithm}!")
@@ -1381,12 +2091,12 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
                 f'--heuristic={test.ut.heuristic}',
             ]
 
-            if test.ut.heuristic in [constants.HEU_CPD_CACHE, constants.HEU_CPD_NO_CACHE]:
+            if test.ut.heuristic in [HEU_CPD_CACHE, HEU_CPD_NO_CACHE]:
                 if test.ut.enable_upperbound:
                     arguments = arguments + [f'--enable_upperbound', ]
                 if test.ut.enable_earlystop:
                     arguments = arguments + [f'--enable_earlystop', ]
-            elif test.ut.heuristic in [constants.HEU_DIFFERENTIAL_HEURISTIC]:
+            elif test.ut.heuristic in [HEU_DIFFERENTIAL_HEURISTIC]:
                 arguments = arguments + [f'--landmark_number={test.ut.landmark_number}']
             else:
                 raise ValueError(f"invalid heuristic {test.ut.heuristic}")
@@ -1408,12 +2118,59 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
         logging.debug("copying the csv into the csv directory...")
         csv_in_cwd_directory = paths.get_csv_mainoutput_name_just_generated(test)
         csv_in_csv_directory = paths.get_csv_mainoutput_name(test)
-        shutil.move(csv_in_cwd_directory, csv_in_csv_directory)
+
+        # ok, save the csv in the datasource
+        self.filesystem_datasource.move_to(
+            self.datasource,
+            from_path="cwd",
+            from_ks001=paths.get_csv_mainoutput_basename(test),
+            from_data_type='csv',
+            to_path=generate_csv_path_from_test_context(test),
+        )
+
+        # TODO remove
+        # os.remove(csv_in_cwd_directory)
+        # TODO remove shutil.move(csv_in_cwd_directory, csv_in_csv_directory)
+        # copy the anytime csv
+        if test.ut.use_anytime:
+            logging.debug("copying the csv regarding any time")
+            self.filesystem_datasource.move_to_suchthat(
+                other=self.datasource,
+                test_context_template=self.generate_test_context(),
+                data_type='csv',
+                from_path="cwd",
+                to_path=generate_csv_path_from_test_context(test),
+                filters=[csv_filters.DataTypeIs('csv')]
+            )
+            # remove the csv generated by the tester
+            # TODO remove commons.remove_filenames_in_path(paths.get_cwd(), allowed_extensions=["csv"])
+            # TODO remove commons.move_filenames_to(paths.get_cwd(), paths.get_csv(), allowed_extensions=["csv"])
+
+    def begin_perform_test(self, stuff_under_test_values: Dict[str, List[Any]],
+                           test_environment_values: Dict[str, List[Any]], settings: "ITestingGlobalSettings"):
+        pass
+
+    def end_perform_test(self, stuff_under_test_values: Dict[str, List[Any]],
+                         test_environment_values: Dict[str, List[Any]], settings: "ITestingGlobalSettings"):
+        # cleanup cwd directory
+        self.filesystem_datasource.remove_suchthat(
+            from_path="cwd",
+            data_type="graph",
+            filters=[csv_filters.NameContains("query#")],
+        )
+        self.filesystem_datasource.remove_suchthat(
+            from_path="cwd",
+            data_type="graph.info.txt",
+            filters=[csv_filters.NameContains("query#")],
+        )
 
     def perform_test(self, path: PathFindingPaths, tc: PathFindingTestContext, global_settings: PathFindingTestingGlobalSettings):
         # check if the csv exist. If it doesn't exist we ignore we go to the next test to perform
-        if os.path.exists(path.get_csv_mainoutput_name(tc)):
+        if self.datasource.contains(path=generate_csv_path_from_test_context(tc), data_type='csv', ks001=commons.get_ks001_basename_no_extension(path.get_csv_mainoutput_name(tc), pipe=constants.SEP_PIPE)):
             return
+        # TODO remove
+        #if os.path.exists(path.get_csv_mainoutput_name(tc)):
+        #    return
 
         logging.info(f"testing {tc}")
         # ALWAYS generate the map perturbations
@@ -1421,15 +2178,24 @@ class PathFindingResearchField(AbstractSpecificResearchFieldFactory):
         # generate the csvs
         self._generate_mainoutput(path, tc, PathFindingResearchField.get_random_seed(), global_settings)
 
-    def get_csv_row(self, d: Dict[str, str]) -> "PathFindingCsvRow":
-        result = PathFindingCsvRow()
-        result.path_step_size = int(d["Path Step Size"])
-        result.us_time = int(d["Time"])
-        result.path_revised_cost = int(d["PathRevisedCost"])
-        result.path_original_cost = int(d["PathOriginalCost"])
-        result.heuristic_time = int(d["HeuristicTime"])
-        result.has_original_path_perturbated = bool(d["OriginalOptimalPathPerturbated"])
-        result.experiment_id = int(d["ExperimentId"])
-        result.expanded_nodes = int(d["NodesExpanded"])
+    def get_csv_row(self, d: Dict[str, str], csv_ks: KS001) -> "ICsvRow":
+        if csv_ks.has_key_value(k="type", v="anytime"):
+            result = PathFindingAnyboundCsvRow()
+            result.solution_id = int(d["SOLUTION_ID"])
+            result.solution_cost = int(d["SOLUTION_COST"])
+            result.solution_time = int(d["SOLUTION_TIME"])
+            result.is_optimal = bool(d["IS_OPTIMAL"])
+        elif csv_ks.has_key_value(k="type", v="mainOutput"):
+            result = PathFindingCsvRow()
+            result.path_step_size = int(d["Path Step Size"])
+            result.us_time = int(d["Time"])
+            result.path_revised_cost = int(d["PathRevisedCost"])
+            result.path_original_cost = int(d["PathOriginalCost"])
+            result.heuristic_time = int(d["HeuristicTime"])
+            result.has_original_path_perturbated = bool(d["OriginalOptimalPathPerturbated"])
+            result.experiment_id = int(d["ExperimentId"])
+            result.expanded_nodes = int(d["NodesExpanded"])
+        else:
+            raise TypeError(f"Cannot identify the correct structure to return from the ks!")
 
         return result

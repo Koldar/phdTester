@@ -1,10 +1,11 @@
 import re
 from typing import Any, Iterable, List
 
-from phdTester.model_interfaces import ITestContextMaskOption, ITestContext, ITestingEnvironment
+from phdTester.model_interfaces import ITestContextMaskOption, ITestContext, ITestingEnvironment, \
+    ISimpleTestContextMaskOption, IComplexTestContextMaskOption
 
 
-class TestContextMaskNeedsToBeSameAsNonComputation(ITestContextMaskOption):
+class TestContextMaskNeedsToBeSameAsNonComputation(ISimpleTestContextMaskOption):
     """
     An option is compliant if it has the same value as the one generated in a previous computation.
 
@@ -51,7 +52,7 @@ class TestContextMaskNeedsToBeSameAsNonComputation(ITestContextMaskOption):
             raise ValueError(f"mask cannot be operated!")
         return self._value
 
-    def is_compliant(self, i: int, actual: "Any", actual_set: List["ITestContext"]) -> bool:
+    def is_compliant(self, actual: "Any") -> bool:
         if self._value is None:
             return False
         else:
@@ -67,7 +68,7 @@ class TestContextMaskNeedsToBeSameAsNonComputation(ITestContextMaskOption):
             return f"needs to be of a value dynamically obtained"
 
 
-class TestContextMaskNeedsToBeTheSameOverSet(ITestContextMaskOption):
+class TestContextMaskNeedsToBeTheSameOverSet(IComplexTestContextMaskOption):
     """
     An option value is compliant only if over a certain set remains the same
     """
@@ -104,7 +105,7 @@ class TestContextMaskNeedsToBeTheSameOverSet(ITestContextMaskOption):
         return "has to be the same over a set"
 
 
-class TestContextMaskNeedsNotNull(ITestContextMaskOption):
+class TestContextMaskNeedsNotNull(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only if it's not null
     """
@@ -128,14 +129,14 @@ class TestContextMaskNeedsNotNull(ITestContextMaskOption):
     def can_operate(self) -> bool:
         return True
 
-    def is_compliant(self, i: int, actual: "Any", actual_set: List["ITestContext"]) -> bool:
+    def is_compliant(self, actual: "Any") -> bool:
         return actual is not None
 
     def __str__(self):
         return "has not to be null"
 
 
-class TestContextMaskNeedToHaveValue(ITestContextMaskOption):
+class TestContextMaskNeedToHaveValue(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only if it has a very well specific value
     """
@@ -160,14 +161,14 @@ class TestContextMaskNeedToHaveValue(ITestContextMaskOption):
         ITestContextMaskOption.__init__(self)
         self.value = value
 
-    def is_compliant(self, i: int, actual: "Any", actual_set: List["ITestContext"]) -> bool:
+    def is_compliant(self, actual: "Any") -> bool:
         return actual == self.value
 
     def __str__(self):
         return f"has to be {self.value}"
 
 
-class TestContextMaskNeedsNotToHaveValue(ITestContextMaskOption):
+class TestContextMaskNeedsNotToHaveValue(ISimpleTestContextMaskOption):
     """
     Option compliant with this mask are required not to be equal to a given value.
 
@@ -194,14 +195,14 @@ class TestContextMaskNeedsNotToHaveValue(ITestContextMaskOption):
     def can_operate(self) -> bool:
         return True
 
-    def is_compliant(self, i: int, actual: "Any", actual_set: List["ITestContext"]) -> bool:
+    def is_compliant(self, actual: "Any") -> bool:
         return actual != self.value
 
     def __str__(self) -> str:
         return f"can't have value {self.value}"
 
 
-class TestContextMaskNeedsToFollowPattern(ITestContextMaskOption):
+class TestContextMaskNeedsToFollowPattern(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only its its string representation follow a specified regex
     """
@@ -226,14 +227,14 @@ class TestContextMaskNeedsToFollowPattern(ITestContextMaskOption):
     def can_operate(self) -> bool:
         return True
 
-    def is_compliant(self, i: int, actual: "Any", actual_set: List["ITestContext"]) -> bool:
+    def is_compliant(self, actual: "Any") -> bool:
         return actual is not None and re.match(self._regex, str(actual)) is not None
 
     def __str__(self) -> str:
         return f"needs to match regex \"{self._regex}\""
 
 
-class TestContextMaskNeedToBeInSet(ITestContextMaskOption):
+class TestContextMaskNeedToBeInSet(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only if its value is inside a well specified set
     """
@@ -258,14 +259,42 @@ class TestContextMaskNeedToBeInSet(ITestContextMaskOption):
         ITestContextMaskOption.__init__(self)
         self.values = list(values)
 
-    def is_compliant(self, i: int, actual: "Any", actual_set: List["ITestContext"]) -> bool:
+    def is_compliant(self, actual: "Any") -> bool:
         return actual in self.values
 
     def __str__(self):
         return "has to be in [{}]".format(', '.join(map(str, self.values)))
 
 
-class TestContextMaskIgnore(ITestContextMaskOption):
+class NeedsNotToBeInSet(ISimpleTestContextMaskOption):
+
+    def __init__(self, prohibited_set: List[Any]):
+        self.prohibited_set = prohibited_set
+
+    def is_compliant(self, actual: "Any") -> bool:
+        return actual not in self.prohibited_set
+
+    def represents_a_well_specified_value(self) -> bool:
+        return False
+
+    def get_well_specified_value(self) -> Any:
+        raise ValueError(f"doesn't specify a value")
+
+    def get_well_specified_value_as_string(self) -> str:
+        raise ValueError(f"doesn't specify a value")
+
+    def set_params(self, **kwargs):
+        pass
+
+    @property
+    def can_operate(self) -> bool:
+        return True
+
+    def __str__(self) -> str:
+        return "has not to be in [{}]".format(', '.join(map(str, self.prohibited_set)))
+
+
+class TestContextMaskIgnore(ISimpleTestContextMaskOption):
     """
     A concrete option value is always compliant with this mask
     """
@@ -286,14 +315,14 @@ class TestContextMaskIgnore(ITestContextMaskOption):
     def can_operate(self) -> bool:
         return True
 
-    def is_compliant(self, i: int, actual: "Any", actual_set: List["ITestContext"]) -> bool:
+    def is_compliant(self, actual: "Any") -> bool:
         return True
 
     def __str__(self):
         return "ignore"
 
 
-class TestContextMaskNeedsNull(ITestContextMaskOption):
+class TestContextMaskNeedsNull(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only if it is null
     """
@@ -320,7 +349,7 @@ class TestContextMaskNeedsNull(ITestContextMaskOption):
     def can_operate(self) -> bool:
         return True
 
-    def is_compliant(self, i: int, actual: "Any", actual_set: List["ITestContext"]) -> bool:
+    def is_compliant(self, actual: "Any") -> bool:
         return actual is None
 
     def __str__(self):

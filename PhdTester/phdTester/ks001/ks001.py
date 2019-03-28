@@ -1,6 +1,7 @@
 import abc
 import copy
 import enum
+import logging
 import os
 import re
 from typing import Any, Tuple, Iterable, Union, Dict, List, Optional
@@ -23,14 +24,16 @@ class Symbol(enum.Enum):
         return self.name
 
 
-class Aliases:
+class Aliases(commons.SlottedClass):
     """
     Structure allowing you to map an official name with an "alias", which is just a synonym of the actual name.
     Names and aliases are unique in this structure
     """
 
+    __slots__ = ('_aliases', )
+
     def __init__(self, d: Dict[str, str] = None):
-        self.__aliases = {}
+        self._aliases = {}
         if d is not None:
             for k, v in d.items():
                 self.set_alias(k, v)
@@ -40,7 +43,7 @@ class Aliases:
             return False
         if not isinstance(other, Aliases):
             return False
-        return self.__aliases == other.__aliases
+        return self._aliases == other._aliases
 
     def __iter__(self) -> Iterable[str]:
         """
@@ -48,21 +51,21 @@ class Aliases:
         :return: iterable of officiale names
         """
 
-        return iter(self.__aliases)
+        return iter(self._aliases)
 
     def aliases(self) -> Iterable[str]:
         """
 
         :return: iterable of aliases
         """
-        return iter(self.__aliases.values())
+        return iter(self._aliases.values())
 
     def names(self) -> Iterable[str]:
         """
 
         :return: iterable of official names
         """
-        return iter(self.__aliases.keys())
+        return iter(self._aliases.keys())
 
     def has_alias(self, alias: str) -> bool:
         """
@@ -70,7 +73,7 @@ class Aliases:
         :param alias: the alias to check
         :return: true if there is an official name which alias is `alias`
         """
-        return alias in self.__aliases.values()
+        return alias in self._aliases.values()
 
     def has_name(self, name: str) -> bool:
         """
@@ -81,7 +84,7 @@ class Aliases:
         :param name: tghe name to check
         :return: True if the user has setup an alias for the official name `name`. False otherwise
         """
-        return name in self.__aliases
+        return name in self._aliases
 
     @commons.inputs_not_none("name", "alias")
     def set_alias(self, name: str, alias: str):
@@ -97,20 +100,20 @@ class Aliases:
         :param alias: the alias to add
         :return:
         """
-        if name in self.__aliases and self.__aliases[name] == alias:
+        if name in self._aliases and self._aliases[name] == alias:
             return
         if self.has_name(name):
             raise ValueError(f"the name {name} is already present!")
         if self.has_alias(alias):
             raise ValueError(f"the alias {alias} is already present!")
-        self.__aliases[name] = alias
+        self._aliases[name] = alias
 
     def get_alias(self, name: str) -> str:
-        return self.__aliases[name]
+        return self._aliases[name]
 
     def get_name(self, alias: str) -> str:
-        for k in self.__aliases:
-            if self.__aliases[k] == alias:
+        for k in self._aliases:
+            if self._aliases[k] == alias:
                 return k
         else:
             raise KeyError(f"alias {alias} has not real name in this structure!")
@@ -194,7 +197,7 @@ class IKS001ValueParser(abc.ABC):
         pass
 
 
-class KS001(IKS001ValueParser):
+class KS001(commons.SlottedClass, IKS001ValueParser):
     """
     KS001 defines how a filename of an experiment should be named.
 
@@ -242,12 +245,11 @@ class KS001(IKS001ValueParser):
 
     has a key equal to "a=" and a value of 5 and it is **not** intepreted as a key "a" and a value of "=5".
 
-    The KS001 represents a ordered list of dictionaries (optionally named with a label called "identifier") containing
-    an ordered set of key-value mapping.
+    The KS001 represents a **ordered** list of dictionaries (optionally named with a label called "identifier") containing
+    an **ordered set** of key-value mapping.
     Key are string. value needs to be a string convertable element.
     The mappings are ordered by **key**: This means that the order is decided by the key alphanumeric value,
-    so for example the "abc" always
-    comes first of the key "cba". Key duplication is not permitted.
+    so for example the "abc" always comes first of the key "cba". Key duplication is not permitted.
     Neither key nor values cannot be None
 
 
@@ -283,6 +285,8 @@ class KS001(IKS001ValueParser):
     As for the keys, no alias can have a None value
 
     """
+
+    __slots__ = ('key_aliases', 'value_aliases', 'identifier', 'dicts', )
 
     def __init__(self, identifier: str = None):
         """
@@ -398,6 +402,38 @@ class KS001(IKS001ValueParser):
     def __repr__(self) -> str:
         return str(self)
 
+    def __contains__(self, other: "KS001") -> bool:
+        """
+        Checks if a KS001 is contained into another one
+
+        ::note
+        a structure `other` is contained in a `self` KS001 only if it exists a dictionary in `self` such that
+        it contains all the key-mappings present in `other`. if `other` contains multiple dictionary, all the
+        dictionaries must be present in `self`. labels, identifiers and indices are ignroe during contain
+        procedure.
+
+        :param other: the other KS001 structure to look for
+        :return: true if all the key-values of self are contained in other.
+                False otherwise
+        """
+
+        for other_dict in other.dicts:
+            found = True
+            for i, self_dict in enumerate(self.dicts):
+                found = True
+                for k, v in other_dict["dict"].items():
+                    if k not in self_dict["dict"]:
+                        found = False
+                        break
+                    if v != self_dict["dict"][k]:
+                        found = False
+                        break
+
+            if found is False:
+                return False
+
+        return True
+
     def __eq__(self, other):
         if other is None:
             return False
@@ -430,6 +466,51 @@ class KS001(IKS001ValueParser):
                 return True
         else:
             return False
+
+    def _has_dict_place(self, place: Union[str, int]) -> bool:
+        if isinstance(place, int):
+            return self._has_dict_index(place)
+        elif isinstance(place, str):
+            return self._has_dict_name(place)
+        else:
+            raise TypeError(f"invalid type {type(place)} for place. Needs str or int!")
+
+    def has_key_value(self, k: str, v: Any) -> bool:
+        for d in self.dicts:
+            if k in d["dict"] and d["dict"][k] == v:
+                return True
+        else:
+            return False
+
+    def has_key_in(self, place: Union[str, int], key: str) -> bool:
+        """
+        Checks if the KS001 has a particular key in a particular place
+        :param place: an identifier for the dictionary. May be either the index or the label
+        :param key: the key of the mapping
+        :return: true if the KS001 structure has the key `k` in the dictionary identified by `place`
+        """
+
+        return self._has_dict_place(place) and key in self[place]
+
+    @commons.inputs_not_none("place", "k", "v")
+    def has_key_value_in(self, place: Union[str, int], k: str, v: Any) -> bool:
+        """
+        Checks if the KS001 has a particular mapping in a particular place
+        :param place: an identifier for the dictionary. May be either the index or the label
+        :param k: the key of the mapping
+        :param v:  the vlaue of the mapping to check
+        :return: true if the KS001 structure has the mapping `k`-`v` in the dictionary identified by `place`
+        """
+        return self._has_dict_place(place) and k in self[place] and self[place][k] == v
+
+    @commons.inputs_not_none("place", "key")
+    def get_value_of_key_in(self, place: Union[str, int], key: str, none_if_fail: bool = False) -> Any:
+        if none_if_fail:
+            if not self._has_dict_place(place):
+                return None
+            if key not in self[place]:
+                return None
+        return self[place][key]
 
     def _try_and_generate_dict_index(self, index: int) -> Dict[str, str]:
         while True:
@@ -468,6 +549,19 @@ class KS001(IKS001ValueParser):
         else:
             raise TypeError(f"invalid type {place}! allowed types are int or str")
         d[key] = value
+        return self
+
+    @commons.inputs_not_none("place", "key", "value")
+    def remove_key_value(self, place: Union[str, int], key: str, value: Any) -> "KS001":
+        if key not in self[place]:
+            return self
+        if self[place][key] != value:
+            return self
+        if isinstance(place, int) and len(self[place][key]) == 1 and self.dicts[place]["name"] is None:
+            # if this is the last key we're removing in an unnamed dictionary we raise error since an unnamed dictionary
+            # cannot be empty
+            raise ValueError(f"trying to generate an empty unnamed dictionary!")
+        del self[place][key]
         return self
 
     @commons.inputs_not_none("name")
@@ -630,7 +724,7 @@ class KS001(IKS001ValueParser):
             return str(value)
 
     @classmethod
-    def parse_filename(cls, filename: str, key_alias: Aliases = None, value_alias: Aliases = None, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=", value_parsing_function: IKS001ValueParser = None):
+    def parse_filename(cls, filename: str, key_alias: Union[Dict[str, str], Aliases] = None, value_alias: Union[Dict[str, str], Aliases] = None, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=", value_parsing_function: IKS001ValueParser = None):
         """
 
 
@@ -646,7 +740,7 @@ class KS001(IKS001ValueParser):
         return cls.parse_str(filename, key_alias, value_alias, colon, pipe, underscore, equal, value_parsing_function)
 
     @classmethod
-    def parse_str(cls, string: str, key_alias: Aliases = None, value_alias: Aliases = None, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=", value_parsing_function: IKS001ValueParser = None):
+    def parse_str(cls, string: str, key_alias: Union[Dict[str, str], Aliases] = None, value_alias: Union[Dict[str, str], Aliases] = None, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=", value_parsing_function: IKS001ValueParser = None):
 
         class State(enum.Enum):
             INIT = enum.auto(),
@@ -676,9 +770,21 @@ class KS001(IKS001ValueParser):
 
         result = cls()
         if key_alias is not None:
-            result.key_aliases = key_alias
+            if isinstance(key_alias, Aliases):
+                result.key_aliases = key_alias
+            elif isinstance(key_alias, dict):
+                for k in key_alias:
+                    result.key_aliases.set_alias(k, key_alias[k])
+            else:
+                raise TypeError(f"invalid type {type(key_alias)}! Only Aliases and dict accepted!")
         if value_alias is not None:
-            result.value_aliases = value_alias
+            if isinstance(value_alias, Aliases):
+                result.value_aliases = value_alias
+            elif isinstance(value_alias, dict):
+                for k in value_alias:
+                    result.value_aliases.set_alias(k, value_alias[k])
+            else:
+                raise TypeError(f"invalid type {type(key_alias)}! Only Aliases and dict accepted!")
 
         for symbol, value, index in cls._symbol_generator(string, colon, pipe, underscore, equal):
             if state in [State.INIT, ]:
@@ -789,6 +895,33 @@ class KS001(IKS001ValueParser):
                 raise ValueError(f"invalid parsing! Error at {index} after fetching {value} which we interpreted as {symbol}!")
 
         return result
+
+    # TODO use lark for parsing
+    # @classmethod
+    # def parse_str(cls, string: str, key_alias: Union[Dict[str, str], Aliases] = None,
+    #               value_alias: Union[Dict[str, str], Aliases] = None, colon: str = ":", pipe: str = "|",
+    #               underscore: str = "_", equal: str = "=", value_parsing_function: IKS001ValueParser = None):
+    #     collision_grammar = f"""
+    #         start: filename
+    #         filename: identifier? "{pipe}" dictionaries "{pipe}" extension?
+    #         dictionaries: dictionary ( "{pipe}" dictionaries )*
+    #         dictionary: name "{colon}" keyvalues* | keyvalues
+    #         keyvalues: keyvalue  ( "{underscore}" keyvalues )*
+    #         keyvalue: key "{equal}" value
+    #
+    #         name: STRING
+    #         identifier: STRING
+    #         extension: STRING
+    #         key: STRING
+    #         value: STRING
+    #
+    #         STRING: /([^{equal}{underscore}{pipe}{colon}]|"{equal}""{equal}"|"{underscore}""{underscore}"|"{pipe}""{pipe}"|"{colon}""{colon}")+/
+    #         """
+    #     logging.info(f"string is {string}")
+    #     parser = lark.Lark(collision_grammar, parser='lalr', debug=True)
+    #     ast = parser.parse(string)
+    #
+    #     logging.info("parsing complete!")
 
     @staticmethod
     def _symbol_generator(input: str, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=") -> Tuple[Symbol, Any, int]:

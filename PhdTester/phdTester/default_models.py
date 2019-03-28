@@ -1,10 +1,260 @@
 import abc
 import logging
-from typing import Iterable, List, Any
+from typing import Iterable, List, Any, Tuple
 
+import pandas as pd
+
+from phdTester import commons
 from phdTester.model_interfaces import ITestContextRepo, ITestContext, ITestContextMask, ITestContextRepoView, \
     IOptionDict, IUnderTesting, ITestingEnvironment, IStuffUnderTestMask, ITestEnvironmentMask, \
-    ITestingGlobalSettings
+    ITestingGlobalSettings, ICsvRow, IFunction2D, IFunction2DWithLabel, IDataWriter
+
+
+class GnuplotDataWriter(IDataWriter):
+    """
+    Gnuplot sucks!
+    """
+
+    def __init__(self, filename: str, separator: str = " ", alias: str = "", carriage_return: str = "\n"):
+        self.filename = filename
+        self.alias = alias
+        self.separator = separator
+        self.carriage_return = carriage_return
+        self._file = None
+
+    def __enter__(self):
+        self._file = open(self.filename, "w")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._file.close()
+
+    def writeline(self, data: Iterable[Any]):
+        if any(map(lambda x: isinstance(x, str), data)):
+            return
+        self._file.write(self.separator.join(map(lambda x: x.replace(self.separator, self.alias), map(lambda x: str(x), data))) + self.carriage_return)
+
+
+class CsvDataWriter(IDataWriter):
+
+    def __init__(self, filename: str, separator: str = ","):
+        self.filename = filename
+        self.separator = separator
+        self._file = None
+
+    def __enter__(self):
+        self._file = open(self.filename, "w")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._file.close()
+
+    def writeline(self, data: Iterable[Any]):
+        self._file.write(self.separator.join(map(lambda x: x.replace(self.separator, ""), map(lambda x: str(x), data))) + "\n")
+
+
+class Function2D(commons.SlottedClass, IFunction2D):
+    """
+    Represents a function y=f(x). The function is merely a set of 2D points, so it's more like a mapping.
+    Functions have no names
+    """
+
+    __slots__ = ('_function', '_sortedx', '_sortedx_valid')
+
+    def __init__(self):
+        super().__init__()
+        self._function = {}
+        self._sortedx = []
+        """
+        A list of sorted x values. Introduced to cache the order to the x values
+        """
+        self._sortedx_valid: bool = False
+        """
+        true if the field _sortedx is actually representing the sorted set of _function, false otherwise
+        """
+
+    @classmethod
+    def from_xy(cls, x: Iterable[float], y: Iterable[float]) -> "IFunction2D":
+        """
+        Create a new function from 2 lists of the same length
+        :param x: the x values
+        :param y: the y values
+        :return: a new function
+        """
+        result = cls()
+        for x, y in zip(x, y):
+            result.update_point(x, y)
+        return result
+
+    def update_point(self, x: float, y: float):
+        """
+        adds a point in the function.
+        If the value was already present the old value is overwritten
+
+        :param x: the x vlaue to add
+        :param y: the y value to add
+        """
+        self._function[x] = y
+        self._sortedx_valid = False
+
+    def remove_point(self, x: float):
+        self._sortedx_valid = False
+        del self._function[x]
+
+    def get_y(self, x: float) -> float:
+        """
+
+        :param x: the x value whose y value we need to fetch
+        :return: the y value associated to the x value
+        """
+        return self._function[x]
+
+    def number_of_points(self) -> int:
+        return len(self._function)
+
+    def x_unordered_values(self) -> Iterable[float]:
+        """
+
+        :return: iterable of x values. Order is **not** garantueed
+        """
+        return self._function.keys()
+
+    def change_ith_x(self, x_index: int, new_value: float):
+        super(Function2D, self).change_ith_x(x_index, new_value)
+        self._sortedx_valid = False
+
+    def change_x(self, old_x: float, new_x: float, overwrite: bool = False):
+        super(Function2D, self).change_x(old_x, new_x, overwrite)
+        self._sortedx_valid = False
+
+    def x_ordered_values(self) -> Iterable[float]:
+        """
+
+        :return: iterable of x values. Order goes from the lowest till the greatest
+        """
+        if not self._sortedx_valid:
+            self._sortedx = list(sorted(self._function.keys()))
+            self._sortedx_valid = True
+        return self._sortedx
+
+    def y_unordered_value(self) -> Iterable[float]:
+        """
+
+        :return: iterable of y values. Order is **not** garantueed
+        """
+        return self._function.values()
+
+    def xy_unordered_values(self) -> Iterable[Tuple[float, float]]:
+        """
+
+        :return: iterable of pair os x,y. Order is **not** garantueed
+        """
+        return self._function.items()
+
+
+class SeriesFunction(commons.SlottedClass, IFunction2D):
+
+    __slots__ = ('_series', '_max_x')
+
+    def __init__(self):
+        super(SeriesFunction, self).__init__()
+        self._series = pd.Series([])
+        self._max_x = float('-inf')
+
+    def update_point(self, x: float, y: float):
+        self._series[x] = y
+        if x > self._max_x:
+            self._max_x = x
+        else:
+            # the index may not be sorted anymore. We need to sort it back
+            self._series.sort_index(inplace=True)
+
+    def remove_point(self, x: float):
+        del self._series[x]
+        if len(self._series) > 0:
+            if x == self._max_x:
+                self._max_x = self._series.index[self._series.idxmax()]
+        else:
+            self._max_x = float('-inf')
+
+    def get_y(self, x: float) -> float:
+        return self._series[x]
+
+    def number_of_points(self) -> int:
+        return len(self._series)
+
+    def x_unordered_values(self) -> Iterable[float]:
+        return self._series.index
+
+    def x_ordered_values(self):
+        return self._series.index
+
+    def y_unordered_value(self) -> Iterable[float]:
+        return self._series.values
+
+
+class PandasFunction(commons.SlottedClass, IFunction2D):
+
+    __slots__ = ('df', )
+
+    def __init__(self):
+        super().__init__()
+        self.df = pd.DataFrame(columns=['x', 'y'])
+        self.df.set_index('x', inplace=True)
+
+    def update_point(self, x: float, y: float):
+        # FIXME this is called lots of time and it slow down application
+        self.df.loc[x] = [y]
+
+    def has_x_value(self, x: float) -> bool:
+        return x in self.df.index
+
+    def remove_point(self, x: float):
+        self.df.drop(x, axis=0, inplace=True)
+
+    def get_y(self, x: float) -> float:
+        return float(self.df.loc[x]['y'])
+
+    def number_of_points(self) -> int:
+        return self.df.shape[0]
+
+    def x_unordered_values(self) -> Iterable[float]:
+        return iter(self.df.index)
+
+    def y_unordered_value(self) -> Iterable[float]:
+        return self.df.loc[:, 'y']
+
+# TODO to remove
+class PandasFunction2DWithLabel(IFunction2DWithLabel):
+
+    def __init__(self):
+        super().__init__()
+        self.df = pd.DataFrame(columns=['x', 'y', 'label'])
+        self.df.set_index('x', inplace=True)
+
+    def update_triple(self, x: float, y: float, label: Any = None):
+        self.df.loc[x] = [y, label]
+
+    def get_label(self, x: float) -> Any:
+        return self.df.loc[x]['label']
+
+    def labels_unordered_values(self) -> Iterable[Any]:
+        return self.df.loc[:, 'label']
+
+    def remove_point(self, x: float):
+        self.df.drop(x, axis=0, inplace=True)
+
+    def get_y(self, x: float) -> float:
+        return self.df.loc[x]['y']
+
+    def number_of_points(self) -> int:
+        return self.df.shape[0]
+
+    def x_unordered_values(self) -> Iterable[float]:
+        return iter(self.df.index)
+
+    def y_unordered_value(self) -> Iterable[float]:
+        return self.df.loc[:, 'y']
 
 
 class StandardOptionDict(IOptionDict):
@@ -16,6 +266,9 @@ class StandardOptionDict(IOptionDict):
      - the attributes you care about are public and are not properties (tagged with @proiperty)
      - it's not implemented as a tuple (so no __slots__ schenanigans)
     """
+
+    def __init__(self):
+        IOptionDict.__init__(self)
 
     def options(self) -> Iterable[str]:
         return (name for name in vars(self) if not name.startswith('_'))
@@ -80,6 +333,17 @@ def _query_by_mask(m: "ITestContextMask", iterable: Iterable["ITestContext"]) ->
     for tc in iterable:
         if m.is_complaint_with_test_context(tc, list(iterable)):
             yield tc
+
+
+class AbstractCSVRow(ICsvRow, StandardOptionDict, abc.ABC):
+    """
+    A csv row which natively implements all the IOptionDict methods by looking at  __dict__ public fields
+    of the subtype
+    """
+
+    def __init__(self):
+        ICsvRow.__init__(self)
+        StandardOptionDict.__init__(self)
 
 
 class SimpleTestContextRepoView(ITestContextRepoView):

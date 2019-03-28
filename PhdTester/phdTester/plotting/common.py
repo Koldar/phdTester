@@ -1,7 +1,8 @@
 import abc
+import itertools
 import textwrap
 from decimal import Decimal
-from typing import Iterable
+from typing import Iterable, Any, Tuple, Optional
 
 from phdTester.plotting.plotting import IAxis, IText, ISinglePlot, ILegend, IGrid, IPlot2DGraph
 
@@ -109,16 +110,25 @@ class DefaultAxis(IAxis):
 
 class DefaultSinglePlot(ISinglePlot):
 
-    def __init__(self, values: Iterable[float], name: str):
+    def __init__(self, values: Iterable[float], name: str, labels: Iterable[Any] = None):
         ISinglePlot.__init__(self)
         self._values = list(values)
         self._label = DefaultText(name)
+        self._labels: Optional[Iterable[Any]] = labels
 
     def __iter__(self) -> Iterable[float]:
         return iter(self._values)
 
+    def values_and_labels(self) -> Iterable[Tuple[float, Optional[str]]]:
+        if self._labels is None:
+            return zip(self._values, itertools.repeat(None, len(self._values)))
+        return zip(self._values, map(str, self._labels))
+
     def __getitem__(self, item) -> float:
         return self._values[item]
+
+    def has_some_labels(self) -> bool:
+        return self._labels is not None
 
     @property
     def label(self) -> "IText":

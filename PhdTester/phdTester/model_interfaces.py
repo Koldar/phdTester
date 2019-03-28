@@ -1,10 +1,14 @@
 import abc
+import copy
 import enum
+import logging
 from abc import ABC
-from typing import Any, Tuple, Iterable, Dict, List
+from typing import Any, Tuple, Iterable, Dict, List, Callable, Optional
 
 from phdTester import constants
-from phdTester.graph import ISingleDirectedGraph
+from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, DataTypeStr
+from phdTester.exceptions import ResourceTypeUnhandledError
+from phdTester.graph import IMultiDirectedGraph
 from phdTester.ks001.ks001 import KS001, Aliases
 
 
@@ -26,44 +30,63 @@ class ConditionKind(enum.Enum):
     HAVE_VALUE = 1
 
 
+class IOptionType(abc.ABC):
+    """
+    A interface representing the root element of every type which is accepted inside an option node in a option graph
+    """
+    pass
+
+
 class IDependencyCondition(abc.ABC):
 
-    @property
     @abc.abstractmethod
-    def kind(self) -> ConditionKind:
-        """
-        Type of condition
-        :return:
-        """
+    def enable_sink_visit(self) -> bool:
         pass
 
     @abc.abstractmethod
-    def should_visit(self, graph: ISingleDirectedGraph, source_name: str, sink_name: str, tc: "ITestContext") -> bool:
-        """
-        check if we should check the compliance of this condition
-
-        :param graph: the graph containing source_name and sink_name
-        :param source_name: the source vertex of the condition
-        :param sink_name: the sink vertex of the condition
-        :param tc: the test context
-        :return: true if we should check the accept method of this edge and follow this edge), false if the text
-        context is not applicable to
-        this edge
-        """
+    def is_required(self) -> bool:
         pass
 
     @abc.abstractmethod
-    def accept(self, graph: ISingleDirectedGraph, source_name: str, sink_name: str, tc: "ITestContext") -> bool:
-        """
-        Check if this constraint is valid
-
-        :param graph: the graph containing the whole contraints
-        :param source_name: name of the source node of this constraint
-        :param sink_name: name of the sink node of this constraint
-        :param tc: test context we're applying the constraint to
-        :return: true if `tc` satisfies this constraint, false otherwise
-        """
+    def accept(self, graph: IMultiDirectedGraph, source_name: str, sink_name: str, tc: "ITestContext") -> bool:
         pass
+
+    # @property
+    # @abc.abstractmethod
+    # def kind(self) -> ConditionKind:
+    #     """
+    #     Type of condition
+    #     :return:
+    #     """
+    #     pass
+    #
+    # @abc.abstractmethod
+    # def should_visit(self, graph: ISingleDirectedGraph, source_name: str, sink_name: str, tc: "ITestContext") -> bool:
+    #     """
+    #     check if we should check the compliance of this condition
+    #
+    #     :param graph: the graph containing source_name and sink_name
+    #     :param source_name: the source vertex of the condition
+    #     :param sink_name: the sink vertex of the condition
+    #     :param tc: the test context
+    #     :return: true if we should check the accept method of this edge and follow this edge), false if the text
+    #     context is not applicable to
+    #     this edge
+    #     """
+    #     pass
+    #
+    # @abc.abstractmethod
+    # def accept(self, graph: ISingleDirectedGraph, source_name: str, sink_name: str, tc: "ITestContext") -> bool:
+    #     """
+    #     Check if this constraint is valid
+    #
+    #     :param graph: the graph containing the whole contraints
+    #     :param source_name: name of the source node of this constraint
+    #     :param sink_name: name of the sink node of this constraint
+    #     :param tc: test context we're applying the constraint to
+    #     :return: true if `tc` satisfies this constraint, false otherwise
+    #     """
+    #     pass
 
 
 class IOptionNode(abc.ABC):
@@ -150,14 +173,16 @@ class IOptionDict(abc.ABC):
     """
     Represents a class containing a mapping between a well-specified set of keys
 
-    Values can be set to None
+    Keys are mandatory to be strings. Values can be anything you might and they **can** be se to None.
+    The interface basically transforms an object into a querable dictionary thanks for methods like:
+
+     - `set_opion`;
+     - `get_option`;
+     - `options`;
 
     You use this interface to allow you to let you implement all the methods without any fields.
     In this terminology, the keys are said **options**
     """
-
-    def __init__(self):
-        pass
 
     @abc.abstractmethod
     def options(self) -> Iterable[str]:
@@ -189,6 +214,14 @@ class IOptionDict(abc.ABC):
         :param value: the value associated to such option
         :raise Exception: if the option does not exist in the object
         :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def __init__(self):
+        """
+        Generate a new instance of this structure, with uninitialized fields
+        :return: a new instance of this structure
         """
         pass
 
@@ -240,6 +273,21 @@ class IOptionDict(abc.ABC):
         :return: iterable of all the options declared
         """
         return self.options()
+
+    def clone(self, copy_function: Callable[[Any], Any] = None) -> "IOptionDict":
+        """
+        Creates a clone of this structure by copying the initialize values inside this very structure
+
+        Values are copy by calling `copy.copy` if no `copy_function` is provided
+
+        :param copy_function: if specified, we will use this function to copy the values
+        :return:
+        """
+        copy_function = copy_function if copy_function is not None else copy.copy
+        result = self.__class__()
+        for o in self.options():
+            result.set_option(o, copy_function(self.get_option(o)))
+        return result
 
     def __contains__(self, option: str) -> bool:
         """
@@ -413,6 +461,9 @@ class IOptionDictWithKS(IOptionDict, abc.ABC):
         self.set_options(ks[label])
         return self
 
+    def clone(self, copy_function: Callable[[Any], Any] = None) -> "IOptionDictWithKS":
+        return super(IOptionDictWithKS, self).clone(copy_function)
+
 
 class ITestContext(IOptionDictWithKS, abc.ABC):
     """
@@ -463,6 +514,11 @@ class ITestContext(IOptionDictWithKS, abc.ABC):
         else:
             raise KeyError(f"option {name} not found!")
 
+    def clone(self, copy_function: Callable[[Any], Any] = None) -> "ITestContext":
+        ut = self._ut.clone(copy_function)
+        te = self._te.clone(copy_function)
+        return self.__class__(ut, te)
+
     def __eq__(self, other):
         if not isinstance(other, ITestContext):
             return False
@@ -509,10 +565,13 @@ class ITestContext(IOptionDictWithKS, abc.ABC):
         return True
 
 
-class ICsvRow(abc.ABC):
+class ICsvRow(IOptionDict, abc.ABC):
+    """
+    A class representing a single row fetched from the data source
+    """
 
     def __init__(self):
-        pass
+        IOptionDict.__init__(self)
 
 
 class IUnderTesting(IOptionDictWithKS, ILabelable, ABC):
@@ -525,6 +584,9 @@ class IUnderTesting(IOptionDictWithKS, ILabelable, ABC):
     def __init__(self):
         IOptionDictWithKS.__init__(self)
         ILabelable.__init__(self)
+
+    def clone(self, copy_function: Callable[[Any], Any] = None) -> "IUnderTesting":
+        return super(IUnderTesting, self).clone(copy_function=copy_function)
 
 
 class ITestingEnvironment(IOptionDictWithKS, ILabelable, ABC):
@@ -539,6 +601,9 @@ class ITestingEnvironment(IOptionDictWithKS, ILabelable, ABC):
 
         :return: a string generated for order several test environment
         """
+
+    def clone(self, copy_function: Callable[[Any], Any] = None) -> "ITestingEnvironment":
+        return super(ITestingEnvironment, self).clone(copy_function=copy_function)
 
 
 class ITestingGlobalSettings(IOptionDict, abc.ABC):
@@ -558,6 +623,52 @@ class IMask(IOptionDict, abc.ABC):
     def __getitem__(self, key: str) -> "ITestContextMaskOption":
         return IOptionDict.__getitem__(self, key)
 
+    def is_simple_compliant(self, tc: "ITestContext") -> bool:
+        """
+        Check if a text context is compliant with all the masks which can be solved only with the given TestContext.
+        This check is usually really fast and it does not require an additional (possible bigger) set of
+        TestContext
+
+        :param tc: the text context to check
+        :return: true if all the masks implementing ISimpleTestContextMaskOption are valid.
+        """
+        return self.__is_compliant(tc, [], [ISimpleTestContextMaskOption])
+
+    def is_complex_compliant(self, tc: "ITestContext", tc_data: List["ITestContext"]) -> bool:
+        """
+        Check if a text context is compliant with all the masks which can be solved only with the given TestContext.
+        This check is usually really fast and it does not require an additional (possible bigger) set of
+        TestContext
+
+        :param tc: the text context to check
+        :param tc_data: a list of all the other text contexts compliant with all the previous test context masks
+        :return: true if all the masks implementing ISimpleTestContextMaskOption are valid.
+        """
+        return self.__is_compliant(tc, tc_data, [IComplexTestContextMaskOption])
+
+    def __is_compliant(self, tc: "ITestContext", tc_data: List["ITestContext"], allowed_types: Iterable[type]) -> bool:
+        i = None
+        for o in self.options():
+            expected: ITestContextMaskOption = self.get_option(o)
+            actual = tc.get_option(o)
+            if expected is None:
+                continue
+            if isinstance(expected, ISimpleTestContextMaskOption):
+                if ISimpleTestContextMaskOption not in allowed_types:
+                    continue
+                if not expected.is_compliant(actual):
+                    return False
+            elif isinstance(expected, IComplexTestContextMaskOption):
+                if IComplexTestContextMaskOption not in allowed_types:
+                    continue
+                if i is None:
+                    i = tc_data.index(tc)
+                if not expected.is_compliant(i, actual, tc_data):
+                    return False
+            else:
+                raise TypeError(f"invalid type {type(expected)}! Only ISimpleTestContextMaskOption or IComplexTestContextMaskOption allowed!")
+        return True
+
     def is_complaint_with_test_context(self, tc: "ITestContext", tcs: List["ITestContext"]) -> bool:
         """
         Check if a test context is compliant against the given mask
@@ -568,15 +679,7 @@ class IMask(IOptionDict, abc.ABC):
             to a list of other test contexts. It is required that `tc` belongs to `tcs`
         :return: True if `tc` is compliant with the given mask, `False` otherwise
         """
-        i = tcs.index(tc)
-        for o in self.options():
-            expected: ITestContextMaskOption = self.get_option(o)
-            actual = tc.get_option(o)
-            if expected is None:
-                continue
-            if not expected.is_compliant(i, actual, tcs):
-                return False
-        return True
+        return self.__is_compliant(tc, tcs, [ISimpleTestContextMaskOption, IComplexTestContextMaskOption])
 
     def get_have_value_string(self, ignore_some_tcm_keys: Iterable[str], string_between_key_value: str = "=", string_between_pairs: str = " ") -> str:
         """
@@ -682,17 +785,53 @@ class ITestContextMask(IMask, abc.ABC):
         return result
 
 
-class Function2D(abc.ABC):
-    """
-    Represents a function y=f(x). The function is merely a set of 2D points, so it's more like a mapping.
-    Functions have no names
-    """
+class IDataWriter(abc.ABC):
 
+    @abc.abstractmethod
+    def __enter__(self):
+        pass
+
+    @abc.abstractmethod
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    @abc.abstractmethod
+    def writeline(self, data: Iterable[Any]):
+        pass
+
+
+class IFunction2D(abc.ABC):
+
+    @abc.abstractmethod
     def __init__(self):
-        self._function = {}
+        pass
+
+    @abc.abstractmethod
+    def update_point(self, x: float, y: float):
+        pass
+
+    @abc.abstractmethod
+    def remove_point(self, x: float):
+        pass
+
+    @abc.abstractmethod
+    def get_y(self, x: float) -> float:
+        pass
+
+    @abc.abstractmethod
+    def number_of_points(self) -> int:
+        pass
+
+    @abc.abstractmethod
+    def x_unordered_values(self) -> Iterable[float]:
+        pass
+
+    @abc.abstractmethod
+    def y_unordered_value(self) -> Iterable[float]:
+        pass
 
     @classmethod
-    def from_xy(cls, x: Iterable[float], y: Iterable[float]) -> "Function2D":
+    def from_xy(cls, x: Iterable[float], y: Iterable[float]) -> "IFunction2D":
         """
         Create a new function from 2 lists of the same length
         :param x: the x values
@@ -701,33 +840,32 @@ class Function2D(abc.ABC):
         """
         result = cls()
         for x, y in zip(x, y):
-            result[x] = y
+            result.update_point(x, y)
         return result
 
-    def update_point(self, x: float, y: float):
+    def has_ith_xvalue(self, i: int) -> bool:
         """
-        adds a point in the function.
-        If the value was already present the old value is overwritten
+        Check if this function has a certain amount of values
+        :param i:
+        :return:
+        """
+        return self.number_of_points() > i
 
-        :param x: the x vlaue to add
-        :param y: the y value to add
-        """
-        self._function[x] = y
+    def has_x_value(self, x: float) -> bool:
+        return x in self.x_unordered_values()
 
-    def get_y(self, x: float) -> float:
+    def get_ith_xvalue(self, i: int) -> float:
         """
+        fetch the i-th x value of the function.
 
-        :param x: the x value whose y value we need to fetch
-        :return: the y value associated to the x value
-        """
-        return self._function[x]
+        If the function is: `<1,3> <5,3> <10,12>`
+        callinf the function with `i=1` will return `5`
 
-    def x_unordered_values(self) -> Iterable[float]:
+        :param i: the index fo the x_value to generate
+        :return: an x value
         """
 
-        :return: iterable of x values. Order is **not** garantueed
-        """
-        return self._function.keys()
+        return self.x_ordered_values()[i]
 
     def keys(self) -> Iterable[float]:
         """
@@ -737,32 +875,43 @@ class Function2D(abc.ABC):
         return self.x_unordered_values()
 
     def x_ordered_values(self) -> Iterable[float]:
-        """
-
-        :return: iterable of x values. Order goes from the lowest till the greatest
-        """
-        return sorted(self._function.keys())
-
-    def y_unordered_value(self) -> Iterable[float]:
-        """
-
-        :return: iterable of y values. Order is **not** garantueed
-        """
-        return self._function.values()
+        return sorted(self.x_unordered_values())
 
     def y_ordered_value(self) -> Iterable[float]:
         """
 
         :return: iterable of y values. Order is garantueed
         """
-        return sorted(self._function.values())
+        return sorted(self.y_unordered_value())
 
     def xy_unordered_values(self) -> Iterable[Tuple[float, float]]:
         """
 
         :return: iterable of pair os x,y. Order is **not** garantueed
         """
-        return self._function.items()
+        return map(lambda x: (x, self.get_y(x)), self.x_unordered_values())
+
+    def xy_ordered_values(self) -> Iterable[Tuple[float, float]]:
+        """
+
+        :return: iterable of pairs of x,y. Order of x **is** garantueed. Order of y is ignored
+        """
+        return map(lambda x: (x, self.get_y(x)), self.x_ordered_values())
+
+    def change_ith_x(self, x_index: int, new_value: float):
+        x = self.get_ith_xvalue(x_index)
+        y = self.get_y(x)
+        self.remove_point(x)
+        self.update_point(new_value, y)
+
+    def change_x(self, old_x: float, new_x: float, overwrite: bool = False):
+        if self.has_x_value(new_x) and overwrite is False:
+            raise ValueError(f"cannot replace an already existing value!")
+        if new_x == old_x:
+            return
+        old_y = self.get_y(old_x)
+        self.update_point(new_x, old_y)
+        self.remove_point(old_x)
 
     def __contains__(self, item: float) -> bool:
         """
@@ -770,7 +919,7 @@ class Function2D(abc.ABC):
         :param item: the x vcalue to check
         :return: true if a x value is present in the function, false otherwise
         """
-        return item in self._function
+        return self.has_x_value(item)
 
     def __setitem__(self, x: float, y: float):
         """
@@ -789,9 +938,78 @@ class Function2D(abc.ABC):
         """
         return self.get_y(x)
 
-    @property
-    def dict(self) -> Dict[float, float]:
-        return self._function
+    def __add__(self, other: "IFunction2D") -> "IFunction2D":
+        result = self.__class__()
+        for x, y in self.xy_unordered_values():
+            if x not in other:
+                raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
+            result[x] = y + other[x]
+        return result
+
+    def __iadd__(self, other: "IFunction2D"):
+        for x, y in self.xy_unordered_values():
+            if x not in other:
+                raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
+            self[x] = self[x] + other[x]
+
+    def __sub__(self, other: "IFunction2D") -> "IFunction2D":
+        result = self.__class__()
+        for x, y in self.xy_unordered_values():
+            if x not in other:
+                raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
+            result[x] = y - other[x]
+        return result
+
+    def __isub__(self, other: "IFunction2D"):
+        for x, y in self.xy_unordered_values():
+            if x not in other:
+                raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
+            self[x] = self[x] - other[x]
+
+    def __str__(self) -> str:
+        result = "{"
+        result += ', '.join(map(lambda x: f"{x:.1f}={self[x]:.1f}", self.x_ordered_values()))
+        result += "}"
+        return result
+
+
+#FIXME remove
+class IFunction2DWithLabel(IFunction2D, abc.ABC):
+
+    @abc.abstractmethod
+    def __init__(self):
+        super().__init__()
+
+    def update_point(self, x: float, y: float):
+        self.update_triple(x, y)
+
+    @abc.abstractmethod
+    def update_triple(self, x: float, y: float, label: Any = None):
+        pass
+
+    def update_only_y(self, x: float, y: float):
+        self.update_triple(x, y, self.get_label(x))
+
+    @abc.abstractmethod
+    def get_label(self, x: float) -> Any:
+        pass
+
+    @abc.abstractmethod
+    def labels_unordered_values(self) -> Iterable[Any]:
+        pass
+
+    def __setitem__(self, key, value):
+        # TODO actually the best is to convert the WHOLE project to use IFunction2dWithLabels instead to mix those 2...
+        # they have different interfaces and the whole project is starting to have too many if the else..
+        raise ValueError(f"should not be used!")
+
+    def __str__(self) -> str:
+        result = "{\ny = "
+        result += ', '.join(map(lambda x: f"{x:.1f}={self[x]:.1f}", self.x_ordered_values()))
+        result += "\nlabels ="
+        result += ', '.join(map(lambda x: f"{x:.1f}={self.get_label(x)}", self.x_ordered_values()))
+        result += "\n}"
+        return result
 
 
 class AbstractDictionaryMergerTemplate(abc.ABC):
@@ -828,6 +1046,8 @@ class AbstractDictionaryMergerTemplate(abc.ABC):
         return new_dict
 
 
+# TODO we should change the aggregator interface to have only a value called aggregate which accept a value.
+# we should have other methods fetching the last value or check if a value has been inserted or not.
 class IAggregator(abc.ABC):
     """
     Represents an object which merge different number in order to maintain a specific metric.
@@ -836,29 +1056,99 @@ class IAggregator(abc.ABC):
     the online succession
     """
 
-    # TODO remove None from new
     @abc.abstractmethod
-    def first_value(self, new: float = None) -> float:
+    def clone(self) -> "IAggregator":
         """
-        Actions to perform when the very first element of the sequence arrives
-        :param new: the first element of the sequence
-        :return: the measurement you want to keep track of after the first element of the sequence has been received
+        Create a new instance exactly the same as `self`
+        :return: a new instance
         """
         pass
 
     @abc.abstractmethod
-    def aggregate(self, old: float, new: float) -> float:
+    def reset(self):
+        """
+        Reset the contents of this aggregator.
+
+        :return:
+        """
+
+    # # TODO remove None from new
+    # @abc.abstractmethod
+    # def first_value(self, new: float = None) -> float:
+    #     """
+    #     Actions to perform when the very first element of the sequence arrives
+    #     :param new: the first element of the sequence
+    #     :return: the measurement you want to keep track of after the first element of the sequence has been received
+    #     """
+    #     pass
+
+    @abc.abstractmethod
+    def get_current(self) -> float:
+        """
+
+        :return: the value of the sequence at the moment
+        """
+        pass
+
+    @abc.abstractmethod
+    def aggregate(self, new: float) -> float:
         """
         Actions to perform when a new element of the sequence arrives
 
         For example assume you want to maintain the maximum of a sequence. Right now you have
-        the maximum set to 6. Then you receive 3. 6 will be "old", 3 will be "new" and the function should return 6
+        the maximum set to 6. Then you receive 3. 3 will be "new" and the function should return 6
         (the maximum of a sequence whose maximum is 6 and 3 is still 6).
         If you then received another value 9 the new maximum will be 9.
 
-        :param old: the value of the measurement you want to maintain before the new value was detected
         :param new: the new value to accept
         :return: the value of the measurement you want to maintain after having received the new value
+        """
+        pass
+
+    # @abc.abstractmethod
+    # def aggregate(self, old: float, new: float) -> float:
+    #     """
+    #     Actions to perform when a new element of the sequence arrives
+    #
+    #     For example assume you want to maintain the maximum of a sequence. Right now you have
+    #     the maximum set to 6. Then you receive 3. 6 will be "old", 3 will be "new" and the function should return 6
+    #     (the maximum of a sequence whose maximum is 6 and 3 is still 6).
+    #     If you then received another value 9 the new maximum will be 9.
+    #
+    #     :param old: the value of the measurement you want to maintain before the new value was detected
+    #     :param new: the new value to accept
+    #     :return: the value of the measurement you want to maintain after having received the new value
+    #     """
+    #     pass
+
+
+class IFunctionSplitter(abc.ABC):
+    """
+    A function splitter allows to "split" a supposedly single plot into multiple plots. Useful if you're not satisfied
+    with the granularity offered by Aggregator.
+
+    Aggregator are useful, but maybe you're aggregating too much, thus losing information you might want to retain. Use
+    a splitter to split the same function into different ones.
+    """
+
+    @abc.abstractmethod
+    def fetch_function(self, x: float, y: float, label: Any, under_test_function_key: str, csv_tc: "ITestContext", csv_name: str, i: int, csv_outcome: "ICsvRow") -> Tuple[float, float, Any, str]:
+        """
+        alters the fetched point from the csvs
+
+        :param x: the x point fetched from the csv
+        :param y: the y point fetched from the csv
+        :param label: the label fetched from the csv
+        :param under_test_function_key: the name of the function label to generate
+        :param csv_tc: the test context used to fetch the csv
+        :param csv_name: the absolute path of the csv name
+        :param i: the index fo the row just read
+        :param csv_outcome: a structure representing the single row of the csv just read
+        :return: a tuple of 4 elements:
+            - the new x vlaue,
+            - the new y value
+            - the new label
+            - the new name of the function
         """
         pass
 
@@ -873,13 +1163,200 @@ class ICurvesChanger(abc.ABC):
     """
 
     @abc.abstractmethod
-    def alter_curves(self, curves: Dict[str, Function2D]) -> Dict[str, Function2D]:
+    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
         """
         perform the operation altering the curves
         :param curves: the curves to alter
         :return: a new set of functions to plot
         """
         pass
+
+
+#TODO this filters not only apply to csv, but theoretically to all the resources in the data source!
+class ICsvFilter(abc.ABC):
+    """
+    A structure representing an object filtering data sources
+    """
+
+    @abc.abstractmethod
+    def reset(self):
+        pass
+
+    @abc.abstractmethod
+    def is_naive(self) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def is_single(self) -> bool:
+        """
+        mutually exclusive with is_complex
+
+        :return: true if the filter is **independent** of other accepted data sources
+        """
+        pass
+
+    @abc.abstractmethod
+    def is_testcontext(self) -> bool:
+        """
+        mutually exclusive with the other is_XXX methods
+        :return: true if trhe filter requires, to work, to access the "ITestContext" of the given resource
+        """
+        pass
+
+    @abc.abstractmethod
+    def is_complex(self) -> bool:
+        """
+        mutually exclusive with is_single
+
+        :return: true f the filter is **dependent** with other accepted data sources
+        """
+        pass
+
+    def as_naive(self) -> "INaiveCsvFilter":
+        return self
+
+    def as_single(self) -> "ISingleCsvFilter":
+        return self
+
+    def as_testcontext(self) -> "ITestContextCsvFilter":
+        return self
+
+    def as_complex(self) -> "IComplexCsvFilter":
+        return self
+
+
+class INaiveCsvFilter(ICsvFilter, abc.ABC):
+    """
+    a datasource filtering object whhose validity can be detected by looking only at the name of a single data source
+
+    This filter is really simple and can be used to avoid more difficult computation. Howver, KS001 representation
+    of the datasource name is not available. If you need it, use ISingleCsvFiltering
+    """
+
+    @abc.abstractmethod
+    def is_valid(self, path: str, ks001: KS001Str, data_type: str, index: int) -> bool:
+        """
+        Check if a csv is valid based on its content
+
+        :param path: the path where the csv resource is located
+        :param ks001: name of the csv
+        :param data_type: the type of the resource to filter
+        :param index: the index of this csv
+        :return: true if this csv needs to be considered when generating an image, false otherwise
+        """
+        pass
+
+    def is_naive(self) -> bool:
+        return True
+
+    def is_single(self) -> bool:
+        return False
+
+    def is_testcontext(self) -> bool:
+        return False
+
+    def is_complex(self) -> bool:
+        return False
+
+
+
+class ISingleCsvFilter(ICsvFilter, abc.ABC):
+    """
+    A datasource filtering object whose validity can be detected by looking only at the single data source and its KS001
+    """
+
+    @abc.abstractmethod
+    def is_valid(self, path: str, csv_ks001str: KS001Str, csv_ks001: "KS001", data_type: str, index: int) -> bool:
+        """
+        Check if a csv is valid based on its content
+
+        :param path: the path of the csv
+        :param csv_ks001str: a string representation of csv_ks001
+        :param csv_ks001: the KS001 representing the name of the csv
+        :param data_type: the type of the resource to filter
+        :param index: the index of this csv
+        :return: true if this csv needs to be considered when generating an image, false otherwise
+        """
+        pass
+
+    def is_naive(self) -> bool:
+        return False
+
+    def is_single(self) -> bool:
+        return True
+
+    def is_testcontext(self) -> bool:
+        return False
+
+    def is_complex(self) -> bool:
+        return False
+
+
+class ITestContextCsvFilter(ICsvFilter, abc.ABC):
+    """
+    Represents a resource filter which requires to have the relative "TestContext" in order to effectively work
+    """
+
+    @abc.abstractmethod
+    def is_valid(self, path: str, csv_ks001str: KS001Str, data_type: str, csv_ks001: "KS001", tc: "ITestContext", index: int) -> bool:
+        """
+        Check if a csv is valid based on its content
+
+        :param path: the path of the csv
+        :param csv_ks001str: a string representation of csv_ks001
+        :param data_type: the type of the resource to filter
+        :param csv_ks001: the KS001 representing the name of the csv
+        :param tc: the test context representing the csv filter
+        :param index: the index of this csv
+        :return: true if this csv needs to be considered when generating an image, false otherwise
+        """
+        pass
+
+    def is_naive(self) -> bool:
+        return False
+
+    def is_single(self) -> bool:
+        return False
+
+    def is_testcontext(self) -> bool:
+        return True
+
+    def is_complex(self) -> bool:
+        return False
+
+
+class IComplexCsvFilter(ICsvFilter, abc.ABC):
+    """
+    A datasource filtering object whose validity can be checked only by looking a set of other datasources as well.
+    """
+
+    @abc.abstractmethod
+    def is_valid(self, path: str, csv_ks0001str: KS001Str, csv_ks001: "KS001", data_type: str, index: int,
+                 csv_data: List[GetSuchInfo]) -> bool:
+        """
+        Check if a csv is valid based on its content
+
+        :param path: path of the csv in the datasource
+        :param csv_ks0001str: string representation of the KS001 rerpesenting the CSV
+        :param csv_ks001: the KS001 representing the csv
+        :param data_type: the type of the resource to consider
+        :param index: the index where `csv_ks001` can be found in `csv_data`
+        :param csv_data: all the relevant csvs which have been filtered by the previous filters
+        :return: true if this csv needs to be considered when generating an image, false otherwise
+        """
+        pass
+
+    def is_naive(self) -> bool:
+        return False
+
+    def is_single(self) -> bool:
+        return False
+
+    def is_testcontext(self) -> bool:
+        return False
+
+    def is_complex(self) -> bool:
+        return True
 
 
 class ITestContextMaskOption(abc.ABC):
@@ -950,6 +1427,26 @@ class ITestContextMaskOption(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def __str__(self) -> str:
+        pass
+
+
+class ISimpleTestContextMaskOption(ITestContextMaskOption):
+
+    def __init__(self):
+        ITestContextMaskOption.__init__(self)
+
+    @abc.abstractmethod
+    def is_compliant(self, actual: "Any") -> bool:
+        pass
+
+
+class IComplexTestContextMaskOption(ITestContextMaskOption):
+
+    def __init__(self):
+        ITestContextMaskOption.__init__(self)
+
+    @abc.abstractmethod
     def is_compliant(self, i: int, actual: "Any", actual_set: List["ITestContext"]) -> bool:
         """
         Check if a option value is is compliant with this mask
@@ -967,10 +1464,6 @@ class ITestContextMaskOption(abc.ABC):
         :param actual_set: the sert of all the test contexts we're dealing with
         :return: True if this option mask is compliant: this means that the value of the option has passed a constraint.
         """
-        pass
-
-    @abc.abstractmethod
-    def __str__(self) -> str:
         pass
 
 
@@ -1059,3 +1552,688 @@ class ITestContextRepoView(abc.ABC):
 
     def __str__(self) -> str:
         return "{" + "\n".join(map(str, self)) + "}"
+
+
+class IDataSourceListener(abc.ABC):
+    """
+    Allows you to react to updates in the data source
+    """
+
+    @abc.abstractmethod
+    def on_new_data_added(self, path: str, name: str):
+        pass
+
+
+class IResourceManager(abc.ABC):
+    """
+    A class which allows to read/write a resource with a well specified type in a well specified data source
+    """
+
+    def __init__(self):
+        pass
+
+    @abc.abstractmethod
+    def is_compliant_with(self, datasource: "IDataSource") -> bool:
+        """
+        Determine if this resource manager can be attached to the specified datasource
+        :param datasource: the datasource to check
+        :return: true if we can register this resource manager to `datasource`, false otherwise
+        """
+        pass
+
+    @abc.abstractmethod
+    def can_handle_data_type(self, datasource: "IDataSource", data_type: str) -> bool:
+        """
+        :param datasource: the data source we will operate on
+        :param data_type: the data_type of resource we need to check if this resource manager can effectively handle
+        :return: true if this resaource manager can handle `data_type`
+        """
+        pass
+
+    @abc.abstractmethod
+    def _on_attached(self, datasource: "IDataSource"):
+        """
+        Code executed when the resource manager is registered to a particular datasource
+        :param datasource: the datasoruce we have jsut attached to
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str, content: Any):
+        """
+        Upload a resource in the filesystem to the datasource by setting to a particular path
+
+        If the resources already exists, the function will overwrites it.
+        If the path was never used up until now, the function behaves normally.
+
+        :param datasource: the data source we will operate on
+        :param path: the path where we need to upload it
+        :param ks001: the name of the file to save into the datasource
+        :param data_type: the type fo the data to upload.
+        :param content: the content to upload to the data source. The exact content highly depend on the resource
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> Any:
+        """
+        get the content of a particular file
+
+        :param datasource: the data source we will operate on
+        :param path: path of the file to load
+        :param ks001: name of the resource to load. Resources need ot be in KS001 format
+        :param data_type: type of file to load
+        :raises ResourceNotFoundError: if the resources was not present in the datasource
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_all(self, datasource: "IDataSource", path: str = None, data_type: str = None) -> Iterable[Tuple[str, str, str]]:
+        """
+        get all the resources which are in `path` and have type `data_type`
+
+        :param datasource: the data source we will operate on
+        :param path: the path where to look for resources in the datasource.
+            If None we will look over all the datasource
+        :param data_type: the type of the data we're looking for in the dartasource.
+            If Nnone we will look oiver all the datasource
+        :return: an iterable of path, ks001 and data_type of every resource compliant with the request
+        """
+        pass
+
+    @abc.abstractmethod
+    def contains(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> bool:
+        """
+        Check if a resource exists in the data source
+
+        Function works even when this instance of path is used for the first time
+
+        :param datasource: the data source we will operate on
+        :param path: the path of the resource
+        :param ks001: the name of the resource. name must be compliant with KS001 format
+        :param data_type: type of the resource to check
+        :return: true if the datasource has a resource as specified, false otherwise
+        """
+        pass
+
+    @abc.abstractmethod
+    def remove(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str):
+        """
+        Removes a resource in the data source
+
+        The function works even when this instance of path is used for the first time
+
+        :param datasource: the data source we will operate on
+        :param path: the path of the resource
+        :param ks001: the name of the resource. name must be compliant with KS001 format
+        :param data_type: type of the resource to remove
+        :raises ResourceNotFoundError: if the resaource does not exist
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def iterate_over(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> Iterable[Any]:
+        """
+        Open the resource specified and than perform an iteration of such resource.
+
+        The semantic of the implementation depends on the resource type loaded.
+
+        For large resources this method may improve memory footprint
+
+        :param datasource: the data source we will operate on
+        :param path: the path of the resource to open
+        :param ks001: the ks001 of the resource to open
+        :param data_type: the data type fo the resource to open
+        :return:
+        """
+
+
+class ICsvResourceManager(IResourceManager, abc.ABC):
+    """
+    A manager which handle the "csv" resources
+    """
+
+    def __init__(self):
+        IResourceManager.__init__(self)
+
+    @abc.abstractmethod
+    def head(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr, index: int) -> Dict[str, Any]:
+        pass
+
+    @abc.abstractmethod
+    def tail(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr, index: int) -> Dict[str, Any]:
+        pass
+
+    def first(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Dict[str, Any]:
+        return self.head(datasource, path, ks001, data_type, 1)
+
+    def last(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Dict[str, Any]:
+        return self.tail(datasource, path, ks001, data_type, 1)
+
+
+class IDataSource(abc.ABC):
+    """
+    Represents a place where experimental data can be gathered from.
+
+    This may be the file system or even a database.
+
+
+    Within a tester datasource, there are several "files", which represents raw data in a unspecified form.
+    To discern file content, each "file" has a "type".
+    Each "file" has a name and can be fetched inside a "path". a "path" is a string separated by the special
+    character '/' which separates between different subgroups. Intend "path" as a way to implement a organized tree-like
+    document structure. "file" name **always** is encoded via KS001
+    standard. "files" have unique triple or "path", "name" and "type".
+
+    Use
+    ===
+
+    Data sources are intended to be used in a "with" statement:
+
+    with DataSourceImpl() as datasource:
+        datasource.save_generic_data_at(...)
+
+    """
+
+    def __init__(self):
+        """
+        Initialize the Datasource.
+        """
+        self.listeners = []
+        self.resource_managers: Dict[str, "IResourceManager"] = {}
+
+    @abc.abstractmethod
+    def __enter__(self) -> "IDataSource":
+        """
+        Allocate resources necessary to run the data source
+        :return: self
+        """
+        pass
+
+    @abc.abstractmethod
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Deallocate resources necessary to run the data source
+        """
+        pass
+
+    @abc.abstractmethod
+    def name(self):
+        """
+        name of the data source. Used to informally indicate the datasource
+        :return: the name of datasource
+        """
+        pass
+
+    @abc.abstractmethod
+    def clear(self):
+        """
+        Completely remove everything inside this datasource
+
+        This will remove all the data in the datasource
+        :return:
+        """
+        pass
+
+    def get_manager_of(self, data_type: str) -> "IResourceManager":
+        """
+        Get the manager responsible of handling resources of type `data_type`
+        :param data_type:
+        :return:
+        """
+        return self.resource_managers[data_type]
+
+    def save_at(self, path: str, ks001: KS001Str, data_type: str, content: Any):
+        """
+        Upload a file in the filesystem to the datasource by setting to a particular path
+
+        If the resources already exists, the function will overwrites it.
+        If the path was never used up until now, the function behaves normally.
+
+        :param path: the path where we need to upload it
+        :param ks001: the name of the file to save into the datasource
+        :param data_type: the type fo the data to upload.
+        :param content: the content to upload to the database (as is, raw)
+        :return:
+        """
+        if data_type not in self.resource_managers:
+            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
+
+        self.resource_managers[data_type].save_at(self, path, ks001, data_type, content)
+
+    def get(self, path: str, ks001: KS001Str, data_type: str) -> Any:
+        """
+        get the content of a particular file
+        :param path: path of the file to load
+        :param ks001: name of the resource to load. Resources need ot be in KS001 format
+        :param data_type: type of file to load
+        :raises ResourceNotFoundError: if the resources was not present in the datasource
+        :return:
+        """
+        if data_type not in self.resource_managers:
+            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
+
+        return self.resource_managers[data_type].get(self, path, ks001, data_type)
+
+    def get_all(self, path: str = None, data_type: str = None) -> Iterable[Tuple[str, str, str]]:
+        if data_type not in self.resource_managers:
+            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
+
+        return self.resource_managers[data_type].get_all(self, path, data_type)
+
+    def contains(self, path: str, ks001: KS001Str, data_type: str) -> bool:
+        """
+        Check if a resource exists
+
+        Function works even when this instance of path is used for the first time
+
+        :param path: the path of the resource
+        :param ks001: the name of the resource. name must be compliant with KS001 format
+        :param data_type: type of the resource to check
+        :return: true if the datasource has a resource as specified, false otherwise
+        """
+        if data_type not in self.resource_managers:
+            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
+
+        return self.resource_managers[data_type].contains(self, path, ks001, data_type)
+
+    def remove(self, path: str, ks001: KS001Str, data_type: str):
+        """
+        Removes a resource in the data source
+
+        The function works even when this instance of path is used for the first time
+
+        :param path: the path of the resource
+        :param ks001: the name of the resource. name must be compliant with KS001 format
+        :param data_type: type of the resource to remove
+        :raises ResourceNotFoundError: if the resaource does not exist
+        :return:
+        """
+        if data_type not in self.resource_managers:
+            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
+
+        self.resource_managers[data_type].remove(self, path, ks001, data_type)
+
+    # @abc.abstractmethod
+    # def save_csv_at(self, path: str, ks001: KS001Str, content: str):
+    #     """
+    #     Upload a csv in the data source
+    #
+    #     If the resources already exists, the function will overwrites it.
+    #     If the path was never used up until now, the function behaves normally.
+    #
+    #     :param path: path in the datasource where you want to save the csv to
+    #     :param ks001: the name of the resources we want to generate
+    #     :param content: the content of the resource we want to generate
+    #
+    #     :return:
+    #     """
+    #     # self.save_generic_data_at(csv_filename, path=path, data_type=data_type)
+    #     pass
+
+    # @abc.abstractmethod
+    # def get_csv(self, path: str, ks001: KS001Str) -> str:
+    #     """
+    #     get a csv string content from the datasource
+    #     :param path: the path where to fetch the csv
+    #     :param ks001: the name of the resource we want to load
+    #     :raises ResourceNotFoundError: if the resources was not present in the datasource
+    #     :return: the string containing the csv file content
+    #     """
+    #     pass
+
+    def iterate_over(self, path: str, ks001: KS001Str, data_type: str) -> Iterable[Any]:
+        """
+        Open the resource specified and than perform an iteration of such resource.
+
+        The semantic of the implementation depends on the resource type loaded
+
+        :param path: the path of the resource to open
+        :param ks001:
+        :param data_type:
+        :return:
+        """
+        if data_type not in self.resource_managers:
+            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
+
+        yield from self.resource_managers[data_type].iterate_over(self, path, ks001, data_type)
+
+
+    # TODO remove
+    # @abc.abstractmethod
+    # def get_csvs(self, path: str = None) -> Iterable[Tuple[str, str]]:
+    #     """
+    #
+    #     :param path: the path where to fetch csv. If None we will consider the whole datasource
+    #     :return: an iterable where each entry has the csv path, ks001
+    #     """
+    #     pass
+
+    def get_suchthat(self,
+                            filters: List[ICsvFilter] = None,
+                            test_context_template: "ITestContext" = None,
+                            path: str = None, data_type: str = None,
+                            force_generate_ks001: bool = False, force_generate_textcontext: bool = False) -> Iterable[GetSuchInfo]:
+        """
+        get all the csv data in the datasource which follows the condition
+
+        path and data_type can be optionally specifiy to statically reduce the number of resources involved while
+        searching
+        :param filters: filters which consider only a subset of csvs
+        :param test_context_template: a ITestContext which we will use to clone to
+        :param path: path used to consider only a subset of all the resources in the datasource. If None we will
+            consider all the resources in the datasource
+        :param data_type: data_type used to consider only a subset of all the resources in the datasource. If None we
+            will consider all the resources in the datasource.
+        :param force_generate_ks001: if true we generate for each csv which surpass all the filters the KS001 structure.
+            If False we will generate such structure only if strictly needed.
+        :param force_generate_textcontext: if true we will generate for each csv which surpasses all the filter the
+            TestContext structure. If False we will generate it only if strictly needed.
+        :return:
+        """
+
+        # TODO rename csv in "generic data"
+        filters = filters if filters is not None else []
+        naive_csv_filters: List[INaiveCsvFilter] = list(filter(lambda f: f.is_naive(), filters))
+        single_csv_filters: List[ISingleCsvFilter] = list(filter(lambda f: f.is_single(), filters))
+        test_context_csv_filters: List[ITestContextCsvFilter] = list(filter(lambda f: f.is_testcontext(), filters))
+        complex_csv_filters: List[IComplexCsvFilter] = list(filter(lambda f: f.is_complex(), filters))
+
+        has_naive_filters = len(naive_csv_filters) > 0
+        has_single_filters = len(single_csv_filters) > 0
+        has_testcontext_filters = len(test_context_csv_filters) > 0
+        has_complex_filters = len(complex_csv_filters) > 0
+
+        if test_context_template is None and (has_single_filters or has_testcontext_filters or has_complex_filters):
+            raise ValueError(f"rtest context template is None but we strictly require it since you have specified either a single filter or a complex one!")
+
+        def handle_generic_data(i: int, path: str, ks001str: str, data_type: str) -> Tuple[bool, Optional["ITestContext"], Optional["KS001"], Optional[str]]:
+            logging.debug(f"considering {path}/{ks001str} (type={data_type})...")
+            if not has_naive_filters and not has_single_filters and not has_testcontext_filters and not has_complex_filters:
+                # if there are no filters we accept everything!
+                return True, None, None, data_type
+
+            for cf in naive_csv_filters:
+                if not cf.is_valid(path, ks001str, data_type, i):
+                    return False, None, None, None
+
+            if not has_single_filters and not has_testcontext_filters and not has_complex_filters:
+                # if, aside naive filters, there are no filters, we accept everything
+                return True, None, None, data_type
+
+            logging.debug(f"checking csv #{i}")
+            # logging.info(f"considering csv #{i}")
+            # we check if the csv filename is compliant with our filter
+            # we know the relevant csvs have as their first dict of the filename
+            # the encoding of the relevant test context
+            tc = test_context_template.clone()
+
+            # we test if the csv fetched has its KS001 compliant with a general one. This because
+            # test context is a KS001, but it does NOT contain all the key-values a normal KS001 may.
+            # test context is just ONE dictionary in the KS001, while KS001 contains several dictionaries
+            csv_filename_ks001 = KS001.parse_str(
+                string=ks001str,
+                key_alias=tc.key_alias,
+                value_alias=tc.value_alias,
+                colon=constants.SEP_COLON,
+                pipe=constants.SEP_PIPE,
+                underscore=constants.SEP_PAIRS,
+                equal=constants.SEP_KEYVALUE,
+            )
+
+            for f in single_csv_filters:
+                if not f.is_valid(path, ks001str, csv_filename_ks001, data_type, i):
+                    # this csv doesn't satisfy the filter
+                    return False, None, None, None
+
+            if not has_testcontext_filters and not has_complex_filters:
+                # if, aside naive filters and single one there are not filters we return immediately
+                return True, None, csv_filename_ks001, data_type
+
+            tc.set_from_ks001_index(
+                index=0,
+                ks=csv_filename_ks001
+            )
+
+            for f in test_context_csv_filters:
+                if not f.is_valid(path, ks001str, data_type, csv_filename_ks001, tc, i):
+                    return False, None, None, None
+
+            # the csv contains values which we're interested in?
+            # FIXME if the user doesn't reuse the same output direcotry for multiple run with different sutff under test/test environment this is useless
+            # if not tc.are_option_values_all_in(research_factory.under_test_dict_values, research_factory.test_environment_dict_values):
+            #    return False, None, None, None
+
+            return True, tc, csv_filename_ks001, data_type
+
+        test_context_from_csv_filename_list: List[GetSuchInfo] = []
+        for i, (path, ks001str, data_type) in enumerate(self.get_all(path, data_type)):
+            outcome, tc, ks001, dt = handle_generic_data(i, path, ks001str, data_type)
+            if outcome:
+
+                if not has_complex_filters:
+                    # if aside from naive and single filters, there are no other fgilters, we accept everything
+                    # NOTE: when there are no complex filter there is no use for test_context_from_csv_filename_list
+                    # so we avoid it altogether
+                    if force_generate_ks001 and ks001 is None:
+                        ks001 = KS001.parse_str(
+                            string=ks001str,
+                            key_alias=test_context_template.key_alias,
+                            value_alias=test_context_template.value_alias,
+                            colon=constants.SEP_COLON,
+                            pipe=constants.SEP_PIPE,
+                            underscore=constants.SEP_PAIRS,
+                            equal=constants.SEP_KEYVALUE,
+                        )
+                    if force_generate_textcontext and tc is None:
+                        tc = test_context_template.clone()
+                        tc.set_from_ks001_index(0, ks001)
+                    yield GetSuchInfo(path, ks001str, data_type, ks001, tc)
+                else:
+                    # ok, there are some complex filters. We need to populate test_context_from_csv_filename_list.
+                    # ok we may add this new csv. Of course we still need to check if it surpasses the checks of the complex
+                    # masks, but then again, we need the whole set in order to compute those!
+                    logging.debug(f"got a new csv {ks001str}! length is {len(test_context_from_csv_filename_list)}!")
+                    test_context_from_csv_filename_list.append(GetSuchInfo(path, ks001str, data_type, ks001, tc))
+
+        if has_complex_filters:
+            # we check the complex filters only if they are present
+
+            # we store the test_contexts in a list because some masks may need the whole list of text_contexts handle to
+            # decide if an option value is compliant or not
+            for i, (path, ks001str, data_type, csv_ks001, test_context) in enumerate(test_context_from_csv_filename_list):
+
+                logging.debug(f"check compliance!")
+                logging.debug(f"val : {test_context}")
+
+                valid = True
+                for cf in complex_csv_filters:
+                    if not cf.is_valid(path, ks001str, csv_ks001, data_type, i, test_context_from_csv_filename_list):
+                        valid = False
+                        break
+                if not valid:
+                    continue
+
+                logging.debug(f"is compliant!")
+                # we know for sure that both csv_ks001 and test_context are not None
+                yield GetSuchInfo(path, ks001str, data_type, csv_ks001, test_context)
+
+    # @abc.abstractmethod
+    # def contains_csv(self, path: str, ks001: KS001Str) -> bool:
+    #     """
+    #     Check if a csv resource exists
+    #
+    #     Function works even when this instance of path is used for the first time
+    #
+    #     :param path: the path of the resource
+    #     :param ks001: the name of the resource. name must be compliant with KS001 format
+    #     :return: true if the datasource has a resource as specified, false otherwise
+    #     """
+    #     pass
+    #
+    # @abc.abstractmethod
+    # def remove_csv(self, path: str, ks001: KS001Str):
+    #     """
+    #     Removes a resource in the data source
+    #
+    #     The function works even when this instance of path is used for the first time
+    #
+    #     :param path: the path of the resource
+    #     :param ks001: the name of the resource. name must be compliant with KS001 format
+    #     :raises ResourceNotFoundError: if the resaource does not exist
+    #     :return:
+    #     """
+    #     pass
+
+    def transfer_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: str, to_path: str = None, to_ks001: KS001Str = None, to_data_type: str = None, remove: bool = False):
+        """
+        Transfer the resource from the current data source to another one. You can optionally specify
+        new path, data type and ks001 in the target data source.
+
+        The function is garantueed to do nothing if self is equal to other and
+        the start position ids the same of end position
+
+        :param other: the other datasource that will receive the resources from the current one
+        :param from_path: the path of the resource to transfer in self
+        :param from_ks001: the name of the reosurce to trasnfer in self
+        :param from_data_type: the type of the resource to transfer in self
+        :param to_path: the path the transferred resource will have in the other datasource. If None it will be
+            the same as before
+        :param to_ks001: the name the transferred resource will have in the other datasource. If None it will be
+            the same as before
+        :param to_data_type: the data type the transferred resource will have in the other datasource. If None it will be
+            the same as before
+        :param remove: if True we will remove the resource from "self" datasource. Otherwise the resource will be
+            copied "as is"
+        :raises ResourceNotFoundError: if the resource does not exist in the current data source
+        :return:
+        """
+        to_path = to_path or from_path
+        to_ks001 = to_ks001 or from_ks001
+        to_data_type = to_data_type or from_data_type
+        if self == other and from_path == to_path and from_ks001 == to_ks001 and from_data_type == to_data_type:
+            return
+
+        generic_data = self.get(path=from_path, ks001=from_ks001, data_type=from_data_type)
+        if remove:
+            self.remove(from_path, from_ks001, from_data_type)
+
+        other.save_at(to_path, to_ks001, to_data_type, generic_data)
+
+    # def transfer_csv_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str,
+    #                          to_path: str = None, to_ks001: KS001Str = None, remove: bool = False):
+    #     """
+    #     Transfer the csv resource from the current data source to another one. You can optionally specify
+    #     new path and ks001 in the target data source.
+    #
+    #     The function is garantueed to do nothing if self is equal to other and
+    #     the start position ids the same of end position
+    #
+    #     :param other: the other datasource that will receive the resources from the current one
+    #     :param from_path: the path of the resource to transfer in self
+    #     :param from_ks001: the name of the reosurce to trasnfer in self
+    #     :param to_path: the path the transferred resource will have in the other datasource. If None it will be
+    #         the same as before
+    #     :param to_ks001: the name the transferred resource will have in the other datasource. If None it will be
+    #         the same as before
+    #     :param remove: if True we will remove the resource from "self" datasource. Otherwise the resource will be
+    #         copied "as is"
+    #     :raises ResourceNotFoundError: if the resource does not exist in the current data source
+    #     :return:
+    #     """
+    #     to_path = to_path or from_path
+    #     to_ks001 = to_ks001 or from_ks001
+    #     if self == other and from_path == to_path and from_ks001 == to_ks001:
+    #         return
+    #
+    #     csv_content = self.get_csv(path=from_path, ks001=from_ks001)
+    #     if remove:
+    #         self.remove_csv(from_path, from_ks001)
+    #
+    #     other.save_csv_at(to_path, to_ks001, csv_content)
+
+    def move_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: str,
+                             to_path: str = None, to_ks001: KS001Str = None):
+        """
+        Shortcut for transfer_csv_to  with remove set to True
+        :param other:
+        :param from_path:
+        :param from_ks001:
+        :param to_path:
+        :param to_ks001:
+        :return:
+        """
+        self.transfer_to(other=other,
+                         from_path=from_path, from_ks001=from_ks001, from_data_type=from_data_type,
+                         to_path=to_path, to_ks001=to_ks001, to_data_type=from_data_type, remove=True
+                         )
+
+    def copy_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: str,
+                    to_path: str = None, to_ks001: KS001Str = None):
+        """
+        Shortcut for transfer_csv_to  with remove set to False
+
+        :param other:
+        :param from_path:
+        :param from_ks001:
+        :param to_path:
+        :param to_ks001:
+        :return:
+        """
+        self.transfer_to(other=other,
+                         from_path=from_path, from_ks001=from_ks001, from_data_type=from_data_type,
+                         to_path=to_path, to_ks001=to_ks001, to_data_type=from_data_type,
+                         remove=False
+                        )
+
+    def move_to_suchthat(self,
+                              other: "IDataSource",
+                              from_path: str,
+                              data_type: str = None, to_path: str = None,
+                              filters: List[ICsvFilter] = None,
+                              test_context_template: "ITestContext" = None):
+        for getsuchinfo in self.get_suchthat(
+                test_context_template=test_context_template, filters=filters,
+                path=from_path, data_type=data_type):
+            self.move_to(other, getsuchinfo.path, getsuchinfo.name, getsuchinfo.type, to_path)
+
+    def copy_to_suchthat(self,
+                              other: "IDataSource",
+                              from_path: str,
+                              data_type: str = None, to_path: str = None,
+                              filters: List[ICsvFilter] = None,
+                              test_context_template: "ITestContext" = None):
+        for getsuchinfo in self.get_suchthat(
+                test_context_template=test_context_template, filters=filters,
+                path=from_path, data_type=data_type):
+            self.copy_to(other, getsuchinfo.path, getsuchinfo.name, to_path)
+
+    def remove_suchthat(self,
+                                from_path: str,
+                                data_type: str = None,
+                                filters: List[ICsvFilter] = None,
+                                test_context_template: "ITestContext" = None):
+        for getsuchinfo in self.get_suchthat(
+                test_context_template=test_context_template, filters=filters,
+                path=from_path, data_type=data_type):
+            self.remove(getsuchinfo.path, getsuchinfo.name, data_type)
+
+    def register_resource_manager(self, resource_type: str, manager: "IResourceManager"):
+        self.resource_managers[resource_type] = manager
+        manager._on_attached(self)
+
+    def unregister_resource_manager(self, resource_type: str):
+        del self.resource_managers[resource_type]
+
+    def unregister_all_resource_managers(self):
+        self.resource_managers = {}
+
+    def add_datasource_listener(self, listener: "IDataSourceListener"):
+        self.listeners.append(listener)
+
+    def clear_listeneres(self):
+        self.listeners.clear()

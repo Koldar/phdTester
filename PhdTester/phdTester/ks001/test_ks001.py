@@ -169,6 +169,40 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(len(a+b), 2)
         self.assertEqual((a+b).dump_str(), "|a=3_b=5|other:c=8_d=9|")
 
+    def test_contains_01(self):
+        a = KS001()
+        a.add_key_value(0, "a", 3)
+
+        b = KS001()
+        b.add_key_value(0, "a", 3)
+        b.add_key_value(0, "b", 4)
+
+        self.assertEqual(a in b, True)
+        self.assertEqual(b in a, False)
+
+    def test_contains_02(self):
+        a = KS001()
+        a.add_key_value("first", "a", 3)
+
+        b = KS001()
+        b.add_key_value("first", "a", 3)
+        b.add_key_value("first", "b", 4)
+
+        self.assertEqual(a in b, True)
+        self.assertEqual(b in a, False)
+
+    def test_contains_03(self):
+        a = KS001()
+        a.add_key_value(0, "a", 3)
+
+        b = KS001()
+        b.add_key_value(1, "a", 3)
+        b.add_key_value(1, "b", 4)
+
+        self.assertEqual(a in b, True)
+        self.assertEqual(b in a, False)
+
+
 
 if __name__ == '__main__':
     unittest.main()

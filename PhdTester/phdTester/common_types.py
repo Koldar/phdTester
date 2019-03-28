@@ -1,102 +1,21 @@
-from typing import Union
+# TODO use these type instad of str!
+KS001Str = str
+PathStr = str
+DataTypeStr = str
 
 
-class Int:
-    pass
-
-
-class Str:
-    pass
-
-
-class Float:
-    pass
-
-
-class Bool:
-    pass
-
-
-class PercentageInt(str):
+class GetSuchInfo(object):
     """
-    A string which ends with a percentage symbol.
-
-    Allowed values are "5", "5%" or "5.3%".
-    The regex is:
-
-    \d+|\d+%|\d+.\d+%
+    A class representing the return value of IDataSource.get_suchthat
     """
-    pass
+    __slots__ = ('path', 'name', 'type', 'ks001', 'tc')
 
+    def __init__(self, path: PathStr, name: KS001Str, type: DataTypeStr, ks001: "KS001", tc: "ITestContext"):
+        self.path = path
+        self.name = name
+        self.type = type
+        self.ks001 = ks001
+        self.tc = tc
 
-# class IntExpr(str):
-#     """
-#     An evaluatable string which, if evaluate, generates an integer.
-#
-#     For example the string "int(0.1*V)" represents an cevaluatable integer.
-#     When V=40, the expression lead to the integer 4
-#     """
-#     pass
-#
-#
-# class FloatExpr(str):
-#     """
-#     An evaluatable string which, if evaluate, generates a float
-#     """
-#     pass
-
-
-class IntList(list):
-    """
-    A list of integers
-    """
-    pass
-
-
-class BoolList(list):
-    """
-    A list of booleans
-    """
-    pass
-
-
-class FloatList(list):
-    """
-    A list of floats
-    """
-    pass
-
-
-class StrList(list):
-    """
-    A list of strings
-    """
-    pass
-
-
-class PercentageIntList(list):
-    """
-    A list of evaluatable integers
-    """
-    pass
-
-# class IntExprList(list):
-#     """
-#     A list of evaluatable integers
-#     """
-#     pass
-#
-#
-# class FloatExprList(list):
-#     """
-#     A list of evaluatable floats
-#     """
-#     pass
-
-
-AvailableOptionType = Union[
-    Int, Float, Bool, Str,
-    IntList, FloatList, BoolList, StrList,
-    PercentageInt,
-    PercentageIntList
-]
+    def __iter__(self):
+        return (x for x in [self.path, self.name, self.type, self.ks001, self.tc])
