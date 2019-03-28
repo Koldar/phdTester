@@ -16,7 +16,7 @@ from phdTester import commons, masks, constants
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr
 from phdTester.commons import StringCsvWriter, UnknownStringCsvReader
 from phdTester.datasources import filesystem_sources
-from phdTester.default_models import PandasFunction, PandasFunction2DWithLabel
+from phdTester.default_models import SeriesFunction
 from phdTester.exceptions import ValueToIgnoreError
 from phdTester.image_computer import aggregators
 from phdTester.ks001.ks001 import KS001
@@ -1574,7 +1574,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 if function_label not in functions_to_draw:
                     functions_to_draw[function_label] = FunctionData(
                         name=function_label,
-                        f=PandasFunction2DWithLabel() if create_functions_with_labels else PandasFunction(),
+                        f=SeriesFunction(),
                         x_aggregator=x_aggregator.clone(),
                         y_aggregator=y_aggregator.clone(),
                         label_aggregator=label_aggregator.clone(),

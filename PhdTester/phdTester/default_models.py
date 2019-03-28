@@ -224,38 +224,6 @@ class PandasFunction(commons.SlottedClass, IFunction2D):
     def y_unordered_value(self) -> Iterable[float]:
         return self.df.loc[:, 'y']
 
-# TODO to remove
-class PandasFunction2DWithLabel(IFunction2DWithLabel):
-
-    def __init__(self):
-        super().__init__()
-        self.df = pd.DataFrame(columns=['x', 'y', 'label'])
-        self.df.set_index('x', inplace=True)
-
-    def update_triple(self, x: float, y: float, label: Any = None):
-        self.df.loc[x] = [y, label]
-
-    def get_label(self, x: float) -> Any:
-        return self.df.loc[x]['label']
-
-    def labels_unordered_values(self) -> Iterable[Any]:
-        return self.df.loc[:, 'label']
-
-    def remove_point(self, x: float):
-        self.df.drop(x, axis=0, inplace=True)
-
-    def get_y(self, x: float) -> float:
-        return self.df.loc[x]['y']
-
-    def number_of_points(self) -> int:
-        return self.df.shape[0]
-
-    def x_unordered_values(self) -> Iterable[float]:
-        return iter(self.df.index)
-
-    def y_unordered_value(self) -> Iterable[float]:
-        return self.df.loc[:, 'y']
-
 
 class StandardOptionDict(IOptionDict):
     """

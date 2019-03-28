@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from phdTester import commons
-from phdTester.default_models import PandasFunction, Function2D, PandasFunction2DWithLabel, SeriesFunction
+from phdTester.default_models import PandasFunction, Function2D, SeriesFunction
 from phdTester.image_computer import aggregators
 from phdTester.model_interfaces import ICurvesChanger, IFunction2D, IFunction2DWithLabel, ITestContext
 
@@ -646,11 +646,7 @@ class MergeCurves(ICurvesChanger):
 
     def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
         result = dict()
-        should_use_labels = any(map(lambda x: isinstance(x, IFunction2DWithLabel), curves.values()))
-        if should_use_labels:
-            result[self.label] = PandasFunction2DWithLabel()
-        else:
-            result[self.label] = SeriesFunction()
+        result[self.label] = SeriesFunction()
 
         # for k, v in curves.items():
         #     logging.critical(f"name = {k}\nvalue = {str(v)}")
