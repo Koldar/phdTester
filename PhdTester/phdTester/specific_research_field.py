@@ -16,14 +16,14 @@ from phdTester import commons, masks, constants
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr
 from phdTester.commons import StringCsvWriter, UnknownStringCsvReader
 from phdTester.datasources import filesystem_sources
-from phdTester.default_models import SeriesFunction
+from phdTester.default_models import SeriesFunction, DataFrameFunctionsDict
 from phdTester.exceptions import ValueToIgnoreError
 from phdTester.image_computer import aggregators
 from phdTester.ks001.ks001 import KS001
 from phdTester.model_interfaces import ITestingEnvironment, IUnderTesting, ITestContext, ITestingGlobalSettings, \
     ICsvRow, OptionBelonging, IOptionNode, ITestContextMask, IFunction2D, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
-    ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IFunction2DWithLabel, IDataSource
+    ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict
 from phdTester.options_builder import OptionGraph
 from phdTester.paths import ImportantPaths
 from phdTester.plotting import matplotlib_plotting
@@ -669,30 +669,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                         data_type="csv",
                         content=f.get_string(),
                     )
-
-                # TODO remove
-                # if output_format == 'csv':
-                #     with_lambda = lambda: CsvDataWriter(self.paths.get_tmp(csv_output_filename))
-                # elif output_format == 'dat':
-                #     with_lambda = lambda: GnuplotDataWriter(self.paths.get_tmp(csv_output_filename))
-                # else:
-                #     raise ValueError(f"invliad output format!")
-                #
-                # with with_lambda() as f:
-                #     xaxis = list(functions_to_print.values())[0].x_ordered_values()
-                #     header = list(sorted(functions_to_print.keys()))
-                #
-                #     f.writeline(["X"] + header)
-                #
-                #     for x in xaxis:
-                #         line = [x]
-                #         line.extend(list(map(lambda name: functions_to_print[name][x] if x in functions_to_print[name] else 0, header)))
-                #         f.writeline(line)
-
             else:
                 raise ValueError(f"invalid use_format value {use_format}! Only stacked or wide accepted!")
-
-
 
     def generate_batch_of_plots(self,
                                 xaxis_name: str,
@@ -1029,63 +1007,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         :return: True if we have generated an image, False otherwise
         """
 
-        # path = path if path is not None else 'csvs'
-        # data_source = data_source if data_source is not None else self.datasource
-        #
-        # relevant_csvs: List[GetSuchInfo] = []
-        # # filter the csvs only with stuff under test / test environment which are involved in this test
-        # for csv_info in data_source.get_suchthat(
-        #     test_context_template=self.generate_test_context(),
-        #     path=path,
-        #     filters=csv_filter,
-        #     data_type='csv',
-        #     force_generate_ks001=True,
-        #     force_generate_textcontext=True,
-        # ):
-        #     # the csv contains values which we're interested in?
-        #     if csv_info.tc.are_option_values_all_in(self.under_test_dict_values, self.test_environment_dict_values):
-        #         relevant_csvs.append(csv_info)
-        #
-        #
-        # # TODO remove
-        # # relevant_csvs = list(self._collect_relevant_csvs(
-        # #     test_context_template=test_context_template,
-        # #     csv_folders=[paths.get_csv()],
-        # #     stuff_under_test_dict_values=self.under_test_dict_values,
-        # #     test_envirnment_dict_values=self.test_environment_dict_values,
-        # #     csv_filter=csv_filter,
-        # # ))
-        #
-        # if len(relevant_csvs) == 0:
-        #     # happens when the test_context_mask generated is inconsistent. We simply return False
-        #     return False
-        #
-        # # TODO remove
-        # # logging.info("we generating plots considering {} csvs:\n{}".format(
-        # #     len(relevant_csvs),
-        # #     '\n'.join(map(lambda x: os.path.basename(x[0]), relevant_csvs))
-        # # ))
-        # functions_to_print = self._compute_measurement_over_column(
-        #     csv_contexts=relevant_csvs,
-        #     get_y_value=get_y_value,
-        #     get_x_value=get_x_value,
-        #     get_label_value=get_label_value,
-        #     y_aggregator=y_aggregator,
-        #     function_splitter=function_splitter,
-        #     x_aggregator=x_aggregator,
-        #     label_aggregator=label_aggregator,
-        # )
-        #
-        # # ok, we have generated the relevant data. Now we apply a shuffler (if given)
-        # if curve_changer is not None:
-        #     # the user wants to apply a curves changer. Make her happy
-        #     if isinstance(curve_changer, ICurvesChanger):
-        #         functions_to_print = curve_changer.alter_curves(functions_to_print)
-        #     elif isinstance(curve_changer, list):
-        #         for i, cc in enumerate(curve_changer):
-        #             logging.critical(f"trying to apply curve changer #{i} of class {cc.__class__}")
-        #             functions_to_print = cc.alter_curves(functions_to_print)
-
         functions_to_print = self._generate_curves(
             test_context_template=test_context_template,
             get_x_value=get_x_value,
@@ -1132,12 +1053,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                          function_splitter: IFunctionSplitter = None,
                          x_aggregator: IAggregator = None,
                          csv_filter: Union["ICsvFilter", List["ICsvFilter"]] = None,
-                         get_label_value: Callable[["ITestContext", str, KS001Str, int, ICsvRow], Any] = None,
-                         label_aggregator: IAggregator = None,
                          data_source: "IDataSource" = None,
-                         ) -> Dict[str, "IFunction2D"]:
+                         ) -> "IFunctionsDict":
         """
-        Generate a Dict[str, "IFunction2D"] which can be used for other objectives, like printing it in an image or in a csv
+        Generate a "IFunctionsDict" which can be used for other objectives, like printing it in an image or in a csv
 
         all the csvs compliant with the specifications in `test_context_template`
 
@@ -1174,9 +1093,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             of `stuff_under_test_dict_values` nor `test_envirnment_dict_values`: for exmaple this is the case when
             the filtering condition entirely depends on values within the data sources. With this object, you can filter
             away test contexts depending entirely on the contents of the data source.
-        :param label_aggregator: function that merges 2 values from the label (optional) of a curve. Note that labels
-            are not mandatory to be numbers, hence be sure to know what are you doing when using this aggregator!
-        :param get_label_value: a function allowing you to fetch a value to set to the label
         :param data_source: the data source where we want to fetch the data. If None we will use the one generated by
             `_generate_datasource`;
         :param path_function: the path in the datasource where to look for csvs to read. Default to 'csvs'
@@ -1203,7 +1119,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             if csv_info.tc.are_option_values_all_in(self.under_test_dict_values, self.test_environment_dict_values):
                 relevant_csvs.append(csv_info)
 
-
         # FILTER THE CSVS BASED ON SIMPLE MASK
         relevant_csvs = list(filter(lambda x: test_context_template.is_simple_compliant(x.tc), relevant_csvs))
         # FILTER THE CSVS BASED ON COMPLEX MASK
@@ -1213,33 +1128,17 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         logging.info(f"the csvs to consider are {len(relevant_csvs)}!")
 
-        # TODO remove
-        # relevant_csvs = list(self._collect_relevant_csvs(
-        #     test_context_template=test_context_template,
-        #     csv_folders=[paths.get_csv()],
-        #     stuff_under_test_dict_values=self.under_test_dict_values,
-        #     test_envirnment_dict_values=self.test_environment_dict_values,
-        #     csv_filter=csv_filter,
-        # ))
-
         if len(relevant_csvs) == 0:
             # happens when the test_context_mask generated is inconsistent. We simply return False
-            return {}
+            return DataFrameFunctionsDict()
 
-        # TODO remove
-        # logging.info("we generating plots considering {} csvs:\n{}".format(
-        #     len(relevant_csvs),
-        #     '\n'.join(map(lambda x: os.path.basename(x[0]), relevant_csvs))
-        # ))
         functions_to_print = self._compute_measurement_over_column(
             csv_contexts=relevant_csvs,
             get_y_value=get_y_value,
             get_x_value=get_x_value,
-            get_label_value=get_label_value,
             y_aggregator=y_aggregator,
             function_splitter=function_splitter,
             x_aggregator=x_aggregator,
-            label_aggregator=label_aggregator,
         )
 
         # ok, we have generated the relevant data. Now we apply a shuffler (if given)
@@ -1251,138 +1150,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 for i, cc in enumerate(curve_changer):
                     logging.critical(f"trying to apply curve changer #{i} of class {cc.__class__}")
                     functions_to_print = cc.alter_curves(functions_to_print)
+            else:
+                raise TypeError(f"invalid curve changer type!")
 
         return functions_to_print
-
-    # def _collect_relevant_csvs(self, test_context_template: ITestContextMask, csv_folders: Iterable[str], stuff_under_test_dict_values: Dict[str, List[Any]], test_envirnment_dict_values: Dict[str, List[Any]], csv_filter: Union[ICsvFilter, List[ICsvFilter]] = None) -> Iterable[Tuple[str, ITestContext]]:
-    #     """
-    #     Search inside a single directory (non recursively) looking for csvs.
-    #
-    #     Only csvs whose all option values are within stuff_under_test_dict_values and test_envirnment_dict_values are
-    #     considered: in this way csvs not considered in the factory CLI command line options are ignored (useful if your
-    #     csv directory already contains some csv).
-    #
-    #     For every csvs it finds, it checks if its filename is compliant with the function document_filter.
-    #     If it is, the csv belongs to the output of the function.
-    #
-    #     :param test_context_template: the constraints the csv needs to satisfy. Every constraint is considered
-    #     :param csv_folders: a list of folders where we want to look. We won't look for csv recursively
-    #     :param stuff_under_test_dict_values: list of all the possible values each "stuff under test" option may have
-    #     :param test_envirnment_dict_values: list of all the possible values each "test environment" option may have
-    #     :param csv_filter: a structure which can be use to crfeate a more advance filter than what already does
-    #         `test_context_template`. You should use it when the filtering conditions **do not depend** on the values
-    #         of `stuff_under_test_dict_values` nor `test_envirnment_dict_values`: for exmaple this is the case when
-    #         the filtering condition entirely depends on values within the data sources. With this object, you can filter
-    #         away test contexts depending entirely on the contents of the data source.
-    #     :return: an iterable of tuples. The first item is the csv name while the second item is the test context
-    #     transformation of the first dictionary of the path
-    #     """
-    #
-    #     csv_filter = csv_filter or []
-    #     if isinstance(csv_filter, ICsvFilter):
-    #         csv_filter = [csv_filter]
-    #     elif isinstance(csv_filter, list):
-    #         pass
-    #     else:
-    #         raise TypeError(f"invalid type {type(csv_filter)} for csv_filter! Only ICsvFilter or list of ICsvFilter allowed!")
-    #
-    #     naive_csv_filters: List["INaiveCsvFilter"] = [x for x in csv_filter if x.is_naive()]
-    #     single_csv_filters: List["ISingleCsvFilter"] = [x for x in csv_filter if x.is_single()]
-    #     complex_csv_filters: List["IComplexCsvFilter"] = [x for x in csv_filter if x.is_complex()]
-    #
-    #     test_context_from_csv_filename_list = []
-    #
-    #     def process_datasource(i: int, csv_abs_filename: str, output_lock: multiprocessing.Lock, output: List):
-    #         # naive data source filtering
-    #         for cf in naive_csv_filters:
-    #             if not cf.is_valid(csv_abs_filename, i):
-    #                 return
-    #
-    #         logging.debug(f"checking csv #{i}")
-    #         # logging.info(f"considering csv #{i}")
-    #         # we check if the csv filename is compliant with our filter
-    #         # we know the relevant csvs have as their first dict of the filename
-    #         # the encoding of the relevant test context
-    #         ut = self.generate_under_testing()
-    #         te = self.generate_environment()
-    #         tc = self.generate_test_context(ut, te)
-    #
-    #         # we test if the csv fetched has its KS001 compliant with a general one. This because
-    #         # test context is a KS001, but it does NOT contain all the key-values a normal KS001 may.
-    #         # test context is just ONE dictionary in the KS001, while KS001 contains several dictionaries
-    #         csv_filename_ks001 = KS001.parse_filename(
-    #             filename=csv_abs_filename,
-    #             key_alias=tc.key_alias,
-    #             value_alias=tc.value_alias,
-    #             colon=constants.SEP_COLON,
-    #             pipe=constants.SEP_PIPE,
-    #             underscore=constants.SEP_PAIRS,
-    #             equal=constants.SEP_KEYVALUE,
-    #         )
-    #
-    #         for f in single_csv_filters:
-    #             if not f.is_valid(csv_abs_filename, csv_filename_ks001, i):
-    #                 # this csv doesn't satisfy the filter
-    #                 return
-    #
-    #         test_context_from_csv_filename = self.generate_test_context()
-    #         test_context_from_csv_filename.set_from_ks001_index(
-    #             index=0,
-    #             ks=csv_filename_ks001
-    #         )
-    #
-    #         # the csv contains values which we're interested in?
-    #         if not test_context_from_csv_filename.are_option_values_all_in(stuff_under_test_dict_values, test_envirnment_dict_values):
-    #             return
-    #         # the test context of the csv satifsy all the single masks of the user? We check them in advance since
-    #         # they do not dipend on the whole computed set, thereby improving csv pruning!
-    #         if not test_context_template.is_simple_compliant(test_context_from_csv_filename):
-    #             return
-    #
-    #         # ok we may add this new csv. Of course we still need to check if it surpasses the checks of the complex
-    #         # masks, but then again, we need the whole set in order to compute those!
-    #         logging.debug(f"got a new csv {csv_abs_filename}! length is {len(test_context_from_csv_filename_list)}!")
-    #         with output_lock:
-    #             output.append((csv_abs_filename, test_context_from_csv_filename, csv_filename_ks001))
-    #
-    #     workers = multiprocessing.cpu_count()
-    #     lock = threading.Lock()
-    #     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="datasource_") as executor:
-    #
-    #         for csv_folder in csv_folders:
-    #             for i, csv_abs_filename in enumerate(commons.get_filenames(directory=csv_folder, allowed_extensions=["csv"])):
-    #                     executor.submit(process_datasource,
-    #                         i=i,
-    #                         csv_abs_filename=csv_abs_filename,
-    #                         output_lock=lock,
-    #                         output=test_context_from_csv_filename_list
-    #                     )
-    #
-    #     # ok, let's check if the test context is compliant.
-    #     # we store the test_contexts in a list because some masks may need the whole list of text_contexts handle to
-    #     # decide if an option value is compliant or not
-    #     csv_abs_filenames = list(map(lambda x: x[0], test_context_from_csv_filename_list))
-    #     test_contexts = list(map(lambda x: x[1], test_context_from_csv_filename_list))
-    #     for i, (csv_abs_filename, test_context, csv_ks001) in enumerate(test_context_from_csv_filename_list):
-    #
-    #         logging.debug(f"check compliance!")
-    #         logging.debug(f"mask: {test_context_template}")
-    #         logging.debug(f"val : {test_context}")
-    #         # all the csvs have the single masks valid, hence we need to check only the complex ones!
-    #         if not test_context_template.is_complex_compliant(test_context, test_contexts):
-    #             continue
-    #
-    #         valid = True
-    #         for cf in complex_csv_filters:
-    #             if not cf.is_valid(csv_abs_filename, csv_ks001, test_context_template, i, csv_abs_filenames,
-    #                                test_contexts):
-    #                 valid = False
-    #                 break
-    #         if not valid:
-    #             continue
-    #
-    #         logging.debug(f"is compliant!")
-    #         yield (csv_abs_filename, test_context)
 
     def _compute_measurement_over_column(self,
                                          csv_contexts: Iterable[GetSuchInfo],
@@ -1391,10 +1162,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                          y_aggregator: IAggregator,
                                          function_splitter: IFunctionSplitter = None,
                                          x_aggregator: IAggregator = None,
-                                         get_label_value: Callable[["ITestContext", str, KS001Str, pd.DataFrame, int, ICsvRow], Any] = None,
-                                         label_aggregator: IAggregator = None,
                                          data_source: "IDataSource" = None,
-                                         ) -> Dict[str, IFunction2D]:
+                                         ) -> "IFunctionsDict":
         """
         Compute a particular measurement over a well specific column in the csv
         :param csv_contexts: an iterable representing the csv we need to read
@@ -1424,9 +1193,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             in the data source already represents your measurement but, if you want to aggregate the x in some way
             (e.g., summing them) then you can use this field tov aggregate. Note: this field is actually a template; we
             will use `clone` method to generate the actual aggregator
-        :param label_aggregator: function that merges 2 values from the label (optional) of a curve. Note that labels
-            are not mandatory to be numbers, hence be sure to know what are you doing when using this aggregator!
-        :param get_label_value: a function allowing you to fetch a value to set to the label
         :param data_source: the data source we will poll for the csv data in csvs_contexts. If None we will use the default datasource
         :return: a dictionary where the keys are the label of the stuff under test while the values are dictionary where the key
             are the x values of a function and the values are the y values of a function
@@ -1443,47 +1209,25 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 raise ValueError(
                     f"y_valuex cannot be null! x_value={x} csv_name={csv_name}, i={i}, csv_outcome={csv_outcome}")
 
-        def default_get_label(tc: "ITestContext", csv_path: str, csv_name: KS001Str, csv_content: pd.DataFrame, csv_index: int, row: "ICsvRow") -> Any:
-            return None
-
         class FunctionData(commons.SlottedClass):
 
             __slots__ = ('name', 'function', 'x_aggregator', 'y_aggregator', 'label_aggregator', 'y_aggregator_per_x')
 
-            def __init__(self, name: str, f: IFunction2D, x_aggregator: IAggregator = None, y_aggregator: IAggregator = None, label_aggregator: IAggregator = None):
+            def __init__(self, name: str, f: IFunction2D, x_aggregator: IAggregator = None, y_aggregator: IAggregator = None):
                 self.name = name
                 self.function = f
-                # TODO remove
-                # self.last_x_value = None
-                # self.last_label_value= None
                 self.x_aggregator = x_aggregator
                 self.y_aggregator = y_aggregator
-                self.label_aggregator = label_aggregator
                 self.y_aggregator_per_x = {}
                 """
                 Dictionary whose keys are the values of f and the values are different instances of the y_aggregator.
                 Used to maintain state of aggregators
                 """
 
-        create_functions_with_labels = True
-        """
-        If true, we will create IFunction2DWithLabels instead of IFunction2D
-        """
-
         data_source = data_source if data_source is not None else self.datasource
         x_aggregator = x_aggregator if x_aggregator is not None else aggregators.IdentityAggregator()
-        # TODO remove
-        label_aggregator = label_aggregator if label_aggregator is not None else aggregators.IdentityAggregator()
-
-        if get_label_value is None:
-            create_functions_with_labels = False
-            get_label_value = default_get_label
 
         functions_to_draw: Dict[str, FunctionData] = {}
-        # TODO remove
-        # xaxis_set = None
-        # xaxis_stuff_under_test_label = None
-        # previous_under_test_key = None
 
         key_alias = self.generate_test_context().key_alias
         value_alias = self.generate_test_context().value_alias
@@ -1499,45 +1243,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             current_function_label = csv_info.tc.ut.get_label()
             logging.debug(f"generating values for stuff under test {current_function_label}")
 
-            # TODO remove
-            # if function_splitter is None:
-            #     # if function splitter is NOT enabled, the the only functions to draw are the ones provided but the
-            #     # stuff under test. Otherwise the curves to generate are dynamically create and we can't ensure that
-            #     # all the curve has the same number of points
-            #
-            #     # TODO remove
-            #     # # creating a new function, if needed. Each function has its own, well separated values
-            #     # if under_test_function_key not in functions_to_draw:
-            #     #     functions_to_draw[under_test_function_key] = FunctionData(
-            #     #         name=under_test_function_key,
-            #     #         f=Function2D(),
-            #     #         x_aggregator=x_aggregator.clone(),
-            #     #         y_aggregator=y_aggregator.clone(),
-            #     #     )
-            #     # building_function: IFunction2D = functions_to_draw[under_test_function_key].function
-            #
-            #     # check to ensure that all the stuff under test has the same xaxis
-            #     if previous_under_test_key is not None and (previous_under_test_key != current_function_label):
-            #         # we have changed the stuff we're testing. the sort
-            #         # needs to ensure this happen only once per pair of testing
-            #         if xaxis_set is None:
-            #             xaxis_set = set(functions_to_draw[previous_under_test_key].function.keys())
-            #             xaxis_stuff_under_test_label = previous_under_test_key
-            #         else:
-            #             # we need to ensure the xaxis is the same for every stuff under test!
-            #             current_xaxis_set = set(functions_to_draw[previous_under_test_key].function.keys())
-            #             if current_xaxis_set != xaxis_set:
-            #                 raise ValueError(f"""
-            #                 OPS! the stuff under test {xaxis_stuff_under_test_label} (A) has {len(xaxis_set)} xaxis long while
-            #                 another stuff under test caled {previous_under_test_key} (B) has {len(current_xaxis_set)} xaxis long.
-            #                 Here's the intersection:
-            #                 A \intersect B: {xaxis_set.intersection(current_xaxis_set)}
-            #                 A/B: {xaxis_set.difference(current_xaxis_set)}
-            #                 B/A: {current_xaxis_set.difference(xaxis_set)}
-            #                 """)
-
             # fetch data from CSV
-
             csv_content: str = data_source.get(csv_info.path, csv_info.name, 'csv')
             # read csv with pandas
             csv_dataframe = pd.read_csv(io.StringIO(csv_content))
@@ -1546,7 +1252,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 try:
                     x_value = get_x_value(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome)
                     y_value = get_y_value(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome)
-                    label_value = get_label_value(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome)
                     check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
                 except IgnoreCSVRowError:
                     # this data needs to be ignored
@@ -1555,10 +1260,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 if function_splitter is not None:
                     # a function splitter may redirect the just computed value into another function or, even better
                     # a new one
-                    x_value, y_value, label_value, function_label = function_splitter.fetch_function(
+                    x_value, y_value, function_label = function_splitter.fetch_function(
                         x=x_value,
                         y=y_value,
-                        label=label_value,
                         under_test_function_key=current_function_label,
                         csv_tc=csv_info.tc,
                         csv_name=csv_info.name,
@@ -1577,66 +1281,30 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                         f=SeriesFunction(),
                         x_aggregator=x_aggregator.clone(),
                         y_aggregator=y_aggregator.clone(),
-                        label_aggregator=label_aggregator.clone(),
                     )
                 building_function: IFunction2D = functions_to_draw[function_label].function
 
                 # handle x
                 x_value = functions_to_draw[function_label].x_aggregator.aggregate(x_value)
-                # TODO remove
-                # if functions_to_draw[function_label].last_x_value is None:
-                #     x_value = functions_to_draw[function_label].x_aggregator.first_value(x_value)
-                # else:
-                #     x_value = functions_to_draw[function_label].x_aggregator.aggregate(functions_to_draw[function_label].last_x_value, x_value)
                 check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
-                # TODO remove
-                # functions_to_draw[function_label].last_x_value = x_value
-
-                # handle label
-                label_value = functions_to_draw[function_label].label_aggregator.aggregate(label_value)
-                # TODO remove
-                # if functions_to_draw[function_label].last_label_value is None:
-                #     label_value = functions_to_draw[function_label].label_aggregator.first_value(label_value)
-                # else:
-                #     label_value = functions_to_draw[function_label].label_aggregator.aggregate(
-                #         functions_to_draw[function_label].last_label_value, label_value)
-                # functions_to_draw[function_label].last_label_value = label_value
-
                 # handle y
                 if x_value not in functions_to_draw[function_label].y_aggregator_per_x:
                     functions_to_draw[function_label].y_aggregator_per_x[x_value] = functions_to_draw[function_label].y_aggregator.clone()
                 y_value = functions_to_draw[function_label].y_aggregator_per_x[x_value].aggregate(y_value)
-                # if x_value not in building_function:
-                #     # first value in the series
-                #     y_value = functions_to_draw[function_label].y_aggregator.first_value(y_value)
-                # else:
-                #     # we need to update the value
-                #     y_value = functions_to_draw[function_label].y_aggregator.aggregate(building_function[x_value], y_value)
-
                 if y_value is None:
                     raise ValueError(f"value associated to {x_value} cannot be null for function {functions_to_draw}")
 
-                if isinstance(building_function, IFunction2DWithLabel):
-                    building_function.update_triple(x_value, y_value, label_value)
-                elif isinstance(building_function, IFunction2D):
-                    building_function.update_point(x_value, y_value)
-                else:
-                    raise TypeError(f"invlaid function type {type(building_function)}!")
+                building_function.update_point(x_value, y_value)
 
-            # TODO control by flag
-            # we reset the aggregator. we reset after every csv has been just read
             functions_to_draw[function_label].x_aggregator.reset()
-            # TODO remove
-            # functions_to_draw[function_label].last_x_value = None
-            functions_to_draw[function_label].label_aggregator.reset()
-            # TODO remove
-            # functions_to_draw[function_label].last_label_value = None
 
-            previous_under_test_key = function_label
+        result = DataFrameFunctionsDict()
+        for name in functions_to_draw:
+            result.set_function(name, functions_to_draw[name].function)
 
-        return {k: functions_to_draw[k].function for k in functions_to_draw}
+        return result
 
-    def _should_we_generate_the_image(self, functions_to_print: Dict[str, IFunction2D]):
+    def _should_we_generate_the_image(self, functions_to_print: "IFunctionsDict"):
         """
         Check if we really need to generate the image
 
@@ -1648,7 +1316,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         return True
 
     def _print_images(self,
-                      functions_to_print: Dict[str, IFunction2D],
+                      functions_to_print: "IFunctionsDict",
                       paths: "ImportantPaths",
                       test_context_template: ITestContextMask,
                       xaxis_name: str,
@@ -1699,19 +1367,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                     point in function={function_to_print.x_ordered_values()}
                     """)
 
-            if isinstance(function_to_print, IFunction2DWithLabel):
-                plot = DefaultSinglePlot(
-                    name=stuff_under_test_name,
-                    values=map(lambda x2: function_to_print.get_y(x2), xaxis.axis),
-                    labels=map(lambda x2: label_to_string(function_to_print.get_label(x2)), xaxis.axis),
-                )
-            elif isinstance(function_to_print, IFunction2D):
-                plot = DefaultSinglePlot(
-                    name=stuff_under_test_name,
-                    values=map(lambda x2: function_to_print[x2], xaxis.axis),
-                )
-            else:
-                raise TypeError(f"invalid type {type(function_to_print)}!")
+            plot = DefaultSinglePlot(
+                name=stuff_under_test_name,
+                values=map(lambda x2: function_to_print[x2], xaxis.axis),
+            )
             plotter.add_plot(plot)
 
         # generate a KS001 containing only the values which we're considering

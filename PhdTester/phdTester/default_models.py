@@ -1,13 +1,14 @@
 import abc
 import logging
-from typing import Iterable, List, Any, Tuple
+from typing import Iterable, List, Any, Tuple, Dict
 
+import numpy as np
 import pandas as pd
 
 from phdTester import commons
 from phdTester.model_interfaces import ITestContextRepo, ITestContext, ITestContextMask, ITestContextRepoView, \
     IOptionDict, IUnderTesting, ITestingEnvironment, IStuffUnderTestMask, ITestEnvironmentMask, \
-    ITestingGlobalSettings, ICsvRow, IFunction2D, IFunction2DWithLabel, IDataWriter
+    ITestingGlobalSettings, ICsvRow, IFunction2D, IDataWriter, IFunctionsDict
 
 
 class GnuplotDataWriter(IDataWriter):
@@ -151,6 +152,12 @@ class Function2D(commons.SlottedClass, IFunction2D):
         """
         return self._function.items()
 
+    def to_series(self) -> pd.Series:
+        return pd.Series(self._function)
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return pd.DataFrame(self.to_series())
+
 
 class SeriesFunction(commons.SlottedClass, IFunction2D):
 
@@ -160,6 +167,16 @@ class SeriesFunction(commons.SlottedClass, IFunction2D):
         super(SeriesFunction, self).__init__()
         self._series = pd.Series([])
         self._max_x = float('-inf')
+
+
+    @classmethod
+    def from_dataframe(cls, df: pd.DataFrame) -> "SeriesFunction":
+        result = cls()
+
+        result._series = pd.Series(df)
+        result._max_x = result._series.max()
+
+        return result
 
     def update_point(self, x: float, y: float):
         self._series[x] = y
@@ -191,6 +208,12 @@ class SeriesFunction(commons.SlottedClass, IFunction2D):
 
     def y_unordered_value(self) -> Iterable[float]:
         return self._series.values
+
+    def to_series(self) -> pd.Series:
+        return self._series
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return pd.DataFrame(self._series)
 
 
 class PandasFunction(commons.SlottedClass, IFunction2D):
@@ -224,6 +247,170 @@ class PandasFunction(commons.SlottedClass, IFunction2D):
     def y_unordered_value(self) -> Iterable[float]:
         return self.df.loc[:, 'y']
 
+    def to_series(self) -> pd.Series:
+        return self.df.loc[:, 'y']
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return self.df
+
+
+class StandardFunctionsDict(commons.SlottedClass, IFunctionsDict):
+    """
+    A class which saves the different functions inside a dict
+    """
+
+    __slots__ = ("_dictionary", )
+
+    def __init__(self):
+        self._dictionary: Dict[str, "IFunction2D"] = {}
+
+    def function_names(self) -> Iterable[str]:
+        yield from self._dictionary.keys()
+
+    def functions(self) -> Iterable["IFunction2D"]:
+        yield from self._dictionary.values()
+
+    def size(self) -> int:
+        return len(self._dictionary)
+
+    def max_function_length(self) -> int:
+        return max(map(lambda name: self.get_function(name).number_of_points(), self.function_names()))
+
+    def get_function(self, name: str) -> "IFunction2D":
+        return self._dictionary[name]
+
+    def set_function(self, name, f: "IFunction2D"):
+        self._dictionary[name] = f
+
+    def remove_function(self, name: str):
+        del self._dictionary[name]
+
+    def contains_function_point(self, name: str, x: float) -> bool:
+        return self._dictionary[name].has_x_value(x)
+
+    def get_function_y(self, name: str, x: float) -> float:
+        return self._dictionary[name].get_y(x)
+
+    def update_function_point(self, name: str, x: float, y: float):
+        self._dictionary[name].update_point(x, y)
+
+    def remove_function_point(self, name: str, x: float):
+        self._dictionary[name].remove_point(x)
+
+    def contains_function(self, name: str) -> bool:
+        return name in self._dictionary
+
+    def get_ordered_x_axis(self, name: str) -> Iterable[float]:
+        yield from self._dictionary[name].x_ordered_values()
+
+    def to_dataframe(self) -> pd.DataFrame:
+        result = pd.DataFrame(columns=self.function_names())
+        for name in self.function_names():
+            for x in self.get_ordered_x_axis(name):
+                result.loc[x, name] = self.get_function_y(name, x)
+        result.sort_index()
+        return result
+
+    def get_union_of_all_xaxis(self) -> Iterable[float]:
+        xaxis = set()
+        for name in self.function_names():
+            xaxis = xaxis.union(self._dictionary[name].x_unordered_values())
+        return xaxis
+
+
+class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
+    """
+    A class which saves the functions inside a single dataframe
+
+    The dataframe is structured as follows: each function is represented by a column. the Column
+    name is the function name. the x axis is the index of the dataframe.
+    If a function does not have a y values associated to an xaxis, NAN is put instead.
+
+    """
+
+    __slots__ = ('_dataframe', )
+
+    def __init__(self):
+        super(DataFrameFunctionsDict, self).__init__()
+        self._dataframe = pd.DataFrame()
+
+    @classmethod
+    def empty(cls, functions: Iterable[str], size: int) -> "DataFrameFunctionsDict":
+        result = cls()
+
+        data = np.ndarray((size, len(list(functions))))
+        data.fill(np.NaN)
+        result._dataframe = pd.DataFrame(
+            data=np.NaN,
+            columns=functions,
+        )
+
+        return result
+
+    @classmethod
+    def from_other(cls, other: "IFunctionsDict"):
+        result = cls()
+        result._dataframe = other.to_dataframe()
+        return result
+
+    def function_names(self) -> Iterable[str]:
+        yield from self._dataframe.columns.values
+
+    def functions(self) -> Iterable["IFunction2D"]:
+        for name in self.function_names():
+            yield self.get_function(name)
+
+    def size(self) -> int:
+        return self._dataframe.shape[1]
+
+    def max_function_length(self) -> int:
+        return self._number_of_rows()
+
+    def get_function(self, name: str) -> "IFunction2D":
+        return SeriesFunction.from_dataframe(self._dataframe.loc[:, name])
+
+    def set_function(self, name: str, f: "IFunction2D"):
+        self._dataframe.join(f.to_dataframe(), how='outer')
+        self._dataframe.sort_index(inplace=True)
+
+    def remove_function(self, name: str):
+        self._dataframe.drop([name], axis=1)
+
+    def _number_of_rows(self) -> int:
+        return self._dataframe.shape[0]
+
+    def contains_function_point(self, name: str, x: float) -> bool:
+        return np.isnan(self._dataframe.loc[x, name])
+
+    def get_function_y(self, name: str, x: float) -> float:
+        result = self._dataframe.loc[x, name]
+        if np.isnan(result):
+            raise KeyError(f"function {name} does not have a value on axis {x}")
+        return result
+
+    def update_function_point(self, name: str, x: float, y: float):
+        # this will add NaN in the missing spot or add a new row
+        self._dataframe.loc[x, name] = y
+        # we may need to sort the index
+        self._dataframe.sort_index(inplace=True)
+
+    def remove_function_point(self, name: str, x: float):
+        self._dataframe.loc[x, name] = np.NaN
+        self._dataframe.dropna(how='all')
+
+    def contains_function(self, name: str) -> bool:
+        return name in self._dataframe.columns.values
+
+    def get_ordered_x_axis(self, name: str) -> Iterable[float]:
+        for x in self._dataframe.index:
+            if not np.isnan(self._dataframe.loc[x, name]):
+                yield x
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return self._dataframe
+
+    def get_union_of_all_xaxis(self) -> Iterable[float]:
+        yield from self._dataframe.index
 
 class StandardOptionDict(IOptionDict):
     """

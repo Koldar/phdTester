@@ -7,9 +7,10 @@ import numpy as np
 import pandas as pd
 
 from phdTester import commons
-from phdTester.default_models import PandasFunction, Function2D, SeriesFunction
+from phdTester.default_models import PandasFunction, Function2D, SeriesFunction, DataFrameFunctionsDict
 from phdTester.image_computer import aggregators
-from phdTester.model_interfaces import ICurvesChanger, IFunction2D, IFunction2DWithLabel, ITestContext
+from phdTester.model_interfaces import ICurvesChanger, IFunction2D, ITestContext, XAxisSharingEnum, \
+    XAxisGeneratedEnum, IFunctionsDict
 
 
 class AbstractTransform(ICurvesChanger, abc.ABC):
@@ -18,16 +19,11 @@ class AbstractTransform(ICurvesChanger, abc.ABC):
     def _mapping(self, name: str, x: float, y: float) -> float:
         pass
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
-        result = {}
-
-        for name, f in curves.items():
-            new_f = SeriesFunction()
-            for x, y in curves[name].xy_unordered_values():
-                new_f[x] = self._mapping(name, x, curves[name][x])
-            result[name] = new_f
-
-        return result
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
+        for name in curves.function_names():
+            for x, y in curves.get_ordered_xy(name):
+                curves.update_function_point(name, x, self._mapping(name, x, curves.get_function_y(name, x)))
+        return curves
 
 
 class TransformX(ICurvesChanger):
@@ -39,17 +35,13 @@ class TransformX(ICurvesChanger):
         AbstractTransform.__init__(self)
         self.mapping = mapping
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
-        result = {}
-        for name, f in curves.items():
-            new_f = SeriesFunction()
-            for x, y in f.xy_unordered_values():
-                new_f.update_point(self.mapping(name, x, y), y)
-            result[name] = new_f
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
+        result = DataFrameFunctionsDict.empty(functions=curves.function_names(), size=curves.max_function_length())
 
+        for name in curves.function_names():
+            for x, y in curves.get_ordered_xy(name):
+                result.update_function_point(name, self.mapping(name, x, y), y)
         return result
-
-
 
 
 class RemapInvalidValues(AbstractTransform):
@@ -91,14 +83,14 @@ class AbstractSingleTransform(ICurvesChanger, abc.ABC):
     def _mapping(self, x: float, y: float) -> float:
         pass
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         f = SeriesFunction()
         for x, y in curves[self.name].xy_unordered_values():
-            f[x] = self._mapping(x, curves[self.name][x])
+            f[x] = self._mapping(x, curves.get_function_y(self.name, x))
 
         del curves[self.name]
         name = self.new_name if self.new_name is not None else self.name
-        curves[name] = f
+        curves.set_function(name, f)
 
         return curves
 
@@ -106,7 +98,7 @@ class AbstractSingleTransform(ICurvesChanger, abc.ABC):
 class SimpleTransform(AbstractSingleTransform):
 
     def __init__(self, name: str, mapping: Callable[[float, float], float], new_name: str = None):
-        AbstractTransform.__init__(self, name, new_name=new_name)
+        AbstractSingleTransform.__init__(self, name, new_name=new_name)
         self.mapping = mapping
 
     def _mapping(self, x: float, y: float) -> float:
@@ -123,15 +115,12 @@ class AbstractSyntheticFunction(ICurvesChanger, abc.ABC):
         self.name = name
 
     @abc.abstractmethod
-    def _compute_f(self, x: float, curves: Dict[str, IFunction2D]) -> float:
+    def _compute_f(self, x: float, curves: "IFunctionsDict") -> float:
         pass
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
-        new_f = SeriesFunction()
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         for x in list(curves.values())[0].x_ordered_values():
-            new_f[x] = self._compute_f(x, curves)
-
-        curves[self.name] = new_f
+            curves.update_function_point(self.name, x, self._compute_f(x, curves))
         return curves
 
 
@@ -140,11 +129,11 @@ class SyntheticFunction(AbstractSyntheticFunction):
     A curve changer which adds a new function in the array available. Used to generate derived functions
     """
 
-    def __init__(self, name: str, f: Callable[[float, Dict[str, IFunction2D]], float]):
+    def __init__(self, name: str, f: Callable[[float, "IFunctionsDict"], float]):
         AbstractSyntheticFunction.__init__(self, name)
         self.f = f
 
-    def _compute_f(self, x: float, curves: Dict[str, IFunction2D]) -> float:
+    def _compute_f(self, x: float, curves: "IFunctionsDict") -> float:
         return self.f(x, curves)
 
 
@@ -157,7 +146,7 @@ class SyntheticCount(AbstractSyntheticFunction):
         AbstractSyntheticFunction.__init__(self, name)
         self.criterion = criterion
 
-    def _compute_f(self, x: float, curves: Dict[str, IFunction2D]) -> float:
+    def _compute_f(self, x: float, curves: "IFunctionsDict") -> float:
         result = 0
         for name, f in curves.items():
             if self.criterion(name, x, f[x]):
@@ -175,7 +164,7 @@ class SyntheticPercentage(SyntheticCount):
     def __init__(self, name: str, criterion: Callable[[str, float, float], bool]):
         SyntheticCount.__init__(self, name, criterion)
 
-    def _compute_f(self, x: float, curves: Dict[str, IFunction2D]) -> float:
+    def _compute_f(self, x: float, curves: "IFunctionsDict") -> float:
         result = 0
         for name, f in curves.items():
             if self.criterion(name, x, f[x]):
@@ -239,16 +228,16 @@ class QuantizeXAxis(ICurvesChanger):
     def _default_slot_value(self, x: float, start_quant: float, end_quant: float) -> float:
         return end_quant
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
-        result: Dict[str, IFunction2D] = {}
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
+        result: "IFunctionsDict" = DataFrameFunctionsDict.from_other(curves)
 
         functions_aggregators: Dict[str, Dict[float, "aggregators.IAggregator"]] = {}
 
-        for name, f in curves.items():
+        for name in curves.function_names():
             if name not in result:
                 result[name] = SeriesFunction()
                 functions_aggregators[name] = {}
-            for x, y in f.xy_unordered_values():
+            for x, y in curves.get_ordered_xy(name):
 
                 if isinstance(self.quantization_step, list):
                     # the quantization is a list. Hence we fetch the 2 numbers representing the quantization step
@@ -271,7 +260,7 @@ class QuantizeXAxis(ICurvesChanger):
                 if xslot not in functions_aggregators[name]:
                     functions_aggregators[name][xslot] = self.aggregator.clone()
 
-                result[name][xslot] = functions_aggregators[name][xslot].aggregate(y)
+                result.update_function_point(name, xslot, functions_aggregators[name][xslot].aggregate(y))
 
         return result
 
@@ -285,10 +274,11 @@ class Print(ICurvesChanger):
         ICurvesChanger.__init__(self)
         self.log_function = log_function
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
-        for name, f in curves.items():
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
+        for name in curves.function_names():
+            f = curves.get_function(name)
             self.log_function(f"name = {name}")
-            self.log_function(f"x [size={f.number_of_points()}] = {f.x_ordered_values()}")
+            self.log_function(f"x [size={f.number_of_points()}] = {curves.get_ordered_x_axis(name)}")
             self.log_function(f"f = {str(f)}")
 
         return curves
@@ -299,7 +289,7 @@ class Identity(ICurvesChanger):
     A changer that does nothing
     """
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         return curves
 
 
@@ -316,16 +306,13 @@ class UseValueToFillCurve(ICurvesChanger):
         ICurvesChanger.__init__(self)
         self.value = value
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
+        shared_xaxis = curves.get_union_of_all_xaxis()
 
-        xaxis = set()
-        for x, f in curves.items():
-            xaxis = xaxis.union(f.x_unordered_values())
-
-        for x, f in curves.items():
-            for x in sorted(xaxis):
-                if x not in f.x_unordered_values():
-                    f[x] = self.value
+        for name in curves.function_names():
+            for x in shared_xaxis:
+                if x not in curves.contains_function_point(name, x):
+                    curves.update_function_point(name, x, self.value)
         return curves
 
 
@@ -346,21 +333,14 @@ class RemoveSmallCurve(ICurvesChanger):
         self.min_size = min_size
         self.max_size = max_size
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
-        result = {}
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
+        for name in curves.function_names():
+            if self.min_size is not None and curves.get_function(name).number_of_points() < self.min_size:
+                curves.remove_function(name)
+            if self.max_size is not None and curves.get_function(name).number_of_points() > self.max_size:
+                curves.remove_function(name)
 
-        to_remove = set()
-        for name, f in curves.items():
-            if self.min_size is not None and f.number_of_points() < self.min_size:
-                to_remove.add(name)
-            if self.max_size is not None and f.number_of_points() > self.max_size:
-                to_remove.add(name)
-
-        for name, f in curves.items():
-            if name not in to_remove:
-                result[name] = f
-
-        return result
+        return curves
 
 
 class TruncateToLowestX(ICurvesChanger):
@@ -375,7 +355,7 @@ class TruncateToLowestX(ICurvesChanger):
     You may want to truncate be to have the same values of A
     """
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         # we get the minimum length of the curve
         min_length = min(map(lambda x: x.number_of_points(), curves.values()))
 
@@ -407,7 +387,7 @@ class AbstractFunctionGroup(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def to_functions(self) -> Dict[str, "IFunction2D"]:
+    def to_functions(self) -> "IFunctionsDict":
         pass
 
 
@@ -447,7 +427,7 @@ class AbstractGrouper(ICurvesChanger, abc.ABC):
         """
         pass
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         groups: Dict[str, "AbstractFunctionGroup"] = {}
         for i, (name, f) in enumerate(curves.items()):
             group_name = self._get_group_name(i, name, f)
@@ -455,13 +435,47 @@ class AbstractGrouper(ICurvesChanger, abc.ABC):
                 groups[group_name] = self._get_new_group_instance(group_name)
             groups[group_name].add_function(name, f)
 
-        # now we convert the groups into a Dict[str, IFunction2D]
+        # now we convert the groups into a "IFunctionsDict"
         result = {}
         for name, group in groups.items():
             for new_name, new_function in group.to_functions().items():
                 if new_name in result:
                     raise ValueError(f"function {new_name} cannot be added because is already present in the dictionary!")
                 result[new_name] = new_function
+        return result
+
+
+class BoxPlotGroup(AbstractFunctionGroup):
+    """
+    A group that merges the functions within the same group and compute the statistical indices for boxplotting.
+
+    The statistical indices for boxplotting are:
+     - min
+     - 50th-xth percentile
+     - 50th+xth percentile
+     - median
+     - average
+
+     The functions are merged together as follows:
+     - if 2 functions have the same x value, the 2 y will concur to compute the statistical indices for the same "x"
+     value
+    """
+
+    def __init__(self, name: str, percentile_watched: int, ignore_invalid_values: bool):
+        AbstractFunctionGroup.__init__(self, name)
+        self.percentile_wacthed = percentile_watched
+        self.ignore_invalid_values = ignore_invalid_values
+        self.functions: List["IFunction2D"] = []
+
+
+    def add_function(self, name: str, f: "IFunction2D"):
+        self.functions.append(f)
+
+    def to_functions(self) -> "IFunctionsDict":
+        result: "IFunctionsDict" = dict()
+
+
+
         return result
 
 
@@ -515,7 +529,7 @@ class StatisticalGroup(AbstractFunctionGroup):
             self.n_f = SeriesFunction()
             self.n_aggregators: Dict[float, "aggregators.IAggregator"] = {}
 
-    def to_functions(self) -> Dict[str, "IFunction2D"]:
+    def to_functions(self) -> "IFunctionsDict":
         result = dict()
 
         if self.max_f is not None:
@@ -612,7 +626,7 @@ class MergeCurvesWithSameStuffUnderTest(ICurvesChanger):
         self.y_aggregator = y_aggregator
         self.name_to_test_context = name_to_test_context
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         result = dict()
 
         # for k, v in curves.items():
@@ -644,7 +658,7 @@ class MergeCurves(ICurvesChanger):
         self.label_aggregator = label_aggregator or aggregators.IdentityAggregator()
         self.label = label
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         result = dict()
         result[self.label] = SeriesFunction()
 
@@ -672,7 +686,7 @@ class CheckSameAxis(ICurvesChanger):
     def __init__(self):
         ICurvesChanger.__init__(self)
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         xaxis = None
         xaxis_curve = None
         for name, f in curves.items():
@@ -715,7 +729,7 @@ class AggregateAllIthXPoints(ICurvesChanger):
         ICurvesChanger.__init__(self)
         self.aggregator = aggregator
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         # we get the maximum length of the curve
         max_length = max(map(lambda x: x.number_of_points(), curves.values()))
 
@@ -749,16 +763,15 @@ class AggregateAllIthXPoints(ICurvesChanger):
         return curves
 
 
-
 class AbstractFillCurve(ICurvesChanger, abc.ABC):
 
-    def _get_all_xs(self, curves: Dict[str, IFunction2D]) -> Set[float]:
+    def _get_all_xs(self, curves: "IFunctionsDict") -> Set[float]:
         result = set()
         for name, f in curves.items():
             result.update(f.x_ordered_values())
         return result
 
-    def _compute_max_length(self, curves: Dict[str, IFunction2D]) -> Tuple[str, int]:
+    def _compute_max_length(self, curves: "IFunctionsDict") -> Tuple[str, int]:
         max_f = None
         max_length = None
         for x, f in curves.items():
@@ -784,7 +797,7 @@ class AbstractFillCurve(ICurvesChanger, abc.ABC):
     def _handle_begin_function_misses_values(self, name: str, f: IFunction2D) -> Any:
         pass
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         xaxis = sorted(list(self._get_all_xs(curves)))
         xaxis_len = len(xaxis)
         # max_f, max_length = self._compute_max_length(curves)
@@ -945,7 +958,7 @@ class CurvesRelativeTo(ICurvesChanger):
         ICurvesChanger.__init__(self)
         self.baseline = baseline
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         if self.baseline not in curves:
             raise KeyError(f"the baseline {self.baseline} not found in the curves generated!!!")
         result = {}
@@ -968,7 +981,7 @@ class SortAll(ICurvesChanger):
         ICurvesChanger.__init__(self)
         self.decrescent = decrescent
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         # ok, first of all we convert all the functions into a single dataframe
         # iteration of tuple name, y values of function
 
@@ -997,7 +1010,7 @@ class SortRelativeTo(ICurvesChanger):
         self.baseline = baseline
         self.decrescent = decrescent
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         # ok, first of all we convert all the functions into a single dataframe
         # iteration of tuple name, y values of function
         ys = {k: list(map(lambda xs: curves[k][xs], curves[k].x_ordered_values())) for k in curves}
@@ -1042,7 +1055,7 @@ class Multiplexer(ICurvesChanger):
     def __init__(self, *changers: ICurvesChanger):
         self.changers = changers
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         result = curves
 
         for changer in self.changers:
@@ -1070,7 +1083,7 @@ class ConditionCurveRemoval(ICurvesChanger):
         """
         self.condition = condition
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         result = {}
 
         for name, f in map(lambda x: (x, curves[x]), curves):
@@ -1090,7 +1103,7 @@ class LowCurveRemoval(ICurvesChanger):
         self.threshold = threshold
         self.threshold_included = threshold_included
 
-    def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
         result = {}
 
         for name, f in map(lambda x: (x, curves[x]), curves):
