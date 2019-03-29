@@ -170,18 +170,6 @@ class OptionBuilder(abc.ABC):
         :return:
         """
 
-        # TODO remove
-        # def condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
-        #     return True
-        #
-        # def should_visit_condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
-        #     return option1_value in option_1_values
-        #
-        # self.option_graph.add_edge(option1_considered, option2_enabled, NeedsToHaveValuesCondition(
-        #     condition=condition,
-        #     shoud_visit_condition=should_visit_condition
-        # ))
-
         def condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
             return option1_value in option_1_values
 
@@ -202,18 +190,6 @@ class OptionBuilder(abc.ABC):
         :param options_prohibited: the option which can't be set if `option1` has one value within `values`
         :return: option builder
         """
-        # TODO remove
-        # def condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
-        #     return option1_value not in option2
-        #
-        # def should_visit_condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
-        #     return True
-        #
-        # self.option_graph.add_edge(option1, options_prohibited, NeedsToHaveValuesCondition(
-        #     condition=condition,
-        #     shoud_visit_condition=should_visit_condition
-        # ))
-        # return self
 
         def condition(source: IOptionNode, source_value: Any, sink: IOptionNode, sink_value: Any):
             return source_value not in values

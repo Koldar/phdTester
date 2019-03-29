@@ -298,21 +298,11 @@ class BinaryArangoDB(AbstractArangoDBResource):
     def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str, content: Any):
         assert isinstance(datasource, ArangoDB)
 
-        # TODO remove
-        # basename = os.path.basename(filename)
-        # if data_type is None:
-        #     data_type = commons.get_ks001_extension(basename, pipe=constants.SEP_PIPE)
-        # name = commons.get_ks001_basename_no_extension(basename, pipe=constants.SEP_PIPE)
         collection_name = self._get_collection_name(path, data_type)
 
         collection: StandardCollection = datasource.fetch_or_create_collection(collection_name)
         doc_name = self._get_document_name(datasource, ks001)
         doc = datasource.fetch_or_create_document(collection=collection, document_key=doc_name)
-
-        # ok, now we save the row data as is
-        # TODO remove
-        # with open(filename, 'rb') as f:
-        #     string_line = f.read()
 
         doc['data'] = content
         datasource.update_document(collection, doc)
@@ -341,10 +331,6 @@ class CsvArangoDB(AbstractArangoDBResource, AbstractCsvResourceManager):
         pass
 
     def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str, content: Any):
-        # TODO remoev
-        # basename = os.path.basename(csv_filename)
-        # data_type = 'csv'
-        # name = commons.get_ks001_basename_no_extension(basename, pipe=constants.SEP_PIPE)
         assert isinstance(datasource, ArangoDB)
         collection_name = self._get_collection_name(path, 'csv')
 

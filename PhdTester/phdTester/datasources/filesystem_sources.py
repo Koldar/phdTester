@@ -62,21 +62,6 @@ class AbstractFileSystem(IResourceManager, abc.ABC):
                     yield (dirpath, name, dt)
                 elif data_type is None:
                     yield (dirpath, name, dt)
-        # TODO remove
-        #
-        # if path is None:
-        #     raise NotImplementedError()
-        # if "/" in path:
-        #     raise NotImplementedError()
-        # if data_type is None:
-        #     raise NotImplementedError()
-        #
-        #
-        #
-        # folder = os.path.dirname(path)
-        # if os.path.exists(folder):
-        #     for abs_filename in commons.get_filenames(directory=folder, allowed_extensions=[data_type]):
-        #         yield (path, commons.get_ks001_basename_no_extension(abs_filename, pipe=constants.SEP_PIPE), data_type)
 
     def contains(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> bool:
         assert isinstance(datasource, FileSystem)

@@ -654,21 +654,11 @@ class MergeCurves(ICurvesChanger):
         for x in list(curves.values())[0].x_ordered_values():
             self.y_aggregator.reset()
             self.label_aggregator.reset()
-            # TODO remove
-            # first = True
             for k, f in curves.items():
 
                 previous_y = self.y_aggregator.aggregate(f[x])
                 previous_label = self.label_aggregator.aggregate(f.get_label(x))
 
-                # TODO remove
-                # if first:
-                #     previous_y = self.y_aggregator.first_value(f[x])
-                #     previous_label = self.label_aggregator.first_value(f.get_label(x))
-                #     first = False
-                # else:
-                #     previous_y = self.y_aggregator.aggregate(previous_y, f[x])
-                #     previous_label = self.label_aggregator.aggregate(previous_label, f.get_label(x))
                 if should_use_labels:
                     result[self.label].update_triple(x, previous_y, previous_label)
                 else:
@@ -743,11 +733,6 @@ class AggregateAllIthXPoints(ICurvesChanger):
             for name, f in curves.items():
                 if f.number_of_points() > x_index:
                     new_value = self.aggregator.aggregate(f.get_ith_xvalue(x_index))
-                    # TODO remove
-                    # if new_value is None:
-                    #     new_value = self.aggregator.first_value(f.get_ith_xvalue(x_index))
-                    # else:
-                    #     new_value = self.aggregator.aggregate(new_value, f.get_ith_xvalue(x_index))
 
             # change the x values of each curve
             # curves which do not have the x_index-th value won't be altered
@@ -763,57 +748,7 @@ class AggregateAllIthXPoints(ICurvesChanger):
 
         return curves
 
-        # todo remove
-        # to_change = {}
-        # for name, f in curves.items():
-        #     to_change[name] = []
-        #     for i, val in zip(range(min_length), f.x_ordered_values()):
-        #         to_change[name].append(val)
-        #
-        # mean = aggregators.MeanAggregator()
-        # for i in range(min_length):
-        #     mean.reset()
-        #
-        #     # compute the average of the i-th x value
-        #     real_mean = 0
-        #     for j, v in enumerate(to_change.values()):
-        #         if j == 0:
-        #             real_mean = mean.first_value(v[i])
-        #         else:
-        #             real_mean = mean.aggregate(real_mean, v[i])
-        #
-        #     # now replace in each curve the new x value
-        #     for name, value in to_change.items():
-        #         # logging.critical(f"changing {value[i]} to {real_mean}")
-        #         curves[name].change_x(value[i], real_mean, overwrite=True)
-        #
-        # # for k, v in curves.items():
-        # #     logging.critical(f"curves are {k} = {v}")
-        #
-        # return curves
 
-
-# class NormalizeCurves(ICurvesChanger):
-#
-#     def __init__(self):
-#         ICurvesChanger.__init__(self)
-#
-#     def alter_curves(self, curves: Dict[str, IFunction2D]) -> Dict[str, IFunction2D]:
-#         # the axis of the functions may be different, so first of all we merge the axis
-#         xaxis = set()
-#         for name, f in curves.items():
-#             xaxis = xaxis.union(f.x_unordered_values())
-#
-#         # ok, now we normalize the curves up until they stop
-#         for name, f in curves.items():
-#             for x in sorted(xaxis):
-#                 # loop over the shared x axis
-#                 if x not in f.x_unordered_values():
-#                     # this value is not present for the function. We interpolate it
-#
-#
-#         # fetch a single
-#         pass
 
 class AbstractFillCurve(ICurvesChanger, abc.ABC):
 

@@ -527,19 +527,6 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         else:
             return self._add_dict(name)
 
-    #TODO remove
-    # @commons.inputs_not_none("index", "key", "value")
-    # def add_key_value_on_index(self, index: int, key: str, value: Any) -> "KS001":
-    #     d = self._try_and_generate_dict_index(index)
-    #     d[key] = value
-    #     return self
-    #
-    # @commons.inputs_not_none("name", "key", "value")
-    # def add_key_value_on_name(self, name: str, key: str, value: Any) -> "KS001":
-    #     d = self._try_and_generate_dict_name(name)
-    #     d[key] = value
-    #     return self
-
     @commons.inputs_not_none("place", "key", "value")
     def add_key_value(self, place: Union[str, int], key: str, value: Any) -> "KS001":
         if isinstance(place, int):

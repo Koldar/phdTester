@@ -132,14 +132,6 @@ class ImportantPaths(abc.ABC):
         """
         return os.path.abspath(os.path.join(self._output_dir, self._cwd_dir))
 
-    # TODO remove
-    # @staticmethod
-    # def _sanitize_path_str(v: str) -> str:
-    #     v = v.replace(constants.SEPARATOR_PAIRS, "-")
-    #     v = v.replace(constants.SEPARATOR_KEYVALUE, "-")
-    #     v = v.replace(constants.SEPARATOR_DICT, "-")
-    #     return v
-
     def _generate_file(self, ks: "KS001", extension: str = None, prepath: str = os.pardir, p: Union[str, Iterable[str]] = None) -> str:
         """
         Generate the absolute path of a filename compliant with KS001 standard
@@ -197,25 +189,3 @@ class ImportantPaths(abc.ABC):
     def generate_output_file(self, ks: "KS001", p: Union[str, Iterable[str]] = None, extension: str = None) -> str:
         return self._generate_file(ks, prepath=os.pardir, extension=extension, p=p)
 
-    # TODO remove
-    # def generate_output_file(self, d, *p: str) -> str:
-    #     """
-    #     :param d: the dictionary whose file we need to generate
-    #     :param p: additional path infos between output
-    #     :return: the absolute file of a generated file create to be compliant with d
-    #     """
-    #     return self.get_output(*p, self.generate_basename(d))
-    #
-    # def generate_basename(self, d) -> str:
-    #
-    #     result = []
-    #     # todo use phd path standard
-    #     for k in sorted(d.keys()):
-    #         if d[k] is not None:
-    #             result.append("{key}{sep}{value}".format(
-    #                 key=ImportantPaths._sanitize_path_str(k),
-    #                 sep=constants.SEPARATOR_KEYVALUE,
-    #                 value=ImportantPaths._sanitize_path_str(str(d[k]))
-    #             ))
-    #
-    #     return constants.SEPARATOR_PAIRS.join(result)

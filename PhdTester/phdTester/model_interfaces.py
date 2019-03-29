@@ -1072,16 +1072,6 @@ class IAggregator(abc.ABC):
         :return:
         """
 
-    # # TODO remove None from new
-    # @abc.abstractmethod
-    # def first_value(self, new: float = None) -> float:
-    #     """
-    #     Actions to perform when the very first element of the sequence arrives
-    #     :param new: the first element of the sequence
-    #     :return: the measurement you want to keep track of after the first element of the sequence has been received
-    #     """
-    #     pass
-
     @abc.abstractmethod
     def get_current(self) -> float:
         """
@@ -1901,17 +1891,6 @@ class IDataSource(abc.ABC):
             raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
 
         yield from self.resource_managers[data_type].iterate_over(self, path, ks001, data_type)
-
-
-    # TODO remove
-    # @abc.abstractmethod
-    # def get_csvs(self, path: str = None) -> Iterable[Tuple[str, str]]:
-    #     """
-    #
-    #     :param path: the path where to fetch csv. If None we will consider the whole datasource
-    #     :return: an iterable where each entry has the csv path, ks001
-    #     """
-    #     pass
 
     def get_suchthat(self,
                             filters: List[ICsvFilter] = None,
