@@ -1132,6 +1132,70 @@ class IFunctionsDict(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    def get_function_number_of_points(self, name: str) -> int:
+        """
+        the number of points where the function is defined
+        :param name: name of the function to work with
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def drop_all_points_after(self, x: float, x_included: bool = True):
+        """
+        Drop all the function points after a particular x value
+        :param x: the x value involved
+        :param x_included: true if we want to remove `x` as well, false otherwise
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def functions_share_same_xaxis(self) -> bool:
+        """
+
+        :return: true if all the functions share the same exact x axis, falsde otherwise
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_ith_xvalue(self, name: str, x_index: int) -> float:
+        """
+
+        :param name: name of the function whose x axis value we want to fetch
+        :param x_index: the i-th x axis value for the function
+        :return: the x axis value requested
+        """
+        pass
+
+    @abc.abstractmethod
+    def change_ith_x(self, x_index: int, new_value: float):
+        """
+        Change the x value into a new value
+
+        :param x_index: index of the x to alter
+        :param new_value: new value to associate to the x
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_function_name_with_most_points(self) -> str:
+        """
+
+        :return: the name of the function which has the greatest number fo points defined
+        """
+        pass
+
+    @abc.abstractmethod
+    def max_of_function(self, name: str) -> float:
+        """
+        get maximum y value the function has
+        :param name: the function to handle
+        :return: max of f(x)
+        """
+
     def get_ordered_xy(self, name: str) -> Iterable[Tuple[float, float]]:
         for x in self.get_ordered_x_axis(name):
             yield self.get_function_y(name, x)
@@ -1252,6 +1316,19 @@ class IAggregator(abc.ABC):
         :return: the value of the measurement you want to maintain after having received the new value
         """
         pass
+
+    def aggregate_many(self, news: Iterable[float]) -> float:
+        """
+        Aggregate several values at once
+        :param news: iterable of values to aggregate
+        :return: value after all the input variables have been aggregated
+        """
+        tmp = None
+        for n in news:
+            tmp = self.aggregate(n)
+        if tmp is None:
+            raise ValueError(f"iterable is empty!")
+        return tmp
 
     # @abc.abstractmethod
     # def aggregate(self, old: float, new: float) -> float:

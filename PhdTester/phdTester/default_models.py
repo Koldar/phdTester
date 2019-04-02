@@ -317,6 +317,39 @@ class StandardFunctionsDict(commons.SlottedClass, IFunctionsDict):
             xaxis = xaxis.union(self._dictionary[name].x_unordered_values())
         return xaxis
 
+    def get_function_number_of_points(self, name: str) -> int:
+        return self._dictionary[name].number_of_points()
+
+    def drop_all_points_after(self, x: float, x_included: bool = True):
+        for name, f in self._dictionary.items():
+            to_remove = set()
+            for ax in f.x_ordered_values():
+                if (ax > x) or (ax == x and x_included is True):
+                    to_remove.add(ax)
+            for p in to_remove:
+                f.remove_point(p)
+
+    def functions_share_same_xaxis(self) -> bool:
+        xaxis = None
+        for name, f in self.items():
+            if xaxis is None:
+                xaxis = set(f.x_unordered_values())
+            else:
+                other = set(f.x_unordered_values())
+                if xaxis != other:
+                    return False
+        return True
+
+    def get_ith_xvalue(self, name: str, index: int) -> float:
+        return self._dictionary[name].get_ith_xvalue(index)
+
+    def change_ith_x(self, x_index: int, new_value: float):
+        for name in self.function_names():
+            self._dictionary[name].change_ith_x(x_index, new_value)
+
+    def max_of_function(self, name: str) -> float:
+        return max(self._dictionary[name].y_unordered_value())
+
 
 class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
     """
@@ -353,6 +386,12 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
         result._dataframe = other.to_dataframe()
         return result
 
+    @classmethod
+    def from_dataframe(cls, other: pd.DataFrame):
+        result = cls()
+        result._dataframe = other
+        return result
+
     def function_names(self) -> Iterable[str]:
         yield from self._dataframe.columns.values
 
@@ -364,7 +403,7 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
         return self._dataframe.shape[1]
 
     def max_function_length(self) -> int:
-        return self._number_of_rows()
+        return max(self._dataframe.count(axis=0, numeric_only=True))
 
     def get_function(self, name: str) -> "IFunction2D":
         return SeriesFunction.from_dataframe(self._dataframe.loc[:, name])
@@ -402,6 +441,7 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
         return name in self._dataframe.columns.values
 
     def get_ordered_x_axis(self, name: str) -> Iterable[float]:
+        # TODO improve performances by caching xaxis of functions
         for x in self._dataframe.index:
             if not np.isnan(self._dataframe.loc[x, name]):
                 yield x
@@ -411,6 +451,34 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
 
     def get_union_of_all_xaxis(self) -> Iterable[float]:
         yield from self._dataframe.index
+
+    def get_function_number_of_points(self, name: str) -> int:
+        return self._dataframe.loc[:, name].dropna().shape[0]
+
+    def drop_all_points_after(self, x: float, x_included: bool = True):
+        if x_included is False:
+            raise NotImplementedError()
+        self._dataframe.drop(self._dataframe.index[x:], inplace=True)
+
+    def functions_share_same_xaxis(self) -> bool:
+        return not self._dataframe.isnull().values.any()
+
+    def get_ith_xvalue(self, name: str, index: int) -> float:
+        for i, x in enumerate(self.get_ordered_x_axis(name)):
+            if i == index:
+                return x
+        raise ValueError(f"in valid {index}!")
+
+    def change_ith_x(self, x_index: int, new_value: float):
+        old_value = self._dataframe.index[x_index]
+        self._dataframe = self._dataframe.iloc[x_index].rename({old_value: new_value})
+
+    def get_function_name_with_most_points(self) -> str:
+        return self._dataframe.count(axis=0, numeric_only=True).idxmax()
+
+    def max_of_function(self, name: str) -> float:
+        return self._dataframe[name].max(skipna=True)
+
 
 class StandardOptionDict(IOptionDict):
     """
