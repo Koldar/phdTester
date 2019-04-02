@@ -1099,12 +1099,11 @@ class LowCurveRemoval(ICurvesChanger):
         self.threshold_included = threshold_included
 
     def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
-        result = {}
 
         for name in curves.function_names():
             m = curves.max_of_function(name)
             if not((m > self.threshold) or (m == self.threshold and self.threshold_included is True)):
                 curves.remove_function(name)
-                
+
         return curves
 
