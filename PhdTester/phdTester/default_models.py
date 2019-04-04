@@ -262,6 +262,7 @@ class StandardFunctionsDict(commons.SlottedClass, IFunctionsDict):
     __slots__ = ("_dictionary", )
 
     def __init__(self):
+        super().__init__()
         self._dictionary: Dict[str, "IFunction2D"] = {}
 
     def function_names(self) -> Iterable[str]:
@@ -349,6 +350,18 @@ class StandardFunctionsDict(commons.SlottedClass, IFunctionsDict):
 
     def max_of_function(self, name: str) -> float:
         return max(self._dictionary[name].y_unordered_value())
+
+    def get_function_name_with_most_points(self) -> str:
+        current_max = -1
+        current_max_name = None
+        for name in self.function_names():
+            function_max = self.get_function(name).number_of_points()
+            if function_max > current_max:
+                current_max = function_max
+                current_max_name = name
+        if current_max_name is None:
+            raise ValueError(f"computing max on empty dataframe!")
+        return current_max_name
 
 
 class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
