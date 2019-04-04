@@ -13,5 +13,9 @@ twine upload --verbose --username ${USERNAME} --password=${PASSWORD} --repositor
 
 if test $RELEASE = "true"
 then
+	echo "uploading the projhect on pypi..."
 	#twine upload --verbose --username ${USERNAME} --password=${PASSWORD} --repository-url https://pypi.org/legacy/ dist/*
 fi
+
+echo "DONE!!!!"
+echo "Checkout test project @"
