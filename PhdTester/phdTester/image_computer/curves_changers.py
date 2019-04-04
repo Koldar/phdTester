@@ -470,51 +470,67 @@ class BoxPlotGroup(AbstractFunctionGroup):
      value
     """
 
-    def __init__(self, name: str, percentile_watched: int, ignore_invalid_values: bool):
+    def __init__(self, name: str, percentile_watched: int, ignore_infinites: bool, generate_plots_ignoring_infinities: bool):
         AbstractFunctionGroup.__init__(self, name)
         self.percentile_watched = percentile_watched
-        self.ignore_invalid_values = ignore_invalid_values
+        self.ignore_infinites = ignore_infinites
+        self.generate_plots_ignoring_infinities = generate_plots_ignoring_infinities
         self.functions: "IFunctionsDict" = DataFrameFunctionsDict()
 
     def add_function(self, name: str, curves: "IFunctionsDict"):
         self.functions.set_function(name, curves.get_function(name))
 
-    def to_functions(self) -> "IFunctionsDict":
+    def _create_boxplot_functions(self, df: pd.DataFrame, suffix: str) -> "IFunctionsDict":
         result: "IFunctionsDict" = DataFrameFunctionsDict()
 
-        df = pd.DataFrame(result.to_dataframe()) # enforce a copy
-        if self.ignore_invalid_values:
-            # by default dataframe operations ignore NaN. So we convert the infinities into Nan
-            df.replace(np.inf, np.NaN, inplace=True)
-
         result.set_function(
-            f"{self.get_name()}_max",
+            f"{self.get_name()}_max{suffix}",
             SeriesFunction.from_dataframe(df.max(axis=1))
         )
         result.set_function(
-            f"{self.get_name()}_min",
+            f"{self.get_name()}_min{suffix}",
             SeriesFunction.from_dataframe(df.min(axis=1))
         )
         result.set_function(
-            f"{self.get_name()}_average",
+            f"{self.get_name()}_average{suffix}",
             SeriesFunction.from_dataframe(df.mean(axis=1))
         )
         result.set_function(
-            f"{self.get_name()}_percentile={self.percentile_watched}",
-            SeriesFunction.from_dataframe(df.quantile(q=self.percentile_watched/100., axis=1))
+            f"{self.get_name()}_percentile={self.percentile_watched}{suffix}",
+            SeriesFunction.from_dataframe(df.quantile(q=self.percentile_watched / 100., axis=1))
         )
         result.set_function(
-            f"{self.get_name()}_percentile={100 - self.percentile_watched}",
-            SeriesFunction.from_dataframe(df.quantile(q=((100-self.percentile_watched)/100.), axis=1))
+            f"{self.get_name()}_percentile={100 - self.percentile_watched}{suffix}",
+            SeriesFunction.from_dataframe(df.quantile(q=((100 - self.percentile_watched) / 100.), axis=1))
         )
         result.set_function(
-            f"{self.get_name()}_percentile=50",
+            f"{self.get_name()}_percentile=50{suffix}",
             SeriesFunction.from_dataframe(df.median(axis=1))
         )
         result.set_function(
-            f"{self.get_name()}_n",
+            f"{self.get_name()}_n {suffix}",
             SeriesFunction.from_dataframe(df.count(axis=1))
         )
+
+        return result
+
+    def to_functions(self) -> "IFunctionsDict":
+        result: "IFunctionsDict" = DataFrameFunctionsDict()
+
+        df = pd.DataFrame(result.to_dataframe())  # enforce a copy
+
+        if self.generate_plots_ignoring_infinities:
+            # we generate 2 set of boxplots, one considering infinities and the other not considering them
+            with_infinities = self._create_boxplot_functions(df, "_withinfinities")
+            without_infinities = self._create_boxplot_functions(df.replace(np.inf, np.NaN), '_withoutinfinities')
+            result = with_infinities + without_infinities
+        elif self.ignore_infinites:
+            # by default dataframe operations ignore NaN. So we convert the infinities into Nan
+            df.replace(np.inf, np.NaN, inplace=True)
+            result = self._create_boxplot_functions(df, "_withoutinfinities")
+        else:
+            # ok we treat the data as is
+            result = self._create_boxplot_functions(df, "")
 
         return result
 
@@ -529,7 +545,7 @@ class BoxPlotGrouper(AbstractGrouper):
     """
 
     def __init__(self, get_group_name_f: Callable[[int, str, "IFunction2D"], str], percentile_watched: int,
-                 ignore_infinities: bool = False):
+                 ignore_infinities: bool = False, generate_plots_ignoring_infinities: bool = False):
         """
 
         :param get_group_name_f: function defining the group name of a given function.
@@ -537,17 +553,23 @@ class BoxPlotGrouper(AbstractGrouper):
              - second parameter is the function name
              - third paramete is the function itself
         :param percentile_watched: the percentile to watch. If you want to look for the 25th and 75th quantile, write 25
-        :param ignore_infinities: true if you want to ignore "infinite" values during the computation of the curvesd
+        :param ignore_infinities: true if you want to ignore "infinite" values during the computation of the curves.
+            Is overwritten by generate_plots_ignoring_infinities
+        :param generate_plots_ignoring_infinities: if true, we will generate 2 sets of curves: the first set will
+        contain min,max, quantiles considering infinites values. The second set will contain min, max, qwuantiles ignoring
+        infinite values. Overrides ignore_infinites parameter.
         """
         AbstractGrouper.__init__(self)
         self.get_group_name_f = get_group_name_f
         self.percentile_watched = percentile_watched
         self.ignore_infinities = ignore_infinities
+        self.generate_plots_ignoring_infinities = generate_plots_ignoring_infinities
 
     def _get_new_group_instance(self, group_name: str) -> AbstractFunctionGroup:
         return BoxPlotGroup(group_name,
                             percentile_watched=self.percentile_watched,
                             ignore_infinities=self.ignore_infinities,
+                            generate_plots_ignoring_infinities=self.generate_plots_ignoring_infinities,
                             )
 
     def _get_group_name(self, i: int, name: str, function1: IFunction2D) -> str:

@@ -992,6 +992,10 @@ class IFunctionsDict(abc.ABC):
     """
 
     @abc.abstractmethod
+    def __init__(self):
+        pass
+
+    @abc.abstractmethod
     def function_names(self) -> Iterable[str]:
         """
         iterable of function names
@@ -1196,6 +1200,23 @@ class IFunctionsDict(abc.ABC):
         :return: max of f(x)
         """
 
+    def merge_dictionaries(self, other: "IFunctionsDict") -> "IFunctionsDict":
+        """
+        Merge 2 dictionaries
+
+        if the 2 dictionaries share the same function name, an error is thrown.
+        Merging is performed on sorted function names
+
+        :param other: the other dictionary to merge function on
+        :raises KeyError: if the 2 dictionaries share the same function name, regardless of its value
+        :return: self
+        """
+        for name in sorted(other.function_names()):
+            if self.contains_function(name):
+                raise KeyError(f"this dictionary already contains function named {name}")
+            self.set_function(name, other.get_function(name))
+        return self
+
     def get_ordered_xy(self, name: str) -> Iterable[Tuple[float, float]]:
         for x in self.get_ordered_x_axis(name):
             yield self.get_function_y(name, x)
@@ -1231,6 +1252,23 @@ class IFunctionsDict(abc.ABC):
 
     def __delitem__(self, key: str):
         self.remove_function(key)
+
+    def __add__(self, other: "IFunctionsDict") -> "IFunctionsDict":
+        """
+        Alias of merge_dictionaries
+
+        :param other: the other dictionary to merge
+        :return: the merge of the 2 dictionaries
+        """
+        result = self.__class__()
+        result += self
+        result += other
+
+        return result
+
+    def __iadd__(self, other: "IFunctionsDict") -> "IFunctionsDict":
+        self.merge_dictionaries(other)
+        return self
 
 
 
