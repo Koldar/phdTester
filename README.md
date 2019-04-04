@@ -18,7 +18,7 @@ This problem can be solved by the PhdTester. It's a framework that lets you:
  
 1. generate all the test combinations;
 2. plot the result;
-3. and aggregate them in a pdf report.
+3. and aggregate them in a pdf report (not yet suypported).
  
 Installation
 ============
