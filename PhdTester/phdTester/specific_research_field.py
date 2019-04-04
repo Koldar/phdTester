@@ -1213,9 +1213,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
             __slots__ = ('name', 'function', 'x_aggregator', 'y_aggregator', 'label_aggregator', 'y_aggregator_per_x')
 
-            def __init__(self, name: str, f: IFunction2D, x_aggregator: IAggregator = None, y_aggregator: IAggregator = None):
+            def __init__(self, name: str, x_aggregator: IAggregator = None, y_aggregator: IAggregator = None):
                 self.name = name
-                self.function = f
                 self.x_aggregator = x_aggregator
                 self.y_aggregator = y_aggregator
                 self.y_aggregator_per_x = {}
@@ -1228,6 +1227,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         x_aggregator = x_aggregator if x_aggregator is not None else aggregators.IdentityAggregator()
 
         functions_to_draw: Dict[str, FunctionData] = {}
+        result = DataFrameFunctionsDict()
 
         key_alias = self.generate_test_context().key_alias
         value_alias = self.generate_test_context().value_alias
@@ -1278,11 +1278,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 if function_label not in functions_to_draw:
                     functions_to_draw[function_label] = FunctionData(
                         name=function_label,
-                        f=SeriesFunction(),
                         x_aggregator=x_aggregator.clone(),
                         y_aggregator=y_aggregator.clone(),
                     )
-                building_function: IFunction2D = functions_to_draw[function_label].function
 
                 # handle x
                 x_value = functions_to_draw[function_label].x_aggregator.aggregate(x_value)
@@ -1294,13 +1292,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 if y_value is None:
                     raise ValueError(f"value associated to {x_value} cannot be null for function {functions_to_draw}")
 
-                building_function.update_point(x_value, y_value)
+                result.update_function_point(function_label, x_value, y_value)
 
             functions_to_draw[function_label].x_aggregator.reset()
-
-        result = DataFrameFunctionsDict()
-        for name in functions_to_draw:
-            result.set_function(name, functions_to_draw[name].function)
 
         return result
 
