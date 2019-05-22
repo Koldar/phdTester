@@ -159,12 +159,15 @@ class Aliases(commons.SlottedClass):
         the function simply returns if string is indeed an alias
 
         :param string: a string that you don't know if it's an alias or a name
+        :raises ValueError: if `string` is not an alias nor has an alias associated
         :return: the alias associated to the given string.
         """
         if self.has_name(string):
             return self.get_alias(string)
         elif self.has_alias(string):
             return string
+        else:
+            raise ValueError(f"{string} has not an alias")
 
     def get(self, name: str = None, alias: str = None) -> str:
         if name is None and alias is None:
@@ -355,7 +358,7 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         self.append(other)
 
     @commons.inputs_not_none("other")
-    def append(self, other: "KS001") -> "KS001":
+    def append(self, other: "KS001", in_place: bool = True) -> "KS001":
         """
         Append a KS001 at the end of another one
 
@@ -368,22 +371,25 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         We put not the values of `other`, but clones of `other` values, generated via copy.copy() function
 
         :param other: the KS001 to append at the end of this structure
+        :param in_place: true if you want to alter `self`, false if you want to create a new instance
         :return: the new update KS001 version.
         """
 
+        result = self if in_place else self.clone()
+
         for k in other.key_aliases:
-            self.key_aliases.set_alias(k, other.key_aliases.get_alias(k))
+            result.key_aliases.set_alias(k, other.key_aliases.get_alias(k))
         for k in other.value_aliases:
-            self.value_aliases.set_alias(k, other.value_aliases.get_alias(k))
+            result.value_aliases.set_alias(k, other.value_aliases.get_alias(k))
         for d in other.dicts:
             if d["name"] is not None:
-                new_dict = self._try_and_generate_dict_name(d["name"])
+                new_dict = result._try_and_generate_dict_name(d["name"])
             else:
-                new_dict = self._try_and_generate_dict_index(len(self.dicts))
+                new_dict = result._try_and_generate_dict_index(len(result.dicts))
             for k in d["dict"]:
                 new_dict[k] = copy.copy(d["dict"][k])
 
-        return self
+        return result
 
     @commons.inputs_not_none("item")
     def __getitem__(self, item: Union[int, str]) -> Dict[str, str]:
@@ -466,6 +472,11 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                 return True
         else:
             return False
+
+    @commons.inputs_not_none("index", "label")
+    def set_dict_label(self, index: int, label: str):
+        old_label = list(self.dicts[index].keys())[0]
+        self.dicts[index] = dict(name=label, dict=self.dicts[index][old_label])
 
     def _has_dict_place(self, place: Union[str, int]) -> bool:
         if isinstance(place, int):
@@ -586,15 +597,41 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         return "\n".join(result)
 
     @classmethod
-    def get_from(cls, d: Dict[Any, Any], identifier: str = None, label: str = None, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None):
+    def from_template(cls, template: "KS001", identifier: str = None, label: str = None, index: int = None, **kwargs):
+
+        key_aliases = {k: template.key_aliases.get_alias(k) for k in template.key_aliases.names()}
+        value_aliases = {k: template.value_aliases.get_alias(k) for k in template.value_aliases.names()}
+
+        logging.info(f"kswarg is {kwargs}")
+        return KS001.get_from(
+            d=kwargs,
+            identifier=identifier,
+            index=index,
+            label=label,
+            key_alias=key_aliases,
+            value_alias=value_aliases
+        )
+
+    @classmethod
+    def get_from(cls, d: Dict[Any, Any], identifier: str = None, label: str = None, index: int = None, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None):
         """
         Generates a new structure starting from a dictionary
 
-        the KS001 structure generated will have onlyl one dictionary
+        the KS001 structure generated will have onlyl one dictionary.
+
+        If:
+         - label and index are present: we will generate a KS001 which has populated the index-th dictionary and its name
+            is `name`
+         - label is present but index is not: we will generate a dictionary in the first index with label `label`
+         - index is present but label is not: we will generate a labeless dictionary in the ith-index dictionary
+         - label and index are absent: we will generate a labelless dictionary in the 0-th position.
 
         :param d: the dictionary involved
         :param identifier: optional identifier of the KS001 to generate. None if you don't want an identifier
-        :param label: optional label of the KS001 dictionary to generate
+        :param label: optional label of the KS001 dictionary to generate. If index is present as well, we will generate
+            the index-th dictionary labelled with `label`.
+        :param index: optional index of where we need to add key mapping in the KS001 structure to generate.
+            Takes precedence over label
         :param key_alias: representing alias of keys
         :param value_alias: representing alias of values
         :return: a new KS001 object
@@ -612,14 +649,22 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
 
         for k, v in d.items():
             if key_alias is not None:
-                k = result.key_aliases.get_alias_from_unsure(k)
+                k = result.key_aliases.get_actual_name(k)
             if value_alias is not None:
                 v = result.value_aliases.get_actual_name(v)
 
-            if label is None:
-                result.add_key_value(place=0, key=str(k), value=v)
+            if index is None:
+                if label is None:
+                    result.add_key_value(place=0, key=str(k), value=v)
+                else:
+                    result.add_key_value(place=label, key=str(k), value=v)
             else:
-                result.add_key_value(place=label, key=str(k), value=v)
+                if label is None:
+                    result.add_key_value(place=index, key=str(k), value=v)
+                else:
+                    result.add_key_value(place=index, key=str(k), value=v)
+                    result.set_dict_label(index=index, label=label)
+
         return result
 
     def dump_str(self, use_key_alias: bool = True, use_value_alias: bool = True, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=") -> str:
@@ -639,15 +684,15 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         :return: a string which can be parsed with this structure
         """
 
-        def sanitize(string: str, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=") -> str:
-            result = ""
+        def sanitize(string: str, acolon: str = ":", apipe: str = "|", aunderscore: str = "_", aequal: str = "=") -> str:
+            aresult = ""
             for c in string:
-                if c in [colon, pipe, underscore, equal]:
+                if c in [acolon, apipe, aunderscore, aequal]:
                     # escape special characters
-                    result += c * 2
+                    aresult += c * 2
                 else:
-                    result += c
-            return result
+                    aresult += c
+            return aresult
 
         result = ""
         if self.identifier is not None:
@@ -774,6 +819,7 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                 raise TypeError(f"invalid type {type(key_alias)}! Only Aliases and dict accepted!")
 
         for symbol, value, index in cls._symbol_generator(string, colon, pipe, underscore, equal):
+            logging.info(f"symbol was '{symbol}' whose value is {value}")
             if state in [State.INIT, ]:
                 if symbol == Symbol.STRING:
                     result.identifier = value
@@ -800,7 +846,7 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                     next_string_is_key = True
                     next_string_is_value = False
                 else:
-                    raise ValueError(f"Error while parsing a dictionary. We expected either a string, equal but received {symbol} ({value})")
+                    raise ValueError(f"Error while parsing a dictionary:\n{string}\n{' '*index + '^'}:\n We expected either a string, equal but received {symbol} ({value})")
             elif state in [State.NEW_PAIR, ]:
                 # we can enter after we have detected a = at the first key-value mapping
                 # or we can enter after we still need to read the key. None the less the first time we enter here we
