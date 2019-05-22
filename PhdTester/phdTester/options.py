@@ -4,6 +4,7 @@ from phdTester import commons
 from phdTester.model_interfaces import IOptionNode, OptionBelonging, OptionNodeKind, IOptionType
 
 
+# TODO maybe create a seaprate module
 class Int(IOptionType):
     pass
 
