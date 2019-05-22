@@ -2,7 +2,6 @@ import abc
 import os
 from typing import Union, Iterable
 
-from phdTester import constants
 from phdTester.ks001.ks001 import KS001
 
 
@@ -132,7 +131,7 @@ class ImportantPaths(abc.ABC):
         """
         return os.path.abspath(os.path.join(self._output_dir, self._cwd_dir))
 
-    def _generate_file(self, ks: "KS001", extension: str = None, prepath: str = os.pardir, p: Union[str, Iterable[str]] = None) -> str:
+    def _generate_file(self, ks: "KS001", extension: str = None, prepath: str = os.pardir, p: Union[str, Iterable[str]] = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> str:
         """
         Generate the absolute path of a filename compliant with KS001 standard
 
@@ -163,10 +162,10 @@ class ImportantPaths(abc.ABC):
         return self.get_output(final, ks.dump_str(
             use_key_alias=True,
             use_value_alias=True,
-            colon=constants.SEP_COLON,
-            pipe=constants.SEP_PIPE,
-            underscore=constants.SEP_PAIRS,
-            equal=constants.SEP_KEYVALUE,
+            colon=colon,
+            pipe=pipe,
+            underscore=underscore,
+            equal=equal,
         ) + extension)
 
     def generate_image_file(self, ks: "KS001", p: Union[str, Iterable[str]] = None, extension: str = None) -> str:

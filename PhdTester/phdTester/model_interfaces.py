@@ -10,7 +10,6 @@ import pandas as pd
 from abc import ABC
 from typing import Any, Tuple, Iterable, Dict, List, Callable, Optional, Set
 
-from phdTester import constants
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, DataTypeStr
 from phdTester.exceptions import ResourceTypeUnhandledError
 from phdTester.graph import IMultiDirectedGraph
@@ -426,7 +425,7 @@ class IOptionDictWithKS(IOptionDict, abc.ABC):
             if o in self.options():
                 self.set_option(o, ks[label][o])
 
-    def populate_from_ks001_index(self, index: int, filename: str) -> "IOptionDictWithKS":
+    def populate_from_ks001_index(self, index: int, filename: str, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> "IOptionDictWithKS":
         """
         populate `this` fields with the key-value mapping in the i-th dictionary
         :param index: the index representing the dictiopnary where to fetch data from
@@ -437,16 +436,16 @@ class IOptionDictWithKS(IOptionDict, abc.ABC):
             filename=filename,
             key_alias=Aliases(self.key_alias),
             value_alias=Aliases(self.value_alias),
-            colon=constants.SEP_COLON,
-            pipe=constants.SEP_PIPE,
-            underscore=constants.SEP_PAIRS,
-            equal=constants.SEP_KEYVALUE,
+            colon=colon,
+            pipe=pipe,
+            underscore=underscore,
+            equal=equal,
         )
 
         self.set_options(ks[index])
         return self
 
-    def populate_from_ks001_name(self, label: str, filename: str) -> "IOptionDictWithKS":
+    def populate_from_ks001_name(self, label: str, filename: str, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> "IOptionDictWithKS":
         """
         populate `this` fields with the key-value mapping in the `label` named dictionary
         :param label: the label of the dictiopnary where to fetch data from
@@ -457,10 +456,10 @@ class IOptionDictWithKS(IOptionDict, abc.ABC):
             filename=filename,
             key_alias=Aliases(self.key_alias),
             value_alias=Aliases(self.value_alias),
-            colon=constants.SEP_COLON,
-            pipe=constants.SEP_PIPE,
-            underscore=constants.SEP_PAIRS,
-            equal=constants.SEP_KEYVALUE,
+            colon=colon,
+            pipe=pipe,
+            underscore=underscore,
+            equal=equal,
         )
 
         self.set_options(ks[label])
@@ -1945,7 +1944,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_all(self, datasource: "IDataSource", path: str = None, data_type: str = None) -> Iterable[Tuple[str, str, str]]:
+    def get_all(self, datasource: "IDataSource", path: str = None, data_type: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
         """
         get all the resources which are in `path` and have type `data_type`
 
@@ -2133,11 +2132,11 @@ class IDataSource(abc.ABC):
 
         return self.resource_managers[data_type].get(self, path, ks001, data_type)
 
-    def get_all(self, path: str = None, data_type: str = None) -> Iterable[Tuple[str, str, str]]:
+    def get_all(self, path: str = None, data_type: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
         if data_type not in self.resource_managers:
             raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
 
-        return self.resource_managers[data_type].get_all(self, path, data_type)
+        return self.resource_managers[data_type].get_all(self, path, data_type, colon, pipe, underscore, equal)
 
     def contains(self, path: str, ks001: KS001Str, data_type: str) -> bool:
         """
@@ -2220,7 +2219,7 @@ class IDataSource(abc.ABC):
                             filters: List[ICsvFilter] = None,
                             test_context_template: "ITestContext" = None,
                             path: str = None, data_type: str = None,
-                            force_generate_ks001: bool = False, force_generate_textcontext: bool = False) -> Iterable[GetSuchInfo]:
+                            force_generate_ks001: bool = False, force_generate_textcontext: bool = False, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[GetSuchInfo]:
         """
         get all the csv data in the datasource which follows the condition
 
@@ -2282,10 +2281,10 @@ class IDataSource(abc.ABC):
                 string=ks001str,
                 key_alias=tc.key_alias,
                 value_alias=tc.value_alias,
-                colon=constants.SEP_COLON,
-                pipe=constants.SEP_PIPE,
-                underscore=constants.SEP_PAIRS,
-                equal=constants.SEP_KEYVALUE,
+                colon=colon,
+                pipe=pipe,
+                underscore=underscore,
+                equal=equal,
             )
 
             for f in single_csv_filters:
@@ -2327,10 +2326,10 @@ class IDataSource(abc.ABC):
                             string=ks001str,
                             key_alias=test_context_template.key_alias,
                             value_alias=test_context_template.value_alias,
-                            colon=constants.SEP_COLON,
-                            pipe=constants.SEP_PIPE,
-                            underscore=constants.SEP_PAIRS,
-                            equal=constants.SEP_KEYVALUE,
+                            colon=colon,
+                            pipe=pipe,
+                            underscore=underscore,
+                            equal=equal,
                         )
                     if force_generate_textcontext and tc is None:
                         tc = test_context_template.clone()

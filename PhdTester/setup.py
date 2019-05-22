@@ -3,7 +3,7 @@ from typing import Iterable
 import semantic_version
 from setuptools import setup, find_packages
 
-VERSION = "0.2.1-alpha"
+VERSION = "0.2.9-alpha"
 
 
 def load_readme() -> str:

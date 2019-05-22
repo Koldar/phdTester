@@ -21,6 +21,19 @@ from phdTesterExample.models import SortEnvironmentMask, SortTestContext, SortAl
 
 class SortResearchField(AbstractSpecificResearchFieldFactory):
 
+    # TODO create defaul implementation
+    def _get_ks001_colon(self, settings: "ITestingGlobalSettings") -> str:
+        return ":"
+
+    def _get_ks001_pipe(self, settings: "ITestingGlobalSettings") -> str:
+        return "|"
+
+    def _get_ks001_underscore(self, settings: "ITestingGlobalSettings") -> str:
+        return "_"
+
+    def _get_ks001_equal(self, settings: "ITestingGlobalSettings") -> str:
+        return "="
+
     def generate_option_graph(self) -> OptionGraph:
 
         return OptionBuilder().add_under_testing_multiplexer(
@@ -165,10 +178,13 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
                        under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
 
         def get_run_id(tc: "SortTestContext", path: str, data_type: str, content: pd.DataFrame, rowid: int, row: "PerformanceCsvRow") -> float:
-            return row.row
+            return row.run
 
         def get_time(tc: "SortTestContext", path: str, data_type: str, content: pd.DataFrame, rowid: int, row: "PerformanceCsvRow") -> float:
             return row.time
+
+        def get_sequence_size(tc: "SortTestContext", path: str, data_type: str, content: pd.DataFrame, rowid: int, row: "PerformanceCsvRow") -> float:
+            return tc.te.sequenceSize
 
         user_tcm = self.generate_test_context_mask()
         user_tcm.ut.algorithm = masks.TestContextMaskNeedsNotNull()
@@ -183,9 +199,24 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
             subtitle_function=lambda tc: "",
             get_x_value=get_run_id,
             get_y_value=get_time,
-            x_aggregator=aggregators.SingleAggregator(),
             y_aggregator=aggregators.SingleAggregator(),
             image_suffix="|image:type=time_over_runid",  # this should be a ks001 as well
+            user_tcm=user_tcm,
+            path_function=lambda tcm: "csvs",
+        )
+
+        user_tcm = self.generate_test_context_mask()
+        user_tcm.te.sequenceSize = masks.TestContextMaskNeedsNotNull()
+
+        self.generate_batch_of_plots(
+            xaxis_name="sequence size",
+            yaxis_name="avg time (us)",
+            title="time over sequence size",
+            subtitle_function=lambda tc: "",
+            get_x_value=get_sequence_size,
+            get_y_value=get_time,
+            y_aggregator=aggregators.MeanAggregator(),
+            image_suffix="|image:type=time_over_sequenceSize",
             user_tcm=user_tcm,
             path_function=lambda tcm: "csvs",
         )

@@ -119,5 +119,5 @@ class PerformanceCsvRow(AbstractCSVRow):
 
     def __init__(self):
         AbstractCSVRow.__init__(self)
-        self.row: int = None
+        self.run: int = None
         self.time: int = None

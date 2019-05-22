@@ -6,7 +6,7 @@ from typing import Iterable, Tuple, Any, List, Dict
 
 import pandas as pd
 
-from phdTester import commons, constants
+from phdTester import commons
 from phdTester.common_types import KS001Str, PathStr, DataTypeStr
 from phdTester.datasources.resource_mangers import AbstractCsvResourceManager
 from phdTester.exceptions import ResourceNotFoundError
@@ -60,7 +60,7 @@ class AbstractFileSystem(IResourceManager, abc.ABC):
                 yield from self.recursive_files_iterator(x.path, relative_to)
             # ignore other stuff
 
-    def get_all(self, datasource: "IDataSource", path: str = None, data_type: str = None) -> Iterable[Tuple[str, str, str]]:
+    def get_all(self, datasource: "IDataSource", path: str = None, data_type: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
         assert isinstance(datasource, FileSystem)
         abs_path = self._gen_absfile(datasource, path) if path is not None else datasource.root
 
@@ -70,8 +70,8 @@ class AbstractFileSystem(IResourceManager, abc.ABC):
             # filenames is the list files in "dirpath"
 
             for filename in self.recursive_files_iterator(abs_path, relative_to=abs_path):
-                name = commons.get_ks001_basename_no_extension(filename, pipe=constants.SEP_PIPE)
-                dt = commons.get_ks001_extension(filename, pipe=constants.SEP_PIPE)
+                name = commons.get_ks001_basename_no_extension(filename, pipe=pipe)
+                dt = commons.get_ks001_extension(filename, pipe=pipe)
                 # dirpath is an absolute path
                 # we need to convert it to "phdTester/tests"
                 dirpath = os.path.relpath(path)

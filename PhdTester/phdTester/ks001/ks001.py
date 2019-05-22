@@ -819,7 +819,7 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                 raise TypeError(f"invalid type {type(key_alias)}! Only Aliases and dict accepted!")
 
         for symbol, value, index in cls._symbol_generator(string, colon, pipe, underscore, equal):
-            logging.info(f"symbol was '{symbol}' whose value is {value}")
+            logging.debug(f"symbol was '{symbol}' whose value is {value}")
             if state in [State.INIT, ]:
                 if symbol == Symbol.STRING:
                     result.identifier = value

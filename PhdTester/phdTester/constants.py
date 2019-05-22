@@ -1,4 +1,0 @@
-SEP_COLON = ":"
-SEP_PIPE = "|"
-SEP_PAIRS = "@"
-SEP_KEYVALUE = "#"

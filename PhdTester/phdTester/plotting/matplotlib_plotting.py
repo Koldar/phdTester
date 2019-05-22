@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import Formatter
 
-from phdTester import constants
 from phdTester.ks001.ks001 import KS001
 from phdTester.plotting.common import DefaultLegend, DefaultGrid, DefaultText, IPlotTextFormatter
 from phdTester.plotting.plotting import IPlot2DGraph, IAxis, ISinglePlot, IText, ILegend, IGrid
@@ -92,7 +91,7 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
     def plots_map(self) -> Iterable[Tuple[IAxis, ISinglePlot]]:
         return {p.label: p for p in self._plots}
 
-    def save_image(self, image_filename_no_extension: Union[str, KS001], save_raw_data: bool, folder: str = None) -> Any:
+    def save_image(self, image_filename_no_extension: Union[str, KS001], save_raw_data: bool, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Any:
         """
 
         :param image_filename_no_extension:
@@ -105,10 +104,10 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
         if isinstance(image_filename_no_extension, str):
             multi_image = "{filename}{pipe}mode{equal}multi".format(
                     filename=image_filename_no_extension,
-                    colon=constants.SEP_COLON,
-                    pipe=constants.SEP_PIPE,
-                    equal=constants.SEP_KEYVALUE,
-                    underscore=constants.SEP_PAIRS,
+                    colon=colon,
+                    pipe=pipe,
+                    equal=equal,
+                    underscore=underscore,
                 )
         elif isinstance(image_filename_no_extension, KS001):
             multi_image = image_filename_no_extension.clone()
@@ -219,10 +218,10 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
                 if isinstance(image_filename_no_extension, str):
                     single_image = "{filename}{pipe}mode{equal}single{underscore}x{equal}{imagex}{underscore}y{equal}{imagey}".format(
                         filename=image_filename_no_extension,
-                        colon=constants.SEP_COLON,
-                        pipe=constants.SEP_PIPE,
-                        equal=constants.SEP_KEYVALUE,
-                        underscore=constants.SEP_PAIRS,
+                        colon=colon,
+                        pipe=pipe,
+                        equal=equal,
+                        underscore=underscore,
                         imagex=imagex,
                         imagey=imagey
                     )
@@ -294,16 +293,16 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
     def plots_map(self) -> Iterable[Tuple[IAxis, ISinglePlot]]:
         return {p.label: p for p in self._plots}
 
-    def save_image(self, image_filename_no_extension: Union[str, KS001], save_raw_data: bool, folder: str = None) -> Any:
+    def save_image(self, image_filename_no_extension: Union[str, KS001], save_raw_data: bool, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Any:
         if isinstance(image_filename_no_extension, str):
             if not os.path.isabs(image_filename_no_extension):
                 image_filename_no_extension = os.path.abspath(os.path.join(folder, image_filename_no_extension))
         elif isinstance(image_filename_no_extension, KS001):
             image_filename_no_extension = image_filename_no_extension.dump_str(
-                colon=constants.SEP_COLON,
-                pipe=constants.SEP_PIPE,
-                underscore=constants.SEP_PAIRS,
-                equal=constants.SEP_KEYVALUE
+                colon=colon,
+                pipe=pipe,
+                underscore=underscore,
+                equal=equal
             )
             image_filename_no_extension = os.path.abspath(os.path.join(folder, image_filename_no_extension))
         else:

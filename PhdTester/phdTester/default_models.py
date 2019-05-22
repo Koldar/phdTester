@@ -511,12 +511,12 @@ class StandardOptionDict(IOptionDict):
 
     def get_option(self, name: str) -> Any:
         if not self.contains_option(name):
-            raise KeyError(f"key {name} is not inside options")
+            raise KeyError(f"key {name} is not inside options (which are {list(self.options())})")
         return self.__dict__[name]
 
     def set_option(self, name: str, value: Any):
         if not self.contains_option(name):
-            raise KeyError(f"key {name} is not inside options")
+            raise KeyError(f"key {name} is not inside options (which are {list(self.options())})")
         self.__dict__[name] = value
 
 

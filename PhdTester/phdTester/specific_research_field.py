@@ -11,7 +11,7 @@ from typing import Dict, Any, Iterable, List, Tuple, Callable, Union
 
 import pandas as pd
 
-from phdTester import commons, masks, constants
+from phdTester import commons, masks
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr
 from phdTester.commons import StringCsvWriter, UnknownStringCsvReader
 from phdTester.datasources import filesystem_sources
@@ -51,6 +51,47 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         self.__nextimage_identifier: int = 0
         self.__datasource: "IDataSource" = None
         self.__filesystem_datasource: "filesystem_sources.FileSystem" = None
+
+        self.__colon: str = None
+        self.__pipe: str = None
+        self.__underscore: str = None
+        self.__equal: str = None
+
+    @abc.abstractmethod
+    def _get_ks001_colon(self, settings: "ITestingGlobalSettings") -> str:
+        """
+
+        :param settings: the settings read from the command line
+        :return: the character that will be used to parse ':' in KS001
+        """
+        pass
+
+    @abc.abstractmethod
+    def _get_ks001_pipe(self, settings: "ITestingGlobalSettings") -> str:
+        """
+
+        :param settings: the settings read from the command line
+        :return: the character that will be used to parse '|' in KS001
+        """
+        pass
+
+    @abc.abstractmethod
+    def _get_ks001_underscore(self, settings: "ITestingGlobalSettings") -> str:
+        """
+
+        :param settings: the settings read from the command line
+        :return: the character that will be used to parse '_' in KS001
+        """
+        pass
+
+    @abc.abstractmethod
+    def _get_ks001_equal(self, settings: "ITestingGlobalSettings") -> str:
+        """
+
+        :param settings: the settings read from the command line
+        :return: the character that will be used to parse '=' in KS001
+        """
+        pass
 
     @abc.abstractmethod
     def _generate_datasource(self, settings: "ITestingGlobalSettings") -> "IDataSource":
@@ -296,6 +337,12 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         ###################################################
         logging.info("generating global structures...")
         global_settings = self._generate_global_test_settings(self.__option_graph, parse_output)
+
+        self.__colon = self._get_ks001_colon(global_settings)
+        self.__pipe = self._get_ks001_pipe(global_settings)
+        self.__underscore = self._get_ks001_underscore(global_settings)
+        self.__equal = self._get_ks001_equal(global_settings)
+
         with self._generate_filesystem_datasource(global_settings) as self.__filesystem_datasource:
             with self._generate_datasource(global_settings) as self.__datasource:
                 self.__paths = self.generate_paths(global_settings)
@@ -573,10 +620,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             csv_generated = tcm_to_use.to_well_specified_ks001(key_alias=tc.key_alias, value_alias=tc.value_alias)
             csv_generated = csv_generated + ks001_to_add
             csv_output_filename = csv_generated.dump_str(
-                colon=constants.SEP_COLON,
-                pipe=constants.SEP_PIPE,
-                underscore=constants.SEP_PAIRS,
-                equal=constants.SEP_KEYVALUE,
+                colon=self.__colon,
+                pipe=self.__pipe,
+                underscore=self.__underscore,
+                equal=self.__equal,
             )
 
             if skip_if_csv_already_exist and csv_dest_data_source.contains(path=csv_dest_path, ks001=csv_output_filename, data_type='csv'):
@@ -1016,7 +1063,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             image_suffix=image_suffix,
             subtitle_function=subtitle_function,
             title=title,
-            label_to_string=label_to_string
         )
         return True
 
@@ -1225,6 +1271,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # read csv with pandas
             csv_dataframe = pd.read_csv(io.StringIO(csv_content))
             for i, (_, d) in enumerate(csv_dataframe.iterrows()):
+                # force the creation of a dictionary from the pandas data structures
+                d = {k: d[k] for k in d.keys()}
                 csv_outcome = self.get_csv_row(d, csv_info.ks001)
                 try:
                     x_value = get_x_value(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome)
@@ -1295,10 +1343,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                       title: str,
                       subtitle_function: Callable[["ITestContextMask"], str],
                       image_suffix: str,
-                      label_to_string: Callable[[Any], str] = None
                       ):
-
-        label_to_string = label_to_string or str
 
         # we know the xaxis is only one, so we pick the first
         akey = list(functions_to_print.keys())[0]
@@ -1354,8 +1399,11 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             d.identifier = f"{self.__nextimage_identifier:04d}"
             self.__nextimage_identifier += 1
 
+        # TODO we should be able to save images in a generic data_source as well
+        # TODO remove save_raw_data from save_image. raw_data should be saved with generic functions
+        self.filesystem_datasource.make_folders("images")
         plotter.save_image(
             image_filename_no_extension=d,
-            folder=paths.get_image_dir(),
-            save_raw_data=True
+            folder=self.filesystem_datasource.get_path("images"),
+            save_raw_data=True,
         )

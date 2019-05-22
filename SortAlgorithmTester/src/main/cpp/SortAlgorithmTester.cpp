@@ -191,20 +191,6 @@ int main(const int argc, const char* args[]) {
 
     srand(_seed);
 
-    std::vector<int> sequence{};
-
-    if (_sequenceType == std::string{"RANDOM"}) {
-        sequence = generateRandomSequence(_sequenceSize);
-    } else if (_sequenceType == std::string{"SAME"}) {
-        sequence = generateSameSequence(_sequenceSize);
-    } else if (_sequenceType == std::string{"SORTED"}) {
-        sequence = generateSortedSequence(_sequenceSize);
-    } else if (_sequenceType == std::string{"REVERSESORTED"}) {
-        sequence = generateReverseSortedSequence(_sequenceSize);
-    } else{
-        throw std::domain_error{"invalid type!"};
-    }
-
     ISortAlgorithm* alg = nullptr;
     if (_algorithm == std::string{"BUBBLESORT"}) {
         alg = new BubbleSort{};
@@ -220,9 +206,22 @@ int main(const int argc, const char* args[]) {
     if (f == NULL) {
         throw std::domain_error{"can't open file"};
     }
-    fprintf(f, "RUN,TIME\n");
+    fprintf(f, "run,time\n");
 
     for (int run=0; run<_runs; ++run) {
+        std::vector<int> sequence{};
+
+        if (_sequenceType == std::string{"RANDOM"}) {
+            sequence = generateRandomSequence(_sequenceSize);
+        } else if (_sequenceType == std::string{"SAME"}) {
+            sequence = generateSameSequence(_sequenceSize);
+        } else if (_sequenceType == std::string{"SORTED"}) {
+            sequence = generateSortedSequence(_sequenceSize);
+        } else if (_sequenceType == std::string{"REVERSESORTED"}) {
+            sequence = generateReverseSortedSequence(_sequenceSize);
+        } else{
+            throw std::domain_error{"invalid type!"};
+        }
 
         alg->reset();
         auto start = std::chrono::system_clock::now();
