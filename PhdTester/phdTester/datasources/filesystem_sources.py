@@ -31,6 +31,24 @@ class FileSystem(IDataSource):
     def clear(self):
         shutil.rmtree(self.root)
 
+    def get_path(self, *p: str) -> str:
+        """
+
+        :param p: the path to fetch, relative to root
+        :return: the absolute path of the resource pointed by p,
+        """
+        return os.path.abspath(os.path.join(self.root, *p))
+
+    def make_folders(self, *p: str):
+        """
+        generate the set of folder in the path
+
+        :param p: a comma separated list of directory to generate, relative to root
+        :return:
+        """
+
+        os.makedirs(os.path.abspath(os.path.join(self.root, *p)), exist_ok=True)
+
 
 class AbstractFileSystem(IResourceManager, abc.ABC):
 
@@ -126,6 +144,7 @@ class BinaryFileSystem(AbstractFileSystem):
                 yield c
 
 
+#TODO are we sure this should be intherit from file system and not only from resource manager???
 class CsvFileSystem(AbstractFileSystem, AbstractCsvResourceManager):
 
     def __init__(self):
