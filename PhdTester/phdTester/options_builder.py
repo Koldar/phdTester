@@ -38,17 +38,6 @@ class OptionGraph(SimpleMultiDirectedGraph):
                             return False
                         followed_vertices.add(sink)
 
-                # if condition.should_visit(self, source, sink, tc):
-                #     # if should_visit is True, we're serious about ensuring the constraint is satisfied.
-                #     # if it's not the whole combination is threashed away. If should_visit is false, we won't
-                #     # follow the edge (but the sink node won't be added to the followed_vertices). Followed_vertices
-                #     # is important to decide if an option should have set a value or if it's value is None
-                #     if not condition.accept(self, source, sink, tc):
-                #         return False
-                #     if not is_compliant_with_dfs(option_graph, sink):
-                #         return False
-                #
-                #     followed_vertices.add(sink)
 
             return True
 
