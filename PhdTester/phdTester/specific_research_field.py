@@ -14,16 +14,17 @@ import pandas as pd
 
 from phdTester import commons, masks
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr
-from phdTester.commons import StringCsvWriter, UnknownStringCsvReader
+from phdTester.commons import StringCsvWriter
 from phdTester.datasources import filesystem_sources
-from phdTester.default_models import SeriesFunction, DataFrameFunctionsDict, SimpleTestContextRepo, \
+from phdTester.default_models import SimpleTestContextRepo, \
     DefaultGlobalSettings, DefaultTestEnvironment, DefaultStuffUnderTest, DefaultTestContext, DefaultStuffUnderTestMask, \
     DefaultTestEnvironmentMask, DefaultTestContextMask
 from phdTester.exceptions import ValueToIgnoreError
+from phdTester.functions import DataFrameFunctionsDict
 from phdTester.image_computer import aggregators
 from phdTester.ks001.ks001 import KS001
 from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestContext, IGlobalSettings, \
-    ICsvRow, OptionBelonging, IOptionNode, ITestContextMask, IFunction2D, \
+    ICsvRow, OptionBelonging, IOptionNode, ITestContextMask, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
     ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict
 from phdTester.options_builder import OptionGraph
