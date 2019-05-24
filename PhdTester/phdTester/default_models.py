@@ -7,7 +7,7 @@ import pandas as pd
 
 from phdTester import commons
 from phdTester.model_interfaces import ITestContextRepo, ITestContext, ITestContextMask, ITestContextRepoView, \
-    IOptionDict, IUnderTesting, ITestingEnvironment, IStuffUnderTestMask, ITestEnvironmentMask, \
+    IOptionDict, IStuffUnderTest, ITestingEnvironment, IStuffUnderTestMask, ITestEnvironmentMask, \
     ITestingGlobalSettings, ICsvRow, IFunction2D, IDataWriter, IFunctionsDict
 
 
@@ -527,10 +527,10 @@ class AbstractTestingGlobalSettings(ITestingGlobalSettings, StandardOptionDict, 
         StandardOptionDict.__init__(self)
 
 
-class AbstractStuffUnderTest(IUnderTesting, StandardOptionDict, abc.ABC):
+class AbstractStuffUnderTest(IStuffUnderTest, StandardOptionDict, abc.ABC):
 
     def __init__(self):
-        IUnderTesting.__init__(self)
+        IStuffUnderTest.__init__(self)
         StandardOptionDict.__init__(self)
 
 
@@ -543,7 +543,7 @@ class AbstractTestingEnvironment(ITestingEnvironment, StandardOptionDict, abc.AB
 
 class AbstractTestContext(ITestContext, abc.ABC):
 
-    def __init__(self, ut: "IUnderTesting", te: "ITestingEnvironment"):
+    def __init__(self, ut: "IStuffUnderTest", te: "ITestingEnvironment"):
         ITestContext.__init__(self, ut=ut, te=te)
 
 

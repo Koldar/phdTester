@@ -10,6 +10,7 @@ import pandas as pd
 from abc import ABC
 from typing import Any, Tuple, Iterable, Dict, List, Callable, Optional, Set
 
+from phdTester import commons
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, DataTypeStr
 from phdTester.exceptions import ResourceTypeUnhandledError
 from phdTester.graph import IMultiDirectedGraph
@@ -507,19 +508,22 @@ class ITestContext(IOptionDictWithKS, abc.ABC):
     data can be used to generate values.
     """
 
-    def __init__(self, ut: "IUnderTesting", te: "ITestingEnvironment"):
+    @commons.inputs_not_none("ut", "te")
+    def __init__(self, ut: "IStuffUnderTest", te: "ITestingEnvironment"):
         IOptionDictWithKS.__init__(self)
         self._ut = ut
         self._te = te
 
     @property
-    def ut(self) -> "IUnderTesting":
+    def ut(self) -> "IStuffUnderTest":
         """
         A view on all the options related to the stuff you want to test
-        :return:
+
+        :return: the stuff under test
         """
         return self._ut
 
+    @abc.abstractmethod
     @property
     def te(self) -> "ITestingEnvironment":
         """
@@ -608,7 +612,7 @@ class ICsvRow(IOptionDict, abc.ABC):
         IOptionDict.__init__(self)
 
 
-class IUnderTesting(IOptionDictWithKS, ILabelable, ABC):
+class IStuffUnderTest(IOptionDictWithKS, ILabelable, ABC):
     """
     An under testing reperesents the element you want to test within a ITestContext
 
@@ -619,8 +623,8 @@ class IUnderTesting(IOptionDictWithKS, ILabelable, ABC):
         IOptionDictWithKS.__init__(self)
         ILabelable.__init__(self)
 
-    def clone(self, copy_function: Callable[[Any], Any] = None) -> "IUnderTesting":
-        return super(IUnderTesting, self).clone(copy_function=copy_function)
+    def clone(self, copy_function: Callable[[Any], Any] = None) -> "IStuffUnderTest":
+        return super(IStuffUnderTest, self).clone(copy_function=copy_function)
 
 
 class ITestingEnvironment(IOptionDictWithKS, ILabelable, ABC):

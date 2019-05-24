@@ -10,7 +10,7 @@ from phdTester.datasources.filesystem_sources import FileSystem
 from phdTester.default_models import SimpleTestContextRepo
 from phdTester.image_computer import aggregators
 from phdTester.ks001.ks001 import KS001
-from phdTester.model_interfaces import IDataSource, ITestingEnvironment, IUnderTesting, ITestingGlobalSettings, \
+from phdTester.model_interfaces import IDataSource, ITestingEnvironment, IStuffUnderTest, ITestingGlobalSettings, \
     ITestContext, ITestContextMask, ITestContextMaskOption, ICsvRow, ITestContextRepo
 from phdTester.options_builder import OptionGraph, OptionBuilder
 from phdTester.paths import ImportantPaths
@@ -95,14 +95,14 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
     def generate_environment(self) -> "ITestingEnvironment":
         return SortEnvironment()
 
-    def generate_under_testing(self) -> "IUnderTesting":
+    def generate_under_testing(self) -> "IStuffUnderTest":
         return SortAlgorithm()
 
     def generate_test_global_settings(self) -> "ITestingGlobalSettings":
         return SortSettings()
 
     # TODO maybe we can provide a default implementation....
-    def generate_test_context(self, ut: IUnderTesting = None, te: ITestingEnvironment = None) -> "ITestContext":
+    def generate_test_context(self, ut: IStuffUnderTest = None, te: ITestingEnvironment = None) -> "ITestContext":
         # TODO maybe we can ditch  it
         ut = ut if ut is not None else self.generate_under_testing()
         te = te if te is not None else self.generate_environment()

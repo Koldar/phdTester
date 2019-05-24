@@ -20,7 +20,7 @@ from phdTester.default_models import SeriesFunction, DataFrameFunctionsDict
 from phdTester.exceptions import ValueToIgnoreError
 from phdTester.image_computer import aggregators
 from phdTester.ks001.ks001 import KS001
-from phdTester.model_interfaces import ITestingEnvironment, IUnderTesting, ITestContext, ITestingGlobalSettings, \
+from phdTester.model_interfaces import ITestingEnvironment, IStuffUnderTest, ITestContext, ITestingGlobalSettings, \
     ICsvRow, OptionBelonging, IOptionNode, ITestContextMask, IFunction2D, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
     ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict
@@ -200,7 +200,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def generate_under_testing(self) -> "IUnderTesting":
+    def generate_under_testing(self) -> "IStuffUnderTest":
         """
         a research-specific structure containin all the option which are directly involved in the
         stuff you need to test
@@ -246,7 +246,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         return self.__test_environment_dict_values
 
     @abc.abstractmethod
-    def generate_test_context(self, ut: IUnderTesting = None, te: ITestingEnvironment = None) -> "ITestContext":
+    def generate_test_context(self, ut: IStuffUnderTest = None, te: ITestingEnvironment = None) -> "ITestContext":
         """
         Generate a test context, namely a structure representing a single test case.
         A test context contains the specifications of the stuff we need to test and the
@@ -505,11 +505,11 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             raise ValueError(f"under testing values has not been set yet!")
         return self.__test_environment_dict_values
 
-    def get_all_combinations_of_under_test_values(self) -> Iterable["IUnderTesting"]:
+    def get_all_combinations_of_under_test_values(self) -> Iterable["IStuffUnderTest"]:
         """
         Fetch all the possible combinations of under test options and put them
-        in an iterable of IUnderTesting
-        :return: all possibler IUnderTesting
+        in an iterable of IStuffUnderTest
+        :return: all possibler IStuffUnderTest
         """
         # we use a static key to prevent randomness of the outptu of key() method
         keys = list(self.__under_test_dict_values.keys())
