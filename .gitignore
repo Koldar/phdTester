@@ -10,3 +10,6 @@ build/
 dist/
 phd_tester.egg-info/
 
+
+# visual studio
+.vscode/
