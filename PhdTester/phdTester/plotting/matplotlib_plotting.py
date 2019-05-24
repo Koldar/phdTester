@@ -91,7 +91,7 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
     def plots_map(self) -> Iterable[Tuple[IAxis, ISinglePlot]]:
         return {p.label: p for p in self._plots}
 
-    def save_image(self, image_filename_no_extension: Union[str, KS001], save_raw_data: bool, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Any:
+    def save_image(self, image_name: KS001, save_raw_data: bool, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Any:
         """
 
         :param image_filename_no_extension:
@@ -101,19 +101,8 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
         :return:
         """
 
-        if isinstance(image_filename_no_extension, str):
-            multi_image = "{filename}{pipe}mode{equal}multi".format(
-                    filename=image_filename_no_extension,
-                    colon=colon,
-                    pipe=pipe,
-                    equal=equal,
-                    underscore=underscore,
-                )
-        elif isinstance(image_filename_no_extension, KS001):
-            multi_image = image_filename_no_extension.clone()
-            multi_image.add_key_value(place=self._dictonary_to_add_information, key="mode", value="multi")
-        else:
-            TypeError(f"invalid type {type(image_filename_no_extension)}! Only str or KS001 as accepted!")
+        multi_image = image_name.clone()
+        multi_image.add_key_value(place=self._dictonary_to_add_information, key="mode", value="multi")
 
         # Create 2x2 sub plots
         mat_gs = gridspec.GridSpec(2, 2)
@@ -148,22 +137,20 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
         for i, (cumornot, logornot) in enumerate(itertools.product([False, True], [False, True])):
             xperks = []
             yperks = []
-            imagex = ""
-            imagey = ""
+            sub_image: KS001 = multi_image.clone()
 
             if cumornot:
                 xperks.append('cumulative')
-                imagex = 'cumulative'
             else:
                 xperks.append('linear')
-                imagex = 'linear'
 
             if logornot:
                 yperks.append('log10')
-                imagey = 'log'
             else:
                 yperks.append('identity')
-                imagey = 'linear'
+
+            sub_image.add_key_value(place=self._dictonary_to_add_information, key="cumulativex", value=cumornot)
+            sub_image.add_key_value(place=self._dictonary_to_add_information, key="logy", value=logornot)
 
             self.xaxis.cumulative = cumornot
             self.xaxis.log10 = False
@@ -186,9 +173,8 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
                 plot_figure.add_plot(p)
 
             labels, lines = plot_figure.save_image(
-                image_filename_no_extension=multi_image,
+                image_name=sub_image,
                 folder=folder,
-                save_raw_data=False,
             )
 
             if i == 0:
@@ -203,6 +189,10 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
                 )
 
             if self._create_subfigure_images:
+                single_image = image_name.clone()
+                single_image.add_key_value(place=self._dictonary_to_add_information, key="cumulativex", value=cumornot)
+                single_image.add_key_value(place=self._dictonary_to_add_information, key="logy", value=logornot)
+
                 self.xaxis.label.text = xaxis_base
                 self.yaxis.label.text = yaxis_base
 
@@ -215,28 +205,9 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
                 for p in plot_figure.plots():
                     single_figure.add_plot(p)
 
-                if isinstance(image_filename_no_extension, str):
-                    single_image = "{filename}{pipe}mode{equal}single{underscore}x{equal}{imagex}{underscore}y{equal}{imagey}".format(
-                        filename=image_filename_no_extension,
-                        colon=colon,
-                        pipe=pipe,
-                        equal=equal,
-                        underscore=underscore,
-                        imagex=imagex,
-                        imagey=imagey
-                    )
-                elif isinstance(image_filename_no_extension, KS001):
-                    single_image = image_filename_no_extension.clone()
-                    single_image.add_key_value(place=self._dictonary_to_add_information, key="mode", value="single")
-                    single_image.add_key_value(place=self._dictonary_to_add_information, key="x", value=imagex)
-                    single_image.add_key_value(place=self._dictonary_to_add_information, key="y", value=imagey)
-                else:
-                    TypeError(f"invalid type {type(image_filename_no_extension)}! Only str or KS001 as accepted!")
-
                 single_figure.save_image(
-                    image_filename_no_extension=single_image,
+                    image_name=single_image,
                     folder=folder,
-                    save_raw_data=save_raw_data,
                 )
 
 
@@ -266,7 +237,7 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
     def grid(self) -> "IGrid":
         return self._grid
 
-    def __init__(self, xaxis: IAxis, yaxis: IAxis, title:IText, subtitle: Optional[IText], use_provided_fig=None):
+    def __init__(self, xaxis: IAxis, yaxis: IAxis, title: IText, subtitle: Optional[IText], use_provided_fig=None):
         self._title = title
         self._subtitle = subtitle
         self._xaxis = xaxis
@@ -293,22 +264,14 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
     def plots_map(self) -> Iterable[Tuple[IAxis, ISinglePlot]]:
         return {p.label: p for p in self._plots}
 
-    def save_image(self, image_filename_no_extension: Union[str, KS001], save_raw_data: bool, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Any:
-        if isinstance(image_filename_no_extension, str):
-            if not os.path.isabs(image_filename_no_extension):
-                image_filename_no_extension = os.path.abspath(os.path.join(folder, image_filename_no_extension))
-        elif isinstance(image_filename_no_extension, KS001):
-            image_filename_no_extension = image_filename_no_extension.dump_str(
-                colon=colon,
-                pipe=pipe,
-                underscore=underscore,
-                equal=equal
-            )
-            image_filename_no_extension = os.path.abspath(os.path.join(folder, image_filename_no_extension))
-        else:
-            raise TypeError(f"invalid type {type(image_filename_no_extension)}! Only str or KS001 are accepted!")
-
-        logging.info(f"saving image {image_filename_no_extension}")
+    def save_image(self, image_name: KS001, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Any:
+        image_filename_no_ext = image_name.dump_str(
+            colon=colon,
+            pipe=pipe,
+            underscore=underscore,
+            equal=equal
+        )
+        logging.info(f"saving image {image_filename_no_ext}")
 
         if self.use_provided_fig is not None:
             mat_ax = self.use_provided_fig
@@ -329,7 +292,7 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
         delta_title = ydelta_per_row if self.subtitle is None else (2 * ydelta_per_row)
 
         if self.legend.visible:
-                mat_ax.set_title(mat_title, pad=0, loc="center", y=title_y)
+            mat_ax.set_title(mat_title, pad=0, loc="center", y=title_y)
         else:
             mat_ax.set_title(mat_title, pad=0, loc="center")
 
@@ -340,7 +303,7 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
         mat_ax.yaxis.set_major_formatter(MatPlotCompliantFormatter(self.yaxis.formatter))
 
         extension = "eps"
-        final_image = f"{os.path.abspath(image_filename_no_extension)}.{extension}"
+        image_abspath = os.path.abspath(os.path.join(folder, image_filename_no_ext)) + f".{extension}"
 
         lines = []
         labels = []
@@ -352,7 +315,10 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
         markers = itertools.cycle(('^', '+', 'x', 'd', '*'))
         marker_size = itertools.cycle((2, 2, 2, 2, 2))
         marker_number = 10
-        for i, p in enumerate(self.plots()):
+
+        plots = list(self.plots())
+
+        for i, p in enumerate(plots):
             if len(p) != len(self._xaxis):
                 raise ValueError(
                     f"xaxis is long {len(self._xaxis)} but the function {p.label} we want to draw is long {len(p)} points! There is something very wrong!")
@@ -366,7 +332,7 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
             if marker_step == 0:
                 marker_step = 1
 
-            if len(self.xaxis) >= len(self.plots()):
+            if len(self.xaxis) >= len(plots):
                 start_marker = i
             else:
                 start_marker = 0
@@ -389,13 +355,7 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
                         label,
                         xy=(x, y), xytext=(0, 10),
                         textcoords='offset points', ha='right', va='bottom',
-                        # bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
-                        # arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
                     )
-
-        # we need to save the actual data we're printing?
-        if save_raw_data:
-            self._save_raw_data(image_filename_no_extension)
 
         # x axis scale
         if self.xaxis.log10:
@@ -422,11 +382,8 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
                           borderaxespad=0,
                           frameon=False
             )
-            # ax.legend(loc='lower left', bbox_to_anchor=(0.0, 1.01), borderaxespad=0, frameon=False)
-            # ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.05),
-            #          ncol=1, fancybox=True, shadow=True)
 
-        logging.info(f"creating image {final_image}")
-        plt.savefig(final_image, bbox_inches='tight', format=extension)
+        logging.info(f"creating image {image_abspath}")
+        plt.savefig(image_abspath, bbox_inches='tight', format=extension)
 
         return labels, lines
