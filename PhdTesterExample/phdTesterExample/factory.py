@@ -5,6 +5,7 @@ from typing import Dict, List, Any
 import subprocess
 import pandas as pd
 import phdTester as phd
+from phdTester.common_types import PathStr, DataTypeStr
 from phdTesterExample.models import SortSettings, SortEnvironment, SortAlgorithm, SortTestContext, SortAlgorithmMask, \
     SortEnvironmentMask, SortTestContextMask, PerformanceCsvRow
 
@@ -116,32 +117,37 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
     def generate_plots(self, settings: "phd.IGlobalSettings",
                        under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
 
-        def get_run_id(tc: "phd.ITestContext", path: str, data_type: str, content: pd.DataFrame, rowid: int, row: "PerformanceCsvRow") -> float:
-            return row.run
+        class RunId(phd.IDataRowExtrapolator):
+            def fetch(self, test_context: "phd.ITestContext", path: PathStr, data_type: DataTypeStr, content: pd.DataFrame,
+                      rowid: int, row: "phd.ICsvRow") -> float:
+                return row.run
 
-        def get_time(tc: "phd.ITestContext", path: str, data_type: str, content: pd.DataFrame, rowid: int, row: "PerformanceCsvRow") -> float:
-            return row.time
+        class Time(phd.IDataRowExtrapolator):
+            def fetch(self, test_context: "phd.ITestContext", path: PathStr, data_type: DataTypeStr, content: pd.DataFrame,
+                      rowid: int, row: "phd.ICsvRow") -> float:
+                return row.time
 
-        def get_sequence_size(tc: "phd.ITestContext", path: str, data_type: str, content: pd.DataFrame, rowid: int, row: "PerformanceCsvRow") -> float:
-            return tc.te.sequenceSize
+        class SequenceSize(phd.IDataRowExtrapolator):
+            def fetch(self, test_context: "phd.ITestContext", path: PathStr, data_type: DataTypeStr, content: pd.DataFrame,
+                      rowid: int, row: "phd.ICsvRow") -> float:
+                return test_context.te.sequenceSize
 
         user_tcm = self.generate_test_context_mask()
         user_tcm.ut.algorithm = phd.masks.CannotBeNull()
 
         # TODO generate an automatic generation of subtitle
-        # TODO generate an interface for get_x_value function
         # TODO generate path function interface
         self.generate_batch_of_plots(
             xaxis_name="run id",
             yaxis_name="time (us)",
             title="time over run id",
-            subtitle_function=lambda tc: "",
-            get_x_value=get_run_id,
-            get_y_value=get_time,
+            subtitle_function=phd.DefaultSubtitleGenerator(),
+            get_x_value=RunId(),
+            get_y_value=Time(),
             y_aggregator=phd.aggregators.SingleAggregator(),
             image_suffix=phd.KS001.single_labelled("image", type="time-over-runid"),
             user_tcm=user_tcm,
-            path_function=lambda tcm: "csvs",
+            path_function=phd.path_generators.CsvDataContainerPathGenerator(),
         )
 
         user_tcm = self.generate_test_context_mask()
@@ -151,13 +157,11 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             xaxis_name="sequence size",
             yaxis_name="avg time (us)",
             title="time over sequence size",
-            subtitle_function=lambda tc: "",
-            get_x_value=get_sequence_size,
-            get_y_value=get_time,
+            get_x_value=SequenceSize(),
+            get_y_value=Time(),
             y_aggregator=phd.aggregators.MeanAggregator(),
             image_suffix=phd.KS001.single_labelled("image", type="time-over-sequencesize"),
             user_tcm=user_tcm,
-            path_function=lambda tcm: "csvs",
         )
 
     def generate_csvs(self, settings: "phd.IGlobalSettings",

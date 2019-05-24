@@ -18,7 +18,7 @@ from phdTester.commons import StringCsvWriter
 from phdTester.datasources import filesystem_sources
 from phdTester.default_models import SimpleTestContextRepo, \
     DefaultGlobalSettings, DefaultTestEnvironment, DefaultStuffUnderTest, DefaultTestContext, DefaultStuffUnderTestMask, \
-    DefaultTestEnvironmentMask, DefaultTestContextMask
+    DefaultTestEnvironmentMask, DefaultTestContextMask, DefaultSubtitleGenerator
 from phdTester.exceptions import ValueToIgnoreError
 from phdTester.functions import DataFrameFunctionsDict
 from phdTester.image_computer import aggregators
@@ -27,8 +27,9 @@ from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestC
     ICsvRow, OptionBelonging, IOptionNode, ITestContextMask, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
     ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict, \
-    IDataRowExtrapolator
+    IDataRowExtrapolator, IDataContainerPathGenerator, ISubtitleGenerator
 from phdTester.options_builder import OptionGraph
+from phdTester.path_generators import CsvDataContainerPathGenerator
 from phdTester.plotting import matplotlib_plotting
 from phdTester.plotting.common import DefaultAxis, DefaultText, DefaultSinglePlot, StringPlotTextFormatter
 
@@ -608,7 +609,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                              use_format: str,
                              csv_dest_data_source: "IDataSource",
                              csv_dest_path: PathStr,
-                             path_function: Callable[["ITestContextMask"], PathStr],
+                             path_function: "IDataContainerPathGenerator" = None,
                              mask_options: Callable[["ITestEnvironment", "ITestContextMask", str, List["ITestContextMask"]], Dict[str, Any]] = None,
                              curve_changer: Union[ICurvesChanger, List[ICurvesChanger]] = None,
                              function_splitter: IFunctionSplitter = None,
@@ -785,19 +786,19 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                 xaxis_name: str,
                                 yaxis_name: str,
                                 title: str,
-                                subtitle_function: Callable[["ITestContextMask"], str],
                                 get_x_value: "IDataRowExtrapolator",
                                 get_y_value: "IDataRowExtrapolator",
                                 y_aggregator: IAggregator,
                                 image_suffix: KS001,
                                 user_tcm: ITestContextMask,
-                                path_function: Callable[["ITestContextMask"], PathStr],
+                                path_function: "IDataContainerPathGenerator" = None,
                                 mask_options: Callable[["ITestEnvironment", "ITestContextMask", str, List["ITestContextMask"]], Dict[str, Any]]=None,
                                 curve_changer: Union[ICurvesChanger, List[ICurvesChanger]] = None,
                                 function_splitter: IFunctionSplitter = None,
                                 x_aggregator: IAggregator = None,
                                 csv_filter: Union[ICsvFilter, List[ICsvFilter]] = None,
                                 data_source: "IDataSource" = None,
+                                subtitle_function: "ISubtitleGenerator" = None,
                                 ):
         """
         Gather all the possible combination test environments which are compliant with `user_tcm`. Then for each of them
@@ -1039,14 +1040,14 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                     xaxis_name: str,
                                     yaxis_name: str,
                                     title: str,
-                                    subtitle_function: Callable[["ITestContextMask"], str],
                                     image_suffix: KS001,
-                                    path_function: Callable[["ITestContextMask"], PathStr] = None,
+                                    path_function: "IDataContainerPathGenerator" = None,
                                     curve_changer: Union[ICurvesChanger, List[ICurvesChanger]] = None,
                                     function_splitter: IFunctionSplitter = None,
                                     x_aggregator: IAggregator = None,
                                     csv_filter: Union["ICsvFilter", List["ICsvFilter"]] = None,
                                     data_source: "IDataSource" = None,
+                                    subtitle_function: "ISubtitleGenerator" = None,
                                     ) -> bool:
         """
         Generate a single plot listing all the csvs compliant with the specifications in `test_context_template`
@@ -1133,7 +1134,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                          get_y_value: "IDataRowExtrapolator",
                          get_x_value: "IDataRowExtrapolator",
                          y_aggregator: IAggregator,
-                         path_function: Callable[["ITestContextMask"], PathStr],
+                         path_function: "IDataContainerPathGenerator" = None,
                          curve_changer: Union[ICurvesChanger, List[ICurvesChanger]] = None,
                          function_splitter: IFunctionSplitter = None,
                          x_aggregator: IAggregator = None,
@@ -1187,6 +1188,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         # TODO maybe we should return an exception!
 
         data_source = data_source if data_source is not None else self.datasource
+        path_function = path_function if path_function is not None else CsvDataContainerPathGenerator()
 
         # FETCH ALL THE CSVS WE'RE INTERESTING IN (WITHOUT LOOKING AT MASK)
 
@@ -1194,7 +1196,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         # filter the csvs only with stuff under test / test environment which are involved in this test
         for csv_info in data_source.get_suchthat(
             test_context_template=self.__generate_test_context(),
-            path=path_function(test_context_template),
+            path=path_function.fetch(test_context_template),
             filters=csv_filter,
             data_type='csv',
             force_generate_ks001=True,
@@ -1337,8 +1339,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 d = {k: d[k] for k in d.keys()}
                 csv_outcome = self.get_csv_row(d, csv_info.ks001)
                 try:
-                    x_value = get_x_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome)
-                    y_value = get_y_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome)
+                    x_value = float(get_x_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome))
+                    y_value = float(get_y_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome))
                     check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
                 except IgnoreCSVRowError:
                     # this data needs to be ignored
@@ -1402,8 +1404,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                       xaxis_name: str,
                       yaxis_name: str,
                       title: str,
-                      subtitle_function: Callable[["ITestContextMask"], str],
                       image_suffix: KS001,
+                      subtitle_function: "ISubtitleGenerator" = None,
                       ):
         """
         Creates an image inside the file system datasource, under "images" folder
@@ -1440,11 +1442,13 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         #     dictonary_to_add_information="image_infos",
         # )
 
+        subtitle_function = subtitle_function if subtitle_function is not None else DefaultSubtitleGenerator()
+
         plotter = matplotlib_plotting.MatplotLibPlot2DGraph(
             xaxis=xaxis,
             yaxis=yaxis,
             title=DefaultText(title),
-            subtitle=DefaultText(subtitle_function(test_context_template)),
+            subtitle=DefaultText(subtitle_function.fetch(test_context_template)),
         )
 
         # add plots alphabetically to ensure there are no "swaps"

@@ -10,7 +10,8 @@ from phdTester.default_models import \
     AbstractTestContextMask, \
     AbstractStuffUnderTestMask, \
     AbstractTestEnvironmentMask, \
-    AbstractCSVRow
+    AbstractCSVRow, \
+    DefaultSubtitleGenerator
 
 from phdTester.options_builder import OptionGraph, OptionBuilder
 
@@ -18,7 +19,8 @@ from phdTester.model_interfaces import \
     IStuffUnderTest, ITestEnvironment, ITestContext, \
     IStuffUnderTestMask, ITestEnvironmentMask, ITestContextMaskOption, \
     IGlobalSettings, \
-    IDataSource
+    IDataSource, \
+    IDataRowExtrapolator, ICsvRow
 
 from phdTester.specific_research_field import AbstractSpecificResearchFieldFactory
 
@@ -31,5 +33,6 @@ from phdTester import option_types
 from phdTester.datasources import filesystem_sources as datasources
 from phdTester import masks
 from phdTester.image_computer import aggregators
+from phdTester import path_generators
 
 

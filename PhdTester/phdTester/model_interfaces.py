@@ -823,7 +823,7 @@ class ITestContextMask(IMask, abc.ABC):
         yield from self.ut.options()
         yield from self.te.options()
 
-    def get_option(self, name: str) -> Any:
+    def get_option(self, name: str) -> "ITestContextMaskOption":
         if self.ut.contains_option(name):
             return self.ut.get_option(name)
         elif self.te.contains_option(name):
@@ -2562,6 +2562,24 @@ class IDataSource(abc.ABC):
         self.listeners.clear()
 
 
+class IDataContainerPathGenerator(abc.ABC):
+    """
+    A class which can be used to fetch the path where we need to look for in a data source for csvs compliant
+    with the given test context mask.
+
+    the data source is unspeficied
+    """
+
+    @abc.abstractmethod
+    def fetch(self, tcm: "ITestContextMask") -> PathStr:
+        """
+
+        :param tcm: the test context mask to use
+        :return: the path where we need to look for compliant csvs
+        """
+        pass
+
+
 class IDataRowExtrapolator(abc.ABC):
     """
     Represents an instance allowing you to fetch a data starting from a data row inside a data container (e.g., csv).
@@ -2594,4 +2612,14 @@ class IDataRowExtrapolator(abc.ABC):
         :param row: the actual row we're analyzing
         :return: a number
         """
+        pass
+
+
+class ISubtitleGenerator(abc.ABC):
+    """
+    Class allowing to generate a subtitle
+    """
+
+    @abc.abstractmethod
+    def fetch(self, tcm: "ITestContextMask") -> str:
         pass

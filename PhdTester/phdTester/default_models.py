@@ -6,9 +6,10 @@ import numpy as np
 import pandas as pd
 
 from phdTester import commons
+from phdTester.common_types import PathStr
 from phdTester.model_interfaces import ITestContextRepo, ITestContext, ITestContextMask, ITestContextRepoView, \
     IOptionDict, IStuffUnderTest, ITestEnvironment, IStuffUnderTestMask, ITestEnvironmentMask, \
-    IGlobalSettings, ICsvRow, IFunction2D, IDataWriter, IFunctionsDict
+    IGlobalSettings, ICsvRow, IFunction2D, IDataWriter, IFunctionsDict, IDataContainerPathGenerator, ISubtitleGenerator
 from phdTester.option_dicts import StandardOptionDict, DynamicOptionDict, DefaultAnonymuousOptionObject
 
 
@@ -55,6 +56,10 @@ class CsvDataWriter(IDataWriter):
         self._file.write(self.separator.join(map(lambda x: x.replace(self.separator, ""), map(lambda x: str(x), data))) + "\n")
 
 
+class DefaultSubtitleGenerator(ISubtitleGenerator):
+
+    def fetch(self, tcm: "ITestContextMask") -> str:
+        return tcm.te.get_have_value_string(ignore_some_tcm_keys=[])
 
 
 
