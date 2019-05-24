@@ -26,7 +26,8 @@ from phdTester.ks001.ks001 import KS001
 from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestContext, IGlobalSettings, \
     ICsvRow, OptionBelonging, IOptionNode, ITestContextMask, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
-    ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict
+    ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict, \
+    IDataRowExtrapolator
 from phdTester.options_builder import OptionGraph
 from phdTester.plotting import matplotlib_plotting
 from phdTester.plotting.common import DefaultAxis, DefaultText, DefaultSinglePlot, StringPlotTextFormatter
@@ -551,8 +552,12 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
             yield te
 
-    def parse_testcontexts_from_directory(self, directory: str, stuff_under_test_dict_values: Dict[str, List[Any]], test_environment_dict_values: Dict[str, List[Any]],
-                                          afilter: Callable[[str], bool] = None, alias_to_name_dict: Dict[str, str] = None, index: int = 0) -> Iterable["ITestContext"]:
+    def parse_testcontexts_from_directory(self, directory: str,
+                                          stuff_under_test_dict_values: Dict[str, List[Any]],
+                                          test_environment_dict_values: Dict[str, List[Any]],
+                                          afilter: Callable[[str], bool] = None,
+                                          alias_to_name_dict: Dict[str, str] = None,
+                                          index: int = 0) -> Iterable["ITestContext"]:
         """
         From a directory it parse every file compliant with afilter and generated a test context compliant with it
 
@@ -595,8 +600,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         return result
 
     def generate_curves_csvs(self,
-                             get_x_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
-                             get_y_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
+                             get_x_value: "IDataRowExtrapolator",
+                             get_y_value: "IDataRowExtrapolator",
                              y_aggregator: IAggregator,
                              user_tcm: ITestContextMask,
                              ks001_to_add: KS001,
@@ -781,8 +786,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                 yaxis_name: str,
                                 title: str,
                                 subtitle_function: Callable[["ITestContextMask"], str],
-                                get_x_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
-                                get_y_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
+                                get_x_value: "IDataRowExtrapolator",
+                                get_y_value: "IDataRowExtrapolator",
                                 y_aggregator: IAggregator,
                                 image_suffix: KS001,
                                 user_tcm: ITestContextMask,
@@ -1028,8 +1033,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
     def generate_plot_from_template(self,
                                     test_context_template: ITestContextMask,
-                                    get_y_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
-                                    get_x_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
+                                    get_y_value: "IDataRowExtrapolator",
+                                    get_x_value: "IDataRowExtrapolator",
                                     y_aggregator: IAggregator,
                                     xaxis_name: str,
                                     yaxis_name: str,
@@ -1125,8 +1130,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
     def _generate_curves(self,
                          test_context_template: ITestContextMask,
-                         get_y_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
-                         get_x_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
+                         get_y_value: "IDataRowExtrapolator",
+                         get_x_value: "IDataRowExtrapolator",
                          y_aggregator: IAggregator,
                          path_function: Callable[["ITestContextMask"], PathStr],
                          curve_changer: Union[ICurvesChanger, List[ICurvesChanger]] = None,
@@ -1237,8 +1242,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
     def _compute_measurement_over_column(self,
                                          csv_contexts: Iterable[GetSuchInfo],
-                                         get_y_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
-                                         get_x_value: Callable[["ITestContext", str, KS001Str, pd.DataFrame, int, ICsvRow], float],
+                                         get_y_value: "IDataRowExtrapolator",
+                                         get_x_value: "IDataRowExtrapolator",
                                          y_aggregator: IAggregator,
                                          function_splitter: IFunctionSplitter = None,
                                          x_aggregator: IAggregator = None,
@@ -1332,8 +1337,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 d = {k: d[k] for k in d.keys()}
                 csv_outcome = self.get_csv_row(d, csv_info.ks001)
                 try:
-                    x_value = get_x_value(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome)
-                    y_value = get_y_value(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome)
+                    x_value = get_x_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome)
+                    y_value = get_y_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome)
                     check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
                 except IgnoreCSVRowError:
                     # this data needs to be ignored

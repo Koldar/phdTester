@@ -2560,3 +2560,38 @@ class IDataSource(abc.ABC):
 
     def clear_listeneres(self):
         self.listeners.clear()
+
+
+class IDataRowExtrapolator(abc.ABC):
+    """
+    Represents an instance allowing you to fetch a data starting from a data row inside a data container (e.g., csv).
+
+    For example assume that a row contains the following data: ID, TIME where time is in microseconds.
+    If you want to fetch the time in milliseconds, just create an extrapolator such that:
+
+    ```
+    def fetch(self, test_context: "ITestContext", path: PathStr, data_type: DataTypeStr, content: pd.DataFrame, rowid: int,
+                   row: "ICsvRow") -> float:
+        return float(row.time / 1000.)
+    ```
+
+    """
+
+    def __init__(self):
+        pass
+
+    @abc.abstractmethod
+    def fetch(self, test_context: "ITestContext", path: PathStr, data_type: DataTypeStr, content: pd.DataFrame, rowid: int,
+                   row: "ICsvRow") -> float:
+        """
+        Fetch a single data from a row inside a data container (e.g., csv)
+
+        :param test_context: the test context representing the test we're currently analyzing
+        :param path: the path of the data container (e.g., csv) inside the data source
+        :param data_type: the type of the data container (e.g., csv) inside the data source
+        :param content: the content of the dta container, in its fullness
+        :param rowid: number identifying the row inside `content` we're currnetly analyzing. These numbers starts from 0
+        :param row: the actual row we're analyzing
+        :return: a number
+        """
+        pass

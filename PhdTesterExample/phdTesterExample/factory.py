@@ -165,7 +165,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         pass
 
     def generate_report(self, settings: "phd.IGlobalSettings",
-                        tests_performed: "ITestContextRepo", under_test_values: Dict[str, List[Any]],
+                        tests_performed: "phd.ITestContextRepo", under_test_values: Dict[str, List[Any]],
                         test_environment_values: Dict[str, List[Any]]):
         pass
 
