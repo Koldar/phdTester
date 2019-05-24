@@ -5,6 +5,7 @@ from typing import Dict, List, Any
 import subprocess
 import pandas as pd
 import phdTester as phd
+from phdTester.default_models import SimpleTestContextRepo
 from phdTesterExample.models import SortSettings, SortEnvironment, SortAlgorithm, SortTestContext, SortAlgorithmMask, \
     SortEnvironmentMask, SortTestContextMask, PerformanceCsvRow
 
@@ -190,7 +191,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             get_x_value=get_run_id,
             get_y_value=get_time,
             y_aggregator=phd.aggregators.SingleAggregator(),
-            image_suffix="|image:type=time_over_runid",  # this should be a ks001 as well
+            image_suffix=phd.KS001.single_labelled("image", type="time-over-runid"),
             user_tcm=user_tcm,
             path_function=lambda tcm: "csvs",
         )
@@ -206,7 +207,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             get_x_value=get_sequence_size,
             get_y_value=get_time,
             y_aggregator=phd.aggregators.MeanAggregator(),
-            image_suffix="|image:type=time_over_sequenceSize",
+            image_suffix=phd.KS001.single_labelled("image", type="time-over-sequencesize"),
             user_tcm=user_tcm,
             path_function=lambda tcm: "csvs",
         )
