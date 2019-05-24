@@ -12,19 +12,6 @@ from phdTesterExample.models import SortSettings, SortEnvironment, SortAlgorithm
 
 class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
 
-    # TODO create defaul implementation
-    def _get_ks001_colon(self, settings: "SortSettings") -> str:
-        return ":"
-
-    def _get_ks001_pipe(self, settings: "SortSettings") -> str:
-        return "|"
-
-    def _get_ks001_underscore(self, settings: "SortSettings") -> str:
-        return "_"
-
-    def _get_ks001_equal(self, settings: "SortSettings") -> str:
-        return "="
-
     def _generate_option_graph(self) -> "phd.OptionGraph":
 
         return phd.OptionBuilder().add_under_testing_multiplexer(

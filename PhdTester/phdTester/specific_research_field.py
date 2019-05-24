@@ -89,41 +89,37 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return self.__run_kwargs
 
-    @abc.abstractmethod
     def _get_ks001_colon(self, settings: "ITestingGlobalSettings") -> str:
         """
 
         :param settings: the settings read from the command line
         :return: the character that will be used to parse ':' in KS001
         """
-        pass
+        return ":"
 
-    @abc.abstractmethod
     def _get_ks001_pipe(self, settings: "ITestingGlobalSettings") -> str:
         """
 
         :param settings: the settings read from the command line
         :return: the character that will be used to parse '|' in KS001
         """
-        pass
+        return "|"
 
-    @abc.abstractmethod
     def _get_ks001_underscore(self, settings: "ITestingGlobalSettings") -> str:
         """
 
         :param settings: the settings read from the command line
         :return: the character that will be used to parse '_' in KS001
         """
-        pass
+        return "_"
 
-    @abc.abstractmethod
     def _get_ks001_equal(self, settings: "ITestingGlobalSettings") -> str:
         """
 
         :param settings: the settings read from the command line
         :return: the character that will be used to parse '=' in KS001
         """
-        pass
+        return "="
 
     @abc.abstractmethod
     def _generate_datasource(self, settings: "ITestingGlobalSettings") -> "IDataSource":
