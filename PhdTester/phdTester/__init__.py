@@ -17,7 +17,7 @@ from phdTester.options_builder import OptionGraph, OptionBuilder
 from phdTester.model_interfaces import \
     IStuffUnderTest, ITestEnvironment, ITestContext, \
     IStuffUnderTestMask, ITestEnvironmentMask, ITestContextMaskOption, \
-    ITestingGlobalSettings, \
+    IGlobalSettings, \
     IDataSource
 
 from phdTester.specific_research_field import AbstractSpecificResearchFieldFactory

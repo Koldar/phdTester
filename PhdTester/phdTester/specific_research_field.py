@@ -22,7 +22,7 @@ from phdTester.default_models import SeriesFunction, DataFrameFunctionsDict, Sim
 from phdTester.exceptions import ValueToIgnoreError
 from phdTester.image_computer import aggregators
 from phdTester.ks001.ks001 import KS001
-from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestContext, ITestingGlobalSettings, \
+from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestContext, IGlobalSettings, \
     ICsvRow, OptionBelonging, IOptionNode, ITestContextMask, IFunction2D, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
     ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict
@@ -91,7 +91,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return self.__run_kwargs
 
-    def _get_ks001_colon(self, settings: "ITestingGlobalSettings") -> str:
+    def _get_ks001_colon(self, settings: "IGlobalSettings") -> str:
         """
 
         :param settings: the settings read from the command line
@@ -99,7 +99,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return ":"
 
-    def _get_ks001_pipe(self, settings: "ITestingGlobalSettings") -> str:
+    def _get_ks001_pipe(self, settings: "IGlobalSettings") -> str:
         """
 
         :param settings: the settings read from the command line
@@ -107,7 +107,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return "|"
 
-    def _get_ks001_underscore(self, settings: "ITestingGlobalSettings") -> str:
+    def _get_ks001_underscore(self, settings: "IGlobalSettings") -> str:
         """
 
         :param settings: the settings read from the command line
@@ -115,7 +115,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return "_"
 
-    def _get_ks001_equal(self, settings: "ITestingGlobalSettings") -> str:
+    def _get_ks001_equal(self, settings: "IGlobalSettings") -> str:
         """
 
         :param settings: the settings read from the command line
@@ -123,7 +123,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return "="
 
-    def _generate_datasource(self, settings: "ITestingGlobalSettings") -> "IDataSource":
+    def _generate_datasource(self, settings: "IGlobalSettings") -> "IDataSource":
         """
         fetch the data source that we will use throughout all the program run
 
@@ -135,7 +135,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         return self.__filesystem_datasource
 
     @abc.abstractmethod
-    def _generate_filesystem_datasource(self, settings: "ITestingGlobalSettings") -> "filesystem_sources.FileSystem":
+    def _generate_filesystem_datasource(self, settings: "IGlobalSettings") -> "filesystem_sources.FileSystem":
         """
         A datasource which allows you to interact with the local file system
 
@@ -162,7 +162,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         return self.__option_graph
 
     @abc.abstractmethod
-    def setup_filesystem_datasource(self, filesystem: "filesystem_sources.FileSystem", settings: "ITestingGlobalSettings"):
+    def setup_filesystem_datasource(self, filesystem: "filesystem_sources.FileSystem", settings: "IGlobalSettings"):
         """
         generate the structure in the output folder needed to generate the tests
 
@@ -228,7 +228,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return DefaultTestContextMask(ut, te)
 
-    def generate_test_global_settings(self) -> "ITestingGlobalSettings":
+    def generate_test_global_settings(self) -> "IGlobalSettings":
         """
         A research-specific structure containing all the settings which govern the testing framework in
         its globality (e.g., debug flag).
@@ -280,7 +280,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         te = te if te is not None else self.generate_environment()
         return self._generate_test_context(ut, te)
 
-    def generate_test_context_repo(self, settings: "ITestingGlobalSettings") -> "ITestContextRepo":
+    def generate_test_context_repo(self, settings: "IGlobalSettings") -> "ITestContextRepo":
         """
         generate an object contaiing all the tests we need to perform.
         This object may be queried against
@@ -306,7 +306,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         return tc[0]
 
-    def begin_perform_test(self, stuff_under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]], settings: "ITestingGlobalSettings"):
+    def begin_perform_test(self, stuff_under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]], settings: "IGlobalSettings"):
         """
         Function called just before the function `perform_test`
 
@@ -321,24 +321,24 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         pass
 
     def end_perform_test(self, stuff_under_test_values: Dict[str, List[Any]],
-                           test_environment_values: Dict[str, List[Any]], settings: "ITestingGlobalSettings"):
+                         test_environment_values: Dict[str, List[Any]], settings: "IGlobalSettings"):
         pass
 
     @abc.abstractmethod
-    def perform_test(self, tc: ITestContext, global_settings: "ITestingGlobalSettings"):
+    def perform_test(self, tc: ITestContext, global_settings: "IGlobalSettings"):
         pass
 
     @abc.abstractmethod
-    def generate_plots(self, settings: "ITestingGlobalSettings", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
+    def generate_plots(self, settings: "IGlobalSettings", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
         pass
 
     @abc.abstractmethod
-    def generate_csvs(self, psettings: "ITestingGlobalSettings", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
+    def generate_csvs(self, psettings: "IGlobalSettings", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
         pass
 
 
     @abc.abstractmethod
-    def generate_report(self, settings: "ITestingGlobalSettings", tests_performed: "ITestContextRepo", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
+    def generate_report(self, settings: "IGlobalSettings", tests_performed: "ITestContextRepo", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
         """
         Generate a report containing the test outcome images
 

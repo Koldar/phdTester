@@ -8,7 +8,7 @@ import pandas as pd
 from phdTester import commons
 from phdTester.model_interfaces import ITestContextRepo, ITestContext, ITestContextMask, ITestContextRepoView, \
     IOptionDict, IStuffUnderTest, ITestEnvironment, IStuffUnderTestMask, ITestEnvironmentMask, \
-    ITestingGlobalSettings, ICsvRow, IFunction2D, IDataWriter, IFunctionsDict
+    IGlobalSettings, ICsvRow, IFunction2D, IDataWriter, IFunctionsDict
 
 
 class GnuplotDataWriter(IDataWriter):
@@ -583,21 +583,21 @@ class DynamicOptionDict(IOptionDict):
         IOptionDict.__init__(self)
 
 
-class AbstractTestingGlobalSettings(ITestingGlobalSettings, StandardOptionDict, abc.ABC):
+class AbstractTestingGlobalSettings(IGlobalSettings, StandardOptionDict, abc.ABC):
 
     def __init__(self):
-        ITestingGlobalSettings.__init__(self)
+        IGlobalSettings.__init__(self)
         StandardOptionDict.__init__(self)
 
 
-class DefaultGlobalSettings(ITestingGlobalSettings, DynamicOptionDict):
+class DefaultGlobalSettings(IGlobalSettings, DynamicOptionDict):
     """
     A global settings implementation when the user do not want the help of the content assist
 
     This allows you to avoid generating the class containing the global settings yourself
     """
     def __init__(self):
-        ITestingGlobalSettings.__init__(self)
+        IGlobalSettings.__init__(self)
         DynamicOptionDict.__init__(self)
 
 

@@ -73,11 +73,10 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
     # def generate_test_environment_mask(self) -> "SortEnvironmentMask":
     #     return SortEnvironmentMask()
     #
-    # # TODO maybe we can create a signature similar to generate_test_context
-    # def generate_test_context_mask(self) -> "SortTestContextMask":
+    # def _generate_test_context_mask(self, ut: "SortAlgorithmMask", te: "SortEnvironmentMask") -> "SortTestContextMask":
     #     return SortTestContextMask(ut=self.generate_stuff_under_test_mask(), te=self.generate_test_environment_mask())
 
-    def perform_test(self, tc: "phd.ITestContext", global_settings: "SortSettings"):
+    def perform_test(self, tc: "phd.ITestContext", global_settings: "phd.IGlobalSettings"):
         output_template_ks001 = tc.to_ks001(identifier='main')
         performance_ks001 = output_template_ks001.append(
             phd.KS001.from_template(output_template_ks001, label="kind", type="main"), in_place=False
@@ -114,7 +113,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             to_path="csvs",
         )
 
-    def generate_plots(self, settings: "phd.ITestingGlobalSettings",
+    def generate_plots(self, settings: "phd.IGlobalSettings",
                        under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
 
         def get_run_id(tc: "phd.ITestContext", path: str, data_type: str, content: pd.DataFrame, rowid: int, row: "PerformanceCsvRow") -> float:
@@ -161,11 +160,11 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             path_function=lambda tcm: "csvs",
         )
 
-    def generate_csvs(self, settings: "phd.ITestingGlobalSettings",
+    def generate_csvs(self, settings: "phd.IGlobalSettings",
                       under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
         pass
 
-    def generate_report(self, settings: "phd.ITestingGlobalSettings",
+    def generate_report(self, settings: "phd.IGlobalSettings",
                         tests_performed: "ITestContextRepo", under_test_values: Dict[str, List[Any]],
                         test_environment_values: Dict[str, List[Any]]):
         pass

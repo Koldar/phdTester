@@ -677,7 +677,7 @@ class ITestEnvironment(IOptionDictWithKS, ILabelable, ABC):
         return super(ITestEnvironment, self).clone(copy_function=copy_function)
 
 
-class ITestingGlobalSettings(IOptionDict, abc.ABC):
+class IGlobalSettings(IOptionDict, abc.ABC):
 
     def __init__(self):
         IOptionDict.__init__(self)
