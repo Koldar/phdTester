@@ -52,10 +52,45 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         self.__datasource: "IDataSource" = None
         self.__filesystem_datasource: "filesystem_sources.FileSystem" = None
 
+        self.__run_args = None
+        """
+        the \*args passed in run() method, as is 
+        """
+        self.__run_kwargs = None
+        """
+        the \*\*kwargs passed in run() method, as is
+        """
+
         self.__colon: str = None
+        """
+        the character to use instead of ":" for KS001 parsing in **all** KS001 structures
+        """
         self.__pipe: str = None
+        """
+        the character to use instead of "|" for KS001 parsing in **all** KS001 structures
+        """
         self.__underscore: str = None
+        """
+        the character to use instead of "_" for KS001 parsing in **all** KS001 structures
+        """
         self.__equal: str = None
+        """
+        the character to use instead of "=" for KS001 parsing in **all** KS001 structures
+        """
+
+    @property
+    def run_args(self) -> Iterable[Any]:
+        """
+        the \*args passed in run() method, as is
+        """
+        return self.__run_args
+
+    @property
+    def run_kwargs(self) -> Dict[str, Any]:
+        """
+        the \*\*kwargs passed in run() method, as is
+        """
+        return self.__run_kwargs
 
     @abc.abstractmethod
     def _get_ks001_colon(self, settings: "ITestingGlobalSettings") -> str:
@@ -324,13 +359,28 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         pass
 
-    def run(self, args):
+    def run(self, *args, cli_commands: List[str] = None, **kwargs):
+        """
+        Run the experiments for this template
+
+        :param cli_commands: a list of strings that will be injected to the CLI parser. usually `sys.argv[1:]` is good.
+        :param args: set of positional arguments that will be stored as-is. you will be able to fetch them via
+            `factory.run_args`. They are not explicitly used by the framework.
+        :param kwargs:set of dictionary argument that will be stored as-is. You will be able to fetch them via
+            `factory.run_kwargs`. They are not explicitly used by the framework.
+        :return:
+        """
+        ###################################################
+        # generate option graph and parse output
+        ###################################################
+        self.__run_args = args
+        self.__run_kwargs = kwargs
         ###################################################
         # generate option graph and parse output
         ###################################################
         logging.info("parsing option graph")
         self.__option_graph = self.generate_option_graph()
-        parse_output = self._generate_parser_from_option_graph(self.__option_graph, args)
+        parse_output = self._generate_parser_from_option_graph(self.__option_graph, cli_commands)
 
         ###################################################
         # fetch global structure

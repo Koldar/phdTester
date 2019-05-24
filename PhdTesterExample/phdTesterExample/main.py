@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from phdTesterExample.factory import SortResearchField
 
@@ -8,7 +9,7 @@ def main():
 
     factory = SortResearchField()
     # TODO alter run parameters (by adding *arg, **kwargs
-    factory.run(None)
+    factory.run(cli_commands=sys.argv[1:])
 
     logging.critical("DONE!")
 
