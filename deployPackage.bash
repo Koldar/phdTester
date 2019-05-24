@@ -39,7 +39,7 @@ whlFile=$(ls PhdTester/dist/ | grep whl | head -n 1)
 echo "wheel file to install is ${whlFile}"
 installIn PhdTesterExample PhdTester/dist/${whlFile}
 
-twine upload --verbose --username ${USERNAME} --password=${PASSWORD} --repository-url https://test.pypi.org/legacy/ dist/*
+#twine upload --verbose --username ${USERNAME} --password=${PASSWORD} --repository-url https://test.pypi.org/legacy/ dist/*
 
 if test $RELEASE = "true"
 then
