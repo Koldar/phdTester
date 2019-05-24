@@ -3,7 +3,7 @@ from typing import Any, Iterable, List
 
 from phdTester import commons
 from phdTester.model_interfaces import ITestContextMaskOption, ITestContext, ITestEnvironment, \
-    ISimpleTestContextMaskOption, IComplexTestContextMaskOption
+    ISimpleTestContextMaskOption, IComplexTestContextMaskOption, ITestContextMask
 
 
 class MutHaveDynamicallyChosenValue(ISimpleTestContextMaskOption):
@@ -14,6 +14,9 @@ class MutHaveDynamicallyChosenValue(ISimpleTestContextMaskOption):
     MustHaveValue says that the value of the option needs to be static, while this one
     has avalue that may change during the same computation.
     """
+
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        return isinstance(other, MutHaveDynamicallyChosenValue)
 
     def represents_a_well_specified_value(self) -> bool:
         return self.can_operate
@@ -74,6 +77,9 @@ class TestContextSetMustBeConstant(IComplexTestContextMaskOption):
     An option value is compliant only if over a certain set remains the same
     """
 
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        return isinstance(other, TestContextSetMustBeConstant)
+
     def represents_a_well_specified_value(self) -> bool:
         return False
 
@@ -114,6 +120,9 @@ class CannotBeNull(ISimpleTestContextMaskOption):
     def __init__(self):
         ITestContextMaskOption.__init__(self)
 
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        return isinstance(other, CannotBeNull)
+
     def represents_a_well_specified_value(self) -> bool:
         return False
 
@@ -147,6 +156,9 @@ class MustHaveValue(ISimpleTestContextMaskOption, commons.SlottedClass):
     def __init__(self, value: Any):
         ITestContextMaskOption.__init__(self)
         self.__value = value
+
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        return isinstance(other, MustHaveValue) and self.__value == other.__value
 
     def represents_a_well_specified_value(self) -> bool:
         return True
@@ -182,6 +194,9 @@ class CannotHaveValue(ISimpleTestContextMaskOption):
         ITestContextMaskOption.__init__(self)
         self.value = value
 
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        return isinstance(other, CannotHaveValue) and self.value == other.value
+
     def represents_a_well_specified_value(self) -> bool:
         return False
 
@@ -214,6 +229,9 @@ class HasToMatchPattern(ISimpleTestContextMaskOption):
         ITestContextMaskOption.__init__(self)
         self._regex = regex
 
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        return isinstance(other, HasToMatchPattern) and self._regex == other._regex
+
     def represents_a_well_specified_value(self) -> bool:
         return False
 
@@ -241,6 +259,9 @@ class MustBeInSet(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only if its value is inside a well specified set
     """
+
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        return isinstance(other, MustBeInSet) and other.values == self.values
 
     def represents_a_well_specified_value(self) -> bool:
         return True
@@ -274,6 +295,9 @@ class CannotBeInSet(ISimpleTestContextMaskOption):
     def __init__(self, prohibited_set: List[Any]):
         self.prohibited_set = prohibited_set
 
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        return isinstance(other, CannotBeInSet) and self.prohibited_set == other.prohibited_set
+
     def is_compliant(self, actual: "Any") -> bool:
         return actual not in self.prohibited_set
 
@@ -302,6 +326,9 @@ class Ignore(ISimpleTestContextMaskOption):
     A concrete option value is always compliant with this mask
     """
 
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        return isinstance(other, Ignore)
+
     def represents_a_well_specified_value(self) -> bool:
         return False
 
@@ -329,6 +356,9 @@ class HasToBeNull(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only if it is null
     """
+
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        return isinstance(other, HasToBeNull)
 
     def represents_a_well_specified_value(self) -> bool:
         """

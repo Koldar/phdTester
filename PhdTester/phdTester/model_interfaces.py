@@ -651,6 +651,10 @@ class ITestingGlobalSettings(IOptionDict, abc.ABC):
 
 
 class IMask(IOptionDict, abc.ABC):
+    """
+    A mask is an OptionDict which can have several degrees of compliance, depending on the information you provide
+    as input.
+    """
 
     def __init__(self):
         IOptionDict.__init__(self)
@@ -710,6 +714,8 @@ class IMask(IOptionDict, abc.ABC):
     def is_complaint_with_test_context(self, tc: "ITestContext", tcs: List["ITestContext"]) -> bool:
         """
         Check if a test context is compliant against the given mask
+
+        We look both a simple compliance **and** complex compliance.
 
         :param tc: the test context we need to check
         :param tcs: a list of test context which are interepreted as the "test context pool". Some masks in order
@@ -1775,6 +1781,16 @@ class ITestContextMaskOption(abc.ABC):
 
     @abc.abstractmethod
     def __str__(self) -> str:
+        pass
+
+    @abc.abstractmethod
+    def __eq__(self, other: "ITestContextMask") -> bool:
+        """
+        True if self is the same as another test context mask
+
+        :param other: the other test context mask
+        :return: true if the 2 masks are the same (it doesn't necessarly mean that they are the same instance)
+        """
         pass
 
 

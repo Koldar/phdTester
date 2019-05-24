@@ -612,6 +612,11 @@ class AbstractTestContextMask(ITestContextMask, abc.ABC):
     def __init__(self, ut: "IStuffUnderTestMask", te: "ITestEnvironmentMask"):
         ITestContextMask.__init__(self, ut=ut, te=te)
 
+    def __eq__(self, other: "ITestContextMask"):
+        if other is None:
+            return False
+        return self.ut == other.ut and self.te == other.te
+
 
 def _query_by_mask(m: "ITestContextMask", iterable: Iterable["ITestContext"]) -> Iterable["ITestContext"]:
     for tc in iterable:

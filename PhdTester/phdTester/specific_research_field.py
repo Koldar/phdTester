@@ -868,6 +868,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 continue
 
             if tcm_to_use in tcm_visited:
+                logging.debug(f"mask {tcm_to_use} ignored because it was already handled")
                 # if the generated tcm has already been generated we avoid re using the same mask
                 continue
             tcm_visited.append(tcm_to_use)
