@@ -1,90 +1,80 @@
-import logging
-import subprocess
-import pandas as pd
+
 
 from typing import Dict, List, Any
 
-from phdTester import default_models, commons, masks, options, option_types
-from phdTester.datasources import filesystem_sources
-from phdTester.datasources.filesystem_sources import FileSystem
-from phdTester.default_models import SimpleTestContextRepo
-from phdTester.image_computer import aggregators
-from phdTester.ks001.ks001 import KS001
-from phdTester.model_interfaces import IDataSource, ITestEnvironment, IStuffUnderTest, ITestingGlobalSettings, \
-    ITestContext, ITestContextMask, ITestContextMaskOption, ICsvRow, ITestContextRepo
-from phdTester.options_builder import OptionGraph, OptionBuilder
-from phdTester.paths import ImportantPaths
-from phdTester.specific_research_field import AbstractSpecificResearchFieldFactory
-from phdTesterExample.models import SortEnvironmentMask, SortTestContext, SortAlgorithmMask, SortTestContextMask, \
-    SortSettings, SortAlgorithm, SortEnvironment, PerformanceCsvRow
+import subprocess
+import pandas as pd
+import phdTester as phd
+from phdTesterExample.models import SortSettings, SortEnvironment, SortAlgorithm, SortTestContext, SortAlgorithmMask, \
+    SortEnvironmentMask, SortTestContextMask, PerformanceCsvRow
 
 
-class SortResearchField(AbstractSpecificResearchFieldFactory):
+class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
 
     # TODO create defaul implementation
-    def _get_ks001_colon(self, settings: "ITestingGlobalSettings") -> str:
+    def _get_ks001_colon(self, settings: "SortSettings") -> str:
         return ":"
 
-    def _get_ks001_pipe(self, settings: "ITestingGlobalSettings") -> str:
+    def _get_ks001_pipe(self, settings: "SortSettings") -> str:
         return "|"
 
-    def _get_ks001_underscore(self, settings: "ITestingGlobalSettings") -> str:
+    def _get_ks001_underscore(self, settings: "SortSettings") -> str:
         return "_"
 
-    def _get_ks001_equal(self, settings: "ITestingGlobalSettings") -> str:
+    def _get_ks001_equal(self, settings: "SortSettings") -> str:
         return "="
 
-    def generate_option_graph(self) -> OptionGraph:
+    def generate_option_graph(self) -> "phd.OptionGraph":
 
-        return OptionBuilder().add_under_testing_multiplexer(
+        return phd.OptionBuilder().add_under_testing_multiplexer(
             name="algorithm",
             possible_values=["BUBBLESORT", "MERGESORT", ],
             ahelp="""The algorithm we want to test""",
         ).add_environment_value(
             name="sequenceSize",
-            option_type=option_types.Int(),
+            option_type=phd.option_types.Int(),
             ahelp="""The size of the sequence to test""",
         ).add_environment_value(
             name="sequenceType",
-            option_type=option_types.Str(),
+            option_type=phd.option_types.Str(),
             ahelp="""The type of the sequence to test under""",
         ).add_environment_value(
             name="lowerBound",
-            option_type=option_types.Int(),
+            option_type=phd.option_types.Int(),
             ahelp="""lowerbound of any number generated in the sequence""",
         ).add_environment_value(
             name="upperBound",
-            option_type=option_types.Int(),
+            option_type=phd.option_types.Int(),
             ahelp="""upperbound of any number generated in the sequence""",
         ).add_environment_value(
             name="run",
-            option_type=option_types.Int(),
+            option_type=phd.option_types.Int(),
             ahelp="""number of runs to execute for each test context""",
         ).add_settings_value(
             name="outputDirectory",
-            option_type=option_types.Str(),
+            option_type=phd.option_types.Str(),
             ahelp="""the absolute path of the directory where everything will be generated"""
         ).get_option_graph()
 
-    def _generate_datasource(self, settings: "SortSettings") -> "IDataSource":
+    def _generate_datasource(self, settings: "SortSettings") -> "phd.IDataSource":
         return self.filesystem_datasource
 
     # TODO might be default to datasource if _generate_datasource is a FileSystem
-    def _generate_filesystem_datasource(self, settings: "SortSettings") -> "filesystem_sources.FileSystem":
-        result = FileSystem(root=settings.outputDirectory)
+    def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.datasources.FileSystem":
+        result = phd.datasources.FileSystem(root=settings.outputDirectory)
         # orgqanize the filesystem as well
         result.make_folders("cwd")
         result.make_folders("csvs")
         # TODO bny default the file system cannot handle even csv... we should correct this
         result.register_resource_manager(
             resource_type="csv",
-            manager=filesystem_sources.CsvFileSystem()
+            manager=phd.datasources.CsvFileSystem()
         )
 
         return result
 
 
-    def generate_paths(self, settings: "SortSettings") -> ImportantPaths:
+    def generate_paths(self, settings: "SortSettings") -> "ImportantPaths":
         # TODO remove it since it's not used anymore
         pass
 
@@ -92,23 +82,23 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
         # TODO remove it because it's dependent to file system data sourc
         pass
 
-    def generate_environment(self) -> "ITestEnvironment":
+    def generate_environment(self) -> "phd.ITestEnvironment":
         return SortEnvironment()
 
-    def generate_under_testing(self) -> "IStuffUnderTest":
+    def generate_under_testing(self) -> "phd.IStuffUnderTest":
         return SortAlgorithm()
 
-    def generate_test_global_settings(self) -> "ITestingGlobalSettings":
+    def generate_test_global_settings(self) -> "phd.ITestingGlobalSettings":
         return SortSettings()
 
     # TODO maybe we can provide a default implementation....
-    def generate_test_context(self, ut: IStuffUnderTest = None, te: ITestEnvironment = None) -> "ITestContext":
+    def generate_test_context(self, ut: "phd.IStuffUnderTest" = None, te: "phd.ITestEnvironment" = None) -> "phd.ITestContext":
         # TODO maybe we can ditch  it
         ut = ut if ut is not None else self.generate_under_testing()
         te = te if te is not None else self.generate_environment()
         return SortTestContext(ut=ut, te=te)
 
-    #TODO make it such that one may avoid generating under_test, global_settings, environment and their mask entirely (they are there only to generate the content assist)
+    # TODO make it such that one may avoid generating under_test, global_settings, environment and their mask entirely (they are there only to generate the content assist)
     def generate_stuff_under_test_mask(self) -> "SortAlgorithmMask":
         return SortAlgorithmMask()
 
@@ -121,24 +111,24 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
 
     # todo remove. It's not used anywhere
     def generate_test_context_repo(self, paths: "ImportantPaths",
-                                   settings: "ITestingGlobalSettings") -> "ITestContextRepo":
+                                   settings: "phd.ITestingGlobalSettings") -> "ITestContextRepo":
         return SimpleTestContextRepo()
 
     #TODO optional. Used only to execute code before the test
     def begin_perform_test(self, stuff_under_test_values: Dict[str, List[Any]],
-                           test_environment_values: Dict[str, List[Any]], settings: "ITestingGlobalSettings"):
+                           test_environment_values: Dict[str, List[Any]], settings: "SortSettings"):
         pass
 
     # TODO optional. Used only to execute code after the test
     def end_perform_test(self, stuff_under_test_values: Dict[str, List[Any]],
-                         test_environment_values: Dict[str, List[Any]], settings: "ITestingGlobalSettings"):
+                         test_environment_values: Dict[str, List[Any]], settings: "SortSettings"):
         pass
 
     #TODO paths should be removed
-    def perform_test(self, paths: ImportantPaths, tc: SortTestContext, global_settings: "ITestingGlobalSettings"):
+    def perform_test(self, paths: "ImportantPaths", tc: SortTestContext, global_settings: "SortSettings"):
         output_template_ks001 = tc.to_ks001(identifier='main')
         performance_ks001 = output_template_ks001.append(
-            KS001.from_template(output_template_ks001, label="kind", type="main"), in_place=False
+            phd.KS001.from_template(output_template_ks001, label="kind", type="main"), in_place=False
         )
         performance_csv_output = performance_ks001.dump_filename(extension="csv")
 
@@ -154,11 +144,11 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
             f'--runs={tc.te.run}'
         ]
 
-        executor = commons.ProgramExecutor()
+        executor = phd.ProgramExecutor()
         try:
             executor.execute_external_program(
                 program=' '.join(program),
-                #TODO this should be moved to cwd
+                # TODO this should be moved to cwd
                 working_directory=self.filesystem_datasource.get_path("cwd")
             )
         except subprocess.CalledProcessError as e:
@@ -174,7 +164,7 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
         )
 
 
-    def generate_plots(self, paths: ImportantPaths, settings: "ITestingGlobalSettings",
+    def generate_plots(self, paths: "ImportantPaths", settings: "phd.ITestingGlobalSettings",
                        under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
 
         def get_run_id(tc: "SortTestContext", path: str, data_type: str, content: pd.DataFrame, rowid: int, row: "PerformanceCsvRow") -> float:
@@ -187,7 +177,7 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
             return tc.te.sequenceSize
 
         user_tcm = self.generate_test_context_mask()
-        user_tcm.ut.algorithm = masks.TestContextMaskNeedsNotNull()
+        user_tcm.ut.algorithm = phd.masks.TestContextMaskNeedsNotNull()
 
         # TODO generate an automatic generation of subtitle
         # TODO generate an interface for get_x_value function
@@ -199,14 +189,14 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
             subtitle_function=lambda tc: "",
             get_x_value=get_run_id,
             get_y_value=get_time,
-            y_aggregator=aggregators.SingleAggregator(),
+            y_aggregator=phd.aggregators.SingleAggregator(),
             image_suffix="|image:type=time_over_runid",  # this should be a ks001 as well
             user_tcm=user_tcm,
             path_function=lambda tcm: "csvs",
         )
 
         user_tcm = self.generate_test_context_mask()
-        user_tcm.te.sequenceSize = masks.TestContextMaskNeedsNotNull()
+        user_tcm.te.sequenceSize = phd.masks.TestContextMaskNeedsNotNull()
 
         self.generate_batch_of_plots(
             xaxis_name="sequence size",
@@ -215,32 +205,27 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
             subtitle_function=lambda tc: "",
             get_x_value=get_sequence_size,
             get_y_value=get_time,
-            y_aggregator=aggregators.MeanAggregator(),
+            y_aggregator=phd.aggregators.MeanAggregator(),
             image_suffix="|image:type=time_over_sequenceSize",
             user_tcm=user_tcm,
             path_function=lambda tcm: "csvs",
         )
 
-    def generate_csvs(self, paths: ImportantPaths, settings: "ITestingGlobalSettings",
+    def generate_csvs(self, paths: "ImportantPaths", settings: "phd.ITestingGlobalSettings",
                       under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
         pass
 
-    def generate_report(self, paths: ImportantPaths, settings: "ITestingGlobalSettings",
+    def generate_report(self, paths: "ImportantPaths", settings: "phd.ITestingGlobalSettings",
                         tests_performed: "ITestContextRepo", under_test_values: Dict[str, List[Any]],
                         test_environment_values: Dict[str, List[Any]]):
         pass
 
     # TODO allows multiple csv rows. This should be done by removing this method
     # TODO maybe we should also automatize the set of "d" set_options(d)
-    def get_csv_row(self, d: Dict[str, str], ks_csv: "KS001") -> "PerformanceCsvRow":
+    def get_csv_row(self, d: Dict[str, str], ks_csv: "phd.KS001") -> "PerformanceCsvRow":
         result = PerformanceCsvRow()
         result.set_options(d)
         return result
-
-
-
-
-
 
 
 def main():

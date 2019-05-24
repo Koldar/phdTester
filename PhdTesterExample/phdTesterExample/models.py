@@ -4,12 +4,10 @@
 # TODO make ut and te properties abstract: in this way the developer can override them
 from typing import Dict
 
-from phdTester import default_models
-from phdTester.default_models import AbstractCSVRow, AbstractTestContextMask
-from phdTester.model_interfaces import ITestContextMaskOption
+import phdTester as phd
 
 
-class SortTestContext(default_models.AbstractTestContext):
+class SortTestContext(phd.AbstractTestContext):
 
     def __init__(self, ut: "SortAlgorithm" = None, te: "SortEnvironment" = None):
         super().__init__(ut, te)
@@ -23,7 +21,7 @@ class SortTestContext(default_models.AbstractTestContext):
         return self._te
 
 
-class SortAlgorithm(default_models.AbstractStuffUnderTest):
+class SortAlgorithm(phd.AbstractStuffUnderTest):
 
     @property
     def key_alias(self) -> Dict[str, str]:
@@ -37,6 +35,7 @@ class SortAlgorithm(default_models.AbstractStuffUnderTest):
         return {}
 
     def __init__(self):
+        phd.AbstractStuffUnderTest.__init__(self)
         self.algorithm: str = None
 
     # TODO create default implementation (like looking at the sorted sequence)
@@ -44,7 +43,7 @@ class SortAlgorithm(default_models.AbstractStuffUnderTest):
         return f"{self.algorithm}"
 
 
-class SortEnvironment(default_models.AbstractTestingEnvironment):
+class SortEnvironment(phd.AbstractTestingEnvironment):
 
     def get_order_key(self) -> str:
         return "_".join(map(lambda o: f"{o}={str(self.get_option(o))}", self.options()))
@@ -65,7 +64,7 @@ class SortEnvironment(default_models.AbstractTestingEnvironment):
         return {}
 
     def __init__(self):
-        default_models.AbstractTestingEnvironment.__init__(self)
+        phd.AbstractTestingEnvironment.__init__(self)
         self.sequenceSize: int = None
         self.sequenceType: str = None
         self.lowerBound: int = None
@@ -77,18 +76,19 @@ class SortEnvironment(default_models.AbstractTestingEnvironment):
         return f"size={self.sequenceSize} type={self.sequenceType} lb={self.lowerBound} ub={self.upperBound} run={self.run}"
 
 
-class SortSettings(default_models.AbstractTestingGlobalSettings):
+class SortSettings(phd.AbstractTestingGlobalSettings):
 
     def __init__(self):
+        phd.AbstractTestingGlobalSettings.__init__(self)
         self.outputDirectory = None
 
 
 # TODO this can be generated automatically. Make abstract the ut and te properties
-class SortTestContextMask(AbstractTestContextMask):
+class SortTestContextMask(phd.AbstractTestContextMask):
 
-    #TODO should be automatically set
+    # TODO should be automatically set
     def __init__(self, ut: "SortAlgorithmMask", te: "SortEnvironmentMask"):
-        AbstractTestContextMask.__init__(self, ut=ut, te=te)
+        phd.AbstractTestContextMask.__init__(self, ut=ut, te=te)
 
     @property
     def ut(self) -> "SortAlgorithmMask":
@@ -99,25 +99,27 @@ class SortTestContextMask(AbstractTestContextMask):
         return self._te
 
 
-class SortAlgorithmMask(default_models.AbstractStuffUnderTestMask):
+class SortAlgorithmMask(phd.AbstractStuffUnderTestMask):
 
     def __init__(self):
-        self.algorithm: ITestContextMaskOption = None
+        phd.AbstractStuffUnderTestMask.__init__(self)
+        self.algorithm: "phd.ITestContextMaskOption" = None
 
 
-class SortEnvironmentMask(default_models.AbstractTestEnvironmentMask):
-
-    def __init__(self):
-        self.sequenceSize: ITestContextMaskOption = None
-        self.sequenceType: ITestContextMaskOption = None
-        self.lowerBound: ITestContextMaskOption = None
-        self.upperBound: ITestContextMaskOption = None
-        self.run: ITestContextMaskOption = None
-
-
-class PerformanceCsvRow(AbstractCSVRow):
+class SortEnvironmentMask(phd.AbstractTestEnvironmentMask):
 
     def __init__(self):
-        AbstractCSVRow.__init__(self)
+        phd.AbstractTestEnvironmentMask.__init__(self)
+        self.sequenceSize: phd.ITestContextMaskOption = None
+        self.sequenceType: phd.ITestContextMaskOption = None
+        self.lowerBound: phd.ITestContextMaskOption = None
+        self.upperBound: phd.ITestContextMaskOption = None
+        self.run: phd.ITestContextMaskOption = None
+
+
+class PerformanceCsvRow(phd.AbstractCSVRow):
+
+    def __init__(self):
+        phd.AbstractCSVRow.__init__(self)
         self.run: int = None
         self.time: int = None
