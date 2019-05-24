@@ -546,6 +546,54 @@ class AbstractTestContext(ITestContext, abc.ABC):
     def __init__(self, ut: "IStuffUnderTest", te: "ITestEnvironment"):
         ITestContext.__init__(self, ut=ut, te=te)
 
+    @abc.abstractmethod
+    @property
+    def ut(self) -> "IStuffUnderTest":
+        """
+        Return the stuff under test
+
+        This abstract property exists because in this way IDE (like PyCharm) can detect an abstract method to implement.
+        In this way the developer can remember to implement this property. Furthermore, this is an opportunity for
+        the developer to specify the type of IStuffUnderTest for her purpose. In the context of sorting algorithm,
+        The developer can implement the property as follows:
+
+        ```
+        @property
+        def te(self) -> "SortAlgorithm":
+            return self._ut
+        ```
+
+        The implementation is normally just `return self._ut`: the important piece here is the annotation of the return
+        type; this allows IDE (e.g., PyCharm) to help the developer when coding the tests
+
+        :return: the test enviroment
+        """
+        pass
+
+    @abc.abstractmethod
+    @property
+    def te(self) -> "ITestEnvironment":
+        """
+        Return the test environment
+
+        This abstract property exists because in this way IDE (like PyCharm) can detect an abstract method to implement.
+        In this way the developer can remember to implement this property. Furthermore, this is an opportunity for
+        the developer to specify the type of ITestEnviroment for her purpose. In the context of sorting algorithm,
+        The developer can implement the property as follows:
+
+        ```
+        @property
+        def te(self) -> "SortEnvironment":
+            return self._te
+        ```
+
+        The implementation is normally just `return self._te`: the important piece here is the annotation of the return
+        type; this allows IDE (e.g., PyCharm) to help the developer when coding the tests
+
+        :return: the test enviroment
+        """
+        pass
+
 
 class AbstractStuffUnderTestMask(IStuffUnderTestMask, StandardOptionDict, abc.ABC):
 

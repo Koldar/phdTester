@@ -519,16 +519,15 @@ class ITestContext(IOptionDictWithKS, abc.ABC):
         """
         A view on all the options related to the stuff you want to test
 
-        :return: the stuff under test
+        :return: the stuff under test related to this test context
         """
         return self._ut
 
-    @abc.abstractmethod
     @property
     def te(self) -> "ITestEnvironment":
         """
         A view on all the options related to environment where you're testing your stuff
-        :return:
+        :return: the test environment related to this test context
         """
         return self._te
 
