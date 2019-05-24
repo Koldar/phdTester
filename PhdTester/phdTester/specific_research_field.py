@@ -213,12 +213,20 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
     def generate_test_environment_mask(self) -> "ITestEnvironmentMask":
         return DefaultTestEnvironmentMask(self.test_environment_dict_values.keys())
 
-    def generate_test_context_mask(self) -> "ITestContextMask":
+    def __generate_test_context_mask(self, ut: Optional["IStuffUnderTestMask"]=None, te: Optional["ITestEnvironmentMask"] = None) -> "ITestContextMask":
+        ut = ut if ut is not None else self.generate_stuff_under_test_mask()
+        te = te if te is not None else self.generate_test_environment_mask()
+        return self._generate_test_context_mask(ut, te)
+
+    def generate_test_context_mask(self):
+        return self.__generate_test_context(None, None)
+
+    def _generate_test_context_mask(self, ut: "IStuffUnderTestMask", te: "ITestEnvironmentMask") -> "ITestContextMask":
         """
         the context mask is used when you need to generate patterns between test contextes
         :return:
         """
-        return DefaultTestContextMask(self.generate_stuff_under_test_mask(), self.generate_test_environment_mask())
+        return DefaultTestContextMask(ut, te)
 
     def generate_test_global_settings(self) -> "ITestingGlobalSettings":
         """
@@ -608,7 +616,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # (which are displayed in the actual plots). For each of the possibility, we generate a plot
 
             # we generate a clear mask (everything with None)
-            tcm_to_use = self.generate_test_context_mask()
+            tcm_to_use = self.__generate_test_context_mask()
             tcm_to_use.clear()
 
             # we set all the options in the mask to be ignored.
@@ -851,7 +859,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # (which are displayed in the actual plots). For each of the possibility, we generate a plot
 
             # we generate a clear mask (everything with None)
-            tcm_to_use = self.generate_test_context_mask()
+            tcm_to_use = self.__generate_test_context_mask()
             tcm_to_use.clear()
 
             # we set all the options in the mask to be ignored.
