@@ -20,7 +20,7 @@ from phdTester.default_models import SeriesFunction, DataFrameFunctionsDict
 from phdTester.exceptions import ValueToIgnoreError
 from phdTester.image_computer import aggregators
 from phdTester.ks001.ks001 import KS001
-from phdTester.model_interfaces import ITestingEnvironment, IStuffUnderTest, ITestContext, ITestingGlobalSettings, \
+from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestContext, ITestingGlobalSettings, \
     ICsvRow, OptionBelonging, IOptionNode, ITestContextMask, IFunction2D, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
     ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict
@@ -190,7 +190,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def generate_environment(self) -> "ITestingEnvironment":
+    def generate_environment(self) -> "ITestEnvironment":
         """
         A research-specific structure containing all the option which are not involved in the stuff
         you need to test but are impact the tests (for exmaple, you might want to test 2 heuriustics. The
@@ -246,7 +246,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         return self.__test_environment_dict_values
 
     @abc.abstractmethod
-    def generate_test_context(self, ut: IStuffUnderTest = None, te: ITestingEnvironment = None) -> "ITestContext":
+    def generate_test_context(self, ut: IStuffUnderTest = None, te: ITestEnvironment = None) -> "ITestContext":
         """
         Generate a test context, namely a structure representing a single test case.
         A test context contains the specifications of the stuff we need to test and the
@@ -523,10 +523,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
             yield ut
 
-    def get_all_combinations_of_test_environment_values(self) -> Iterable["ITestingEnvironment"]:
+    def get_all_combinations_of_test_environment_values(self) -> Iterable["ITestEnvironment"]:
         """
         Fetch all the possible combinations of testing environment options and put them
-        in an iterable of ITestingEnvironment
+        in an iterable of ITestEnvironment
         :return: all possibler ITestingEnviroment
         """
         # we use a static key to prevent randomness of the outptu of key() method
@@ -594,7 +594,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                              csv_dest_data_source: "IDataSource",
                              csv_dest_path: PathStr,
                              path_function: Callable[["ITestContextMask"], PathStr],
-                             mask_options: Callable[["ITestingEnvironment", "ITestContextMask", str, List["ITestContextMask"]], Dict[str, Any]] = None,
+                             mask_options: Callable[["ITestEnvironment", "ITestContextMask", str, List["ITestContextMask"]], Dict[str, Any]] = None,
                              curve_changer: Union[ICurvesChanger, List[ICurvesChanger]] = None,
                              function_splitter: IFunctionSplitter = None,
                              x_aggregator: IAggregator = None,
@@ -603,7 +603,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                              skip_if_csv_already_exist: bool = False,
                              ):
 
-        def get_empty_mask_options(te: "ITestingEnvironment", tcm: "ITestContextMask", name: str, visited: List["ITestContextMask"]) -> Dict[str, Any]:
+        def get_empty_mask_options(te: "ITestEnvironment", tcm: "ITestContextMask", name: str, visited: List["ITestContextMask"]) -> Dict[str, Any]:
             return {}
 
         if mask_options is None:
@@ -780,7 +780,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                 image_suffix: str,
                                 user_tcm: ITestContextMask,
                                 path_function: Callable[["ITestContextMask"], PathStr],
-                                mask_options: Callable[["ITestingEnvironment", "ITestContextMask", str, List["ITestContextMask"]], Dict[str, Any]]=None,
+                                mask_options: Callable[["ITestEnvironment", "ITestContextMask", str, List["ITestContextMask"]], Dict[str, Any]]=None,
                                 curve_changer: Union[ICurvesChanger, List[ICurvesChanger]] = None,
                                 function_splitter: IFunctionSplitter = None,
                                 x_aggregator: IAggregator = None,
@@ -846,7 +846,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             `_generate_datasource`;
         """
 
-        def get_empty_mask_options(te: "ITestingEnvironment", tcm: "ITestContextMask", name: str, visited: List["ITestContextMask"]) -> Dict[str, Any]:
+        def get_empty_mask_options(te: "ITestEnvironment", tcm: "ITestContextMask", name: str, visited: List["ITestContextMask"]) -> Dict[str, Any]:
             return {}
 
         if mask_options is None:

@@ -1,7 +1,7 @@
 import re
 from typing import Any, Iterable, List
 
-from phdTester.model_interfaces import ITestContextMaskOption, ITestContext, ITestingEnvironment, \
+from phdTester.model_interfaces import ITestContextMaskOption, ITestContext, ITestEnvironment, \
     ISimpleTestContextMaskOption, IComplexTestContextMaskOption
 
 
@@ -34,7 +34,7 @@ class TestContextMaskNeedsToBeSameAsNonComputation(ISimpleTestContextMaskOption)
 
     def set_params(self, **kwargs):
         if all(map(lambda x: x in kwargs, ["current_test_environment", "option_name"])):
-            ctd: "ITestingEnvironment" = kwargs["current_test_environment"]
+            ctd: "ITestEnvironment" = kwargs["current_test_environment"]
             option_name: str = kwargs["option_name"]
 
             self._value = ctd.get_option(option_name)

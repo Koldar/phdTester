@@ -509,7 +509,7 @@ class ITestContext(IOptionDictWithKS, abc.ABC):
     """
 
     @commons.inputs_not_none("ut", "te")
-    def __init__(self, ut: "IStuffUnderTest", te: "ITestingEnvironment"):
+    def __init__(self, ut: "IStuffUnderTest", te: "ITestEnvironment"):
         IOptionDictWithKS.__init__(self)
         self._ut = ut
         self._te = te
@@ -525,7 +525,7 @@ class ITestContext(IOptionDictWithKS, abc.ABC):
 
     @abc.abstractmethod
     @property
-    def te(self) -> "ITestingEnvironment":
+    def te(self) -> "ITestEnvironment":
         """
         A view on all the options related to environment where you're testing your stuff
         :return:
@@ -627,7 +627,7 @@ class IStuffUnderTest(IOptionDictWithKS, ILabelable, ABC):
         return super(IStuffUnderTest, self).clone(copy_function=copy_function)
 
 
-class ITestingEnvironment(IOptionDictWithKS, ILabelable, ABC):
+class ITestEnvironment(IOptionDictWithKS, ILabelable, ABC):
 
     def __init__(self):
         IOptionDictWithKS.__init__(self)
@@ -640,8 +640,8 @@ class ITestingEnvironment(IOptionDictWithKS, ILabelable, ABC):
         :return: a string generated for order several test environment
         """
 
-    def clone(self, copy_function: Callable[[Any], Any] = None) -> "ITestingEnvironment":
-        return super(ITestingEnvironment, self).clone(copy_function=copy_function)
+    def clone(self, copy_function: Callable[[Any], Any] = None) -> "ITestEnvironment":
+        return super(ITestEnvironment, self).clone(copy_function=copy_function)
 
 
 class ITestingGlobalSettings(IOptionDict, abc.ABC):
