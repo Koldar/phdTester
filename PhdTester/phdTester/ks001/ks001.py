@@ -597,6 +597,43 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         return "\n".join(result)
 
     @classmethod
+    def single_labelled(cls, label: str, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None, **kwargs) -> "KS001":
+        """
+        Creates a new KS001 instance with only one labelled dictionary
+
+        :param label: the label of the dictionary
+        :param key_alias: the aliases to use
+        :param value_alias: the aliases to use
+        :param kwargs: key-value mapping to put inside the unnamed dictionary
+        :return: a KS001 instance
+        """
+        return KS001.get_from(
+            d=kwargs,
+            identifier=None,
+            label=label,
+            key_alias=key_alias,
+            value_alias=value_alias
+        )
+
+    @classmethod
+    def single(cls, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None, **kwargs) -> "KS001":
+        """
+        Creates a new KS001 instance with only one unnamed dictionary
+
+        :param key_alias: the aliases to use
+        :param value_alias: the aliases to use
+        :param kwargs: key-value mapping to put inside the unnamed dictionary
+        :return: a KS001 instance
+        """
+        return KS001.get_from(
+            d=kwargs,
+            identifier=None,
+            index=0,
+            key_alias=key_alias,
+            value_alias=value_alias
+        )
+
+    @classmethod
     def from_template(cls, template: "KS001", identifier: str = None, label: str = None, index: int = None, **kwargs):
 
         key_aliases = {k: template.key_aliases.get_alias(k) for k in template.key_aliases.names()}
