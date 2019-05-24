@@ -2091,7 +2091,7 @@ class IDataSource(abc.ABC):
         Initialize the Datasource.
         """
         self.listeners = []
-        self.resource_managers: List[Tuple[RegexStr, "IResourceManager"]] = []
+        self.__resource_managers: List[Tuple[RegexStr, "IResourceManager"]] = []
 
     @abc.abstractmethod
     def __enter__(self) -> "IDataSource":
@@ -2136,7 +2136,7 @@ class IDataSource(abc.ABC):
         :return:
         """
         result = None
-        for (pattern, manager) in self.resource_managers:
+        for (pattern, manager) in self.__resource_managers:
             if re.match(pattern, data_type):
                 if result is None:
                     result = manager
@@ -2476,11 +2476,11 @@ class IDataSource(abc.ABC):
         :raises KeyError: if the `resource_type` pattern is already present
         :return:
         """
-        for (pattern, _) in self.resource_managers:
+        for (pattern, _) in self.__resource_managers:
             if pattern == resource_type:
                 raise KeyError(f"{resource_type} is already present in the managers!")
 
-        self.resource_managers.append((resource_type, manager))
+        self.__resource_managers.append((resource_type, manager))
         manager._on_attached(self)
 
     def unregister_resource_manager(self, resource_type: RegexStr):
@@ -2492,9 +2492,9 @@ class IDataSource(abc.ABC):
         :param resource_type: the pattern of resource type to unregister
         :return:
         """
-        for (i, (pattern, manager)) in enumerate(self.resource_managers):
+        for (i, (pattern, manager)) in enumerate(self.__resource_managers):
             if pattern == resource_type:
-                del self.resource_managers[i]
+                del self.__resource_managers[i]
                 break
 
     def unregister_all_resource_managers(self):
@@ -2502,7 +2502,7 @@ class IDataSource(abc.ABC):
         Unregister all resoruce managers
         :return:
         """
-        self.resource_managers = []
+        self.__resource_managers = []
 
     def add_datasource_listener(self, listener: "IDataSourceListener"):
         self.listeners.append(listener)
