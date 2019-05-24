@@ -5,7 +5,6 @@ from typing import Dict, List, Any
 import subprocess
 import pandas as pd
 import phdTester as phd
-from phdTester.default_models import SimpleTestContextRepo
 from phdTesterExample.models import SortSettings, SortEnvironment, SortAlgorithm, SortTestContext, SortAlgorithmMask, \
     SortEnvironmentMask, SortTestContextMask, PerformanceCsvRow
 
@@ -44,67 +43,39 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             ahelp="""the absolute path of the directory where everything will be generated"""
         ).get_option_graph()
 
-    def _generate_datasource(self, settings: "SortSettings") -> "phd.IDataSource":
-        return self.filesystem_datasource
-
-    # TODO might be default to datasource if _generate_datasource is a FileSystem
     def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.datasources.FileSystem":
         result = phd.datasources.FileSystem(root=settings.outputDirectory)
         # TODO bny default the file system cannot handle even csv... we should correct this
         result.register_resource_manager(
-            resource_type=r"(c)?sv",
+            resource_type=r"(c)?sv",  # we could have written r"csv" but it just to show off regex capabilities
             manager=phd.datasources.CsvFileSystemResourceManager()
         )
 
         return result
 
-    def generate_output_directory_structure(self, filesystem: "phd.datasources.FileSystem", settings: "SortSettings"):
+    def setup_filesystem_datasource(self, filesystem: "phd.datasources.FileSystem", settings: "SortSettings"):
         filesystem.make_folders("images")
         filesystem.make_folders("csvs")
         filesystem.make_folders("cwd")
-        # TODO remove it because it's dependent to file system data sourc
-        pass
 
-    def generate_environment(self) -> "phd.ITestEnvironment":
-        return SortEnvironment()
+    # def generate_environment(self) -> "phd.ITestEnvironment":
+    #     return SortEnvironment()
+    #
+    # def generate_under_testing(self) -> "phd.IStuffUnderTest":
+    #     return SortAlgorithm()
+    #
+    # def _generate_test_context(self, ut: "SortAlgorithm", te: "SortEnvironment") -> "phd.ITestContext":
+    #     return SortTestContext(ut=ut, te=te)
 
-    def generate_under_testing(self) -> "phd.IStuffUnderTest":
-        return SortAlgorithm()
-
-    def generate_test_global_settings(self) -> "phd.ITestingGlobalSettings":
-        return SortSettings()
-
-    # TODO maybe we can provide a default implementation....
-    def generate_test_context(self, ut: "phd.IStuffUnderTest" = None, te: "phd.ITestEnvironment" = None) -> "phd.ITestContext":
-        # TODO maybe we can ditch  it
-        ut = ut if ut is not None else self.generate_under_testing()
-        te = te if te is not None else self.generate_environment()
-        return SortTestContext(ut=ut, te=te)
-
-    # TODO make it such that one may avoid generating under_test, global_settings, environment and their mask entirely (they are there only to generate the content assist)
-    def generate_stuff_under_test_mask(self) -> "SortAlgorithmMask":
-        return SortAlgorithmMask()
-
-    def generate_test_environment_mask(self) -> "SortEnvironmentMask":
-        return SortEnvironmentMask()
-
-    # TODO maybe we can create a signature similar to generate_test_context
-    def generate_test_context_mask(self) -> "SortTestContextMask":
-        return SortTestContextMask(ut=self.generate_stuff_under_test_mask(), te=self.generate_test_environment_mask())
-
-    # todo remove. It's not used anywhere
-    def generate_test_context_repo(self, settings: "phd.ITestingGlobalSettings") -> "ITestContextRepo":
-        return SimpleTestContextRepo()
-
-    #TODO optional. Used only to execute code before the test
-    def begin_perform_test(self, stuff_under_test_values: Dict[str, List[Any]],
-                           test_environment_values: Dict[str, List[Any]], settings: "SortSettings"):
-        pass
-
-    # TODO optional. Used only to execute code after the test
-    def end_perform_test(self, stuff_under_test_values: Dict[str, List[Any]],
-                         test_environment_values: Dict[str, List[Any]], settings: "SortSettings"):
-        pass
+    # def generate_stuff_under_test_mask(self) -> "SortAlgorithmMask":
+    #     return SortAlgorithmMask()
+    #
+    # def generate_test_environment_mask(self) -> "SortEnvironmentMask":
+    #     return SortEnvironmentMask()
+    #
+    # # TODO maybe we can create a signature similar to generate_test_context
+    # def generate_test_context_mask(self) -> "SortTestContextMask":
+    #     return SortTestContextMask(ut=self.generate_stuff_under_test_mask(), te=self.generate_test_environment_mask())
 
     #TODO paths should be removed
     def perform_test(self, tc: SortTestContext, global_settings: "SortSettings"):
@@ -112,7 +83,6 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         performance_ks001 = output_template_ks001.append(
             phd.KS001.from_template(output_template_ks001, label="kind", type="main"), in_place=False
         )
-        performance_csv_output = performance_ks001.dump_filename(extension="csv")
 
         program = [
             "SortAlgorithmTester",

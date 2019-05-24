@@ -8,7 +8,7 @@ import multiprocessing
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Any, Iterable, List, Tuple, Callable, Union
+from typing import Dict, Any, Iterable, List, Tuple, Callable, Union, Optional
 
 import pandas as pd
 
@@ -16,7 +16,9 @@ from phdTester import commons, masks
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr
 from phdTester.commons import StringCsvWriter, UnknownStringCsvReader
 from phdTester.datasources import filesystem_sources
-from phdTester.default_models import SeriesFunction, DataFrameFunctionsDict
+from phdTester.default_models import SeriesFunction, DataFrameFunctionsDict, SimpleTestContextRepo, \
+    DefaultGlobalSettings, DefaultTestEnvironment, DefaultStuffUnderTest, DefaultTestContext, DefaultStuffUnderTestMask, \
+    DefaultTestEnvironmentMask, DefaultTestContextMask
 from phdTester.exceptions import ValueToIgnoreError
 from phdTester.image_computer import aggregators
 from phdTester.ks001.ks001 import KS001
@@ -121,19 +123,22 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return "="
 
-    @abc.abstractmethod
     def _generate_datasource(self, settings: "ITestingGlobalSettings") -> "IDataSource":
         """
         fetch the data source that we will use throughout all the program run
+
+        If you don't implement the method, the datasource will default to the file system
+
         :param settings: the setting you can use to setup the datasource
         :return: the datasource we will use throughout thew run
         """
-        pass
+        return self.__filesystem_datasource
 
     @abc.abstractmethod
     def _generate_filesystem_datasource(self, settings: "ITestingGlobalSettings") -> "filesystem_sources.FileSystem":
         """
         A datasource which allows you to interact with the local file system
+
         :param settings: the generic settings in input of the tester
         :return:
         """
@@ -157,41 +162,74 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         return self.__option_graph
 
     @abc.abstractmethod
-    def generate_output_directory_structure(self, filesystem: "filesystem_sources.FileSystem", settings: "ITestingGlobalSettings"):
+    def setup_filesystem_datasource(self, filesystem: "filesystem_sources.FileSystem", settings: "ITestingGlobalSettings"):
         """
         generate the structure in the output folder needed to generate the tests
+
         :param filesystem: a datasource representing the root of the output directory
         :param settings:
         """
         pass
 
-    @abc.abstractmethod
     def generate_environment(self) -> "ITestEnvironment":
         """
         A research-specific structure containing all the option which are not involved in the stuff
         you need to test but are impact the tests (for exmaple, you might want to test 2 heuriustics. The
         pddl domain you're operate into is not invovled in the heuristic per se, but heavily impact its performances
+
+
+        If you don't override this function, we will use an anonymuous instance of DefaultTestEnvironment
+
         :return:
         """
-        pass
+        return DefaultTestEnvironment(self.test_environment_dict_values.keys())
 
-    @abc.abstractmethod
     def generate_under_testing(self) -> "IStuffUnderTest":
         """
         a research-specific structure containin all the option which are directly involved in the
-        stuff you need to test
+        stuff you need to test.
+
+        If you don't override this function, we will use an anonymuous instance of DefaultStuffUnderTest
+
+
         :return:
         """
-        pass
+        return DefaultStuffUnderTest(self.under_test_dict_values.keys())
 
-    @abc.abstractmethod
+    def _generate_test_context(self, ut: IStuffUnderTest, te: ITestEnvironment) -> "ITestContext":
+        """
+        Generate a test context, namely a structure representing a single test case.
+        A test context contains the specifications of the stuff we need to test and the
+        specification of the environment where we need to test it
+        :param ut: the stuff we need to test specification. None if you want to generate a test with defaults
+        :param te: the environment we need to test in. Non if you want to generate a test with defaults
+        :return:
+        """
+        return DefaultTestContext(ut=ut, te=te)
+
+    def generate_stuff_under_test_mask(self) -> "IStuffUnderTestMask":
+        return DefaultStuffUnderTestMask(self.under_test_dict_values.keys())
+
+    def generate_test_environment_mask(self) -> "ITestEnvironmentMask":
+        return DefaultTestEnvironmentMask(self.test_environment_dict_values.keys())
+
+    def generate_test_context_mask(self) -> "ITestContextMask":
+        """
+        the context mask is used when you need to generate patterns between test contextes
+        :return:
+        """
+        return DefaultTestContextMask(self.generate_stuff_under_test_mask(), self.generate_test_environment_mask())
+
     def generate_test_global_settings(self) -> "ITestingGlobalSettings":
         """
         A research-specific structure containing all the settings which govern the testing framework in
-        its globality (e.g., debug flag)
+        its globality (e.g., debug flag).
+
+        If not specified we will return an instance of DefaultGlobalSettings
+
         :return:
         """
-        pass
+        return DefaultGlobalSettings()
 
     @property
     def datasource(self) -> "IDataSource":
@@ -221,43 +259,30 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             raise ValueError(f"we haven't set the test environment dict values yet!")
         return self.__test_environment_dict_values
 
-    @abc.abstractmethod
-    def generate_test_context(self, ut: IStuffUnderTest = None, te: ITestEnvironment = None) -> "ITestContext":
+    def __generate_test_context(self, ut: Optional[IStuffUnderTest] = None, te: Optional[ITestEnvironment] = None) -> "ITestContext":
         """
-        Generate a test context, namely a structure representing a single test case.
-        A test context contains the specifications of the stuff we need to test and the
-        specification of the environment where we need to test it
-        :param ut: the stuff we need to test specification. None if you want to generate a test with defaults
-        :param te: the environment we need to test in. Non if you want to generate a test with defaults
+        Like `_generate_test_context` but `ut` and `te` might be None
+
+        In case a parameter is None, the function automatically called `generate_under_testing` or `generate_environment`
+        :param ut:
+        :param te:
         :return:
         """
-        pass
+        ut = ut if ut is not None else self.generate_under_testing()
+        te = te if te is not None else self.generate_environment()
+        return self._generate_test_context(ut, te)
 
-    @abc.abstractmethod
-    def generate_stuff_under_test_mask(self) -> "IStuffUnderTestMask":
-        pass
-
-    @abc.abstractmethod
-    def generate_test_environment_mask(self) -> "ITestEnvironmentMask":
-        pass
-
-    @abc.abstractmethod
-    def generate_test_context_mask(self) -> "ITestContextMask":
-        """
-        the context mask is used when you need to generate patterns between test contextes
-        :return:
-        """
-        pass
-
-    @abc.abstractmethod
     def generate_test_context_repo(self, settings: "ITestingGlobalSettings") -> "ITestContextRepo":
         """
         generate an object contaiing all the tests we need to perform.
         This object may be queried against
+
+        By default it generate a default implementation
+
         :param settings: structure containing all the global options in the framework
         :return:
         """
-        pass
+        return SimpleTestContextRepo()
 
     def test_to_perform_sort(self, tc: Tuple[int, ITestContext]) -> Any:
         """
@@ -273,12 +298,11 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         return tc[0]
 
-    @abc.abstractmethod
     def begin_perform_test(self, stuff_under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]], settings: "ITestingGlobalSettings"):
         """
         Function called just before the function `perform_test`
 
-        Use this function to perform some tasks before running the tests
+        Use this function to perform some tasks before running the tests. By default it does nothing
 
         :param tests_to_perform: list fo tests to execute
         :param stuff_under_test_values: list of allowed values for the "stuff under test"
@@ -288,7 +312,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         pass
 
-    @abc.abstractmethod
     def end_perform_test(self, stuff_under_test_values: Dict[str, List[Any]],
                            test_environment_values: Dict[str, List[Any]], settings: "ITestingGlobalSettings"):
         pass
@@ -378,7 +401,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 # # initialize output directory
                 # ###################################################
                 logging.info("setupping filesystem output directory structure...")
-                self.generate_output_directory_structure(self.filesystem_datasource, global_settings)
+                self.setup_filesystem_datasource(self.filesystem_datasource, global_settings)
 
                 ###################################################
                 # generate all the possible values each option can have
@@ -388,6 +411,16 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                     g=self.__option_graph,
                     parse_output=parse_output
                 )
+
+                logging.info("-" * 20)
+                logging.info(f"stuff under test possible values are:")
+                for k in self.__under_test_dict_values:
+                    logging.info(f"{k} = {self.__under_test_dict_values[k]}")
+                logging.info("-"*20)
+                logging.info(f"test environment possible values are:")
+                for k in self.__test_environment_dict_values:
+                    logging.info(f"{k} = {self.__test_environment_dict_values[k]}")
+                logging.info("-" * 20)
 
                 ###################################################
                 # generate tests to perform
@@ -519,7 +552,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         result = []
 
-        tc_class = self.generate_test_context().__class__
+        tc_class = self.__generate_test_context().__class__
         if afilter is None:
             afilter = identity
         for abs_image_file in map(os.path.abspath, filter(afilter, os.listdir(directory))):
@@ -533,7 +566,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             )
             new_ut.set_from_ks001(i=0, ks=tc_dict)
             new_te.set_from_ks001(i=0, ks=tc_dict)
-            tc = self.generate_test_context(new_ut, new_te)
+            tc = self.__generate_test_context(new_ut, new_te)
 
             if not tc.are_option_values_all_in(stuff_under_test_dict_values, test_environment_dict_values):
                 continue
@@ -627,7 +660,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             logging.info(f"test context template is {tcm_to_use}")
 
             # generate the csv filename
-            tc = self.generate_test_context()
+            tc = self.__generate_test_context()
             csv_generated = tcm_to_use.to_well_specified_ks001(key_alias=tc.key_alias, value_alias=tc.value_alias)
             csv_generated = csv_generated + ks001_to_add
             csv_output_filename = csv_generated.dump_str(
@@ -849,6 +882,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             should_ignore = False
             for o in tcm_to_use.options():
                 mask: "ITestContextMaskOption" = tcm_to_use.get_option(o)
+                if mask is None:
+                    # masks of options which are irrelevant can be left to None
+                    continue
                 mask_params = mask_options(te, tcm_to_use, o, tcm_visited)
                 try:
                     mask.set_params(**mask_params)
@@ -964,7 +1000,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             for i, label in enumerate(test_environment_labels):
                 te.set_option(label, values[len(under_testing_labels) + i])
 
-            test_context_to_add = self.generate_test_context(ut, te)
+            test_context_to_add = self.__generate_test_context(ut, te)
             logging.debug(f"checking if {test_context_to_add} is a valid test...")
             followed_vertices = set()
             if not g.is_compliant_with(test_context_to_add, followed_vertices):
@@ -1139,7 +1175,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         relevant_csvs: List[GetSuchInfo] = []
         # filter the csvs only with stuff under test / test environment which are involved in this test
         for csv_info in data_source.get_suchthat(
-            test_context_template=self.generate_test_context(),
+            test_context_template=self.__generate_test_context(),
             path=path_function(test_context_template),
             filters=csv_filter,
             data_type='csv',
@@ -1260,8 +1296,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         functions_to_draw: Dict[str, FunctionData] = {}
         result = DataFrameFunctionsDict()
 
-        key_alias = self.generate_test_context().key_alias
-        value_alias = self.generate_test_context().value_alias
+        key_alias = self.__generate_test_context().key_alias
+        value_alias = self.__generate_test_context().value_alias
 
         # just to be sure, we order them by stuff under test
         csv_numbers = len(csv_contexts)
@@ -1411,8 +1447,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         # generate a KS001 containing only the values which we're considering
         d = test_context_template.to_well_specified_ks001(
-            key_alias=self.generate_test_context().key_alias,
-            value_alias=self.generate_test_context().value_alias,
+            key_alias=self.__generate_test_context().key_alias,
+            value_alias=self.__generate_test_context().value_alias,
         )
         d = d.append(image_suffix)
 

@@ -501,7 +501,15 @@ class StandardOptionDict(IOptionDict):
      - the subtype has __dict__ attribute (if it's a class this is ensured by default)
      - the attributes you care about are public and are not properties (tagged with @proiperty)
      - it's not implemented as a tuple (so no __slots__ schenanigans)
+
+     Use this class when the options are known a priori. To do that you need a class.
     """
+
+    def _create_empty(self) -> "IOptionDict":
+        result = self.__class__()
+        for k in self.options():
+            result.__dict__[k] = None
+        return result
 
     def __init__(self):
         IOptionDict.__init__(self)
@@ -520,11 +528,77 @@ class StandardOptionDict(IOptionDict):
         self.__dict__[name] = value
 
 
+class DefaultAnonymuousOptionObject(IOptionDict):
+    """
+    An OptionDict whose options are not retrieved from the declared fields in the class, but passed during constructor.
+
+    Use this class when the options are not known apriori.
+    """
+
+    def _create_empty(self) -> "IOptionDict":
+        return self.__class__(self.__dict__.keys())
+
+    def __init__(self, fields: Iterable[str]):
+        IOptionDict.__init__(self)
+        for f in fields:
+            self.__dict__[f] = None
+
+    def options(self) -> Iterable[str]:
+        return filter(lambda x: not x.startswith('_'), self.__dict__)
+
+    def get_option(self, name: str) -> Any:
+        if name not in self.__dict__:
+            self.__dict__[name] = None
+        return self.__dict__[name]
+
+    def set_option(self, name: str, value: Any):
+        self.__dict__[name] = value
+
+
+class DynamicOptionDict(IOptionDict):
+    """
+    An implementation of Option Dict where the values are dynamic: you can add and remove options as you wish
+
+    An option is always containes in this dictionary and, if not present, the option will have the default value of None
+    """
+
+    def contains_option(self, name: str) -> bool:
+        return True
+
+    def options(self) -> Iterable[str]:
+        return filter(lambda x: not x.startwith("_"), self.__dict__)
+
+    def get_option(self, name: str) -> Any:
+        if name not in self.__dict__:
+            self.__dict__[name] = None
+        return self.__dict__[name]
+
+    def set_option(self, name: str, value: Any):
+        self.__dict__[name] = value
+
+    def _create_empty(self) -> "IOptionDict":
+        return self.__class__()
+
+    def __init__(self):
+        IOptionDict.__init__(self)
+
+
 class AbstractTestingGlobalSettings(ITestingGlobalSettings, StandardOptionDict, abc.ABC):
 
     def __init__(self):
         ITestingGlobalSettings.__init__(self)
         StandardOptionDict.__init__(self)
+
+
+class DefaultGlobalSettings(ITestingGlobalSettings, DynamicOptionDict):
+    """
+    A global settings implementation when the user do not want the help of the content assist
+
+    This allows you to avoid generating the class containing the global settings yourself
+    """
+    def __init__(self):
+        ITestingGlobalSettings.__init__(self)
+        DynamicOptionDict.__init__(self)
 
 
 class AbstractStuffUnderTest(IStuffUnderTest, StandardOptionDict, abc.ABC):
@@ -534,11 +608,51 @@ class AbstractStuffUnderTest(IStuffUnderTest, StandardOptionDict, abc.ABC):
         StandardOptionDict.__init__(self)
 
 
+class DefaultStuffUnderTest(IStuffUnderTest, DefaultAnonymuousOptionObject):
+    """
+    A stuff under test implementation when the user do not want the help of the content assist
+
+    This allows you to avoid generating the class containing the stuff under test yourself
+    """
+
+    def __init__(self, fields: Iterable[str]):
+        IStuffUnderTest.__init__(self)
+        DefaultAnonymuousOptionObject.__init__(self, fields)
+
+    @property
+    def key_alias(self) -> Dict[str, str]:
+        return {}
+
+    @property
+    def value_alias(self) -> Dict[str, str]:
+        return {}
+
+
 class AbstractTestingEnvironment(ITestEnvironment, StandardOptionDict, abc.ABC):
 
     def __init__(self):
         ITestEnvironment.__init__(self)
         StandardOptionDict.__init__(self)
+
+
+class DefaultTestEnvironment(ITestEnvironment, DefaultAnonymuousOptionObject):
+    """
+    A global settings implementation when the user do not want the help of the content assist
+
+    This allows you to avoid generating the class containing the global settings yourself
+    """
+
+    def __init__(self, fields: Iterable[str]):
+        ITestEnvironment.__init__(self)
+        DefaultAnonymuousOptionObject.__init__(self, fields)
+
+    @property
+    def key_alias(self) -> Dict[str, str]:
+        return {}
+
+    @property
+    def value_alias(self) -> Dict[str, str]:
+        return {}
 
 
 class AbstractTestContext(ITestContext, abc.ABC):
@@ -595,16 +709,36 @@ class AbstractTestContext(ITestContext, abc.ABC):
         pass
 
 
+class DefaultTestContext(ITestContext):
+
+    def __init__(self, ut: IStuffUnderTest, te: ITestEnvironment):
+        ITestContext.__init__(self, ut, te)
+
+
 class AbstractStuffUnderTestMask(IStuffUnderTestMask, StandardOptionDict, abc.ABC):
 
     def __init__(self):
         IStuffUnderTestMask.__init__(self)
 
 
+class DefaultStuffUnderTestMask(IStuffUnderTestMask, DefaultAnonymuousOptionObject):
+
+    def __init__(self, fields: Iterable[str]):
+        IStuffUnderTestMask.__init__(self)
+        DefaultAnonymuousOptionObject.__init__(self, fields)
+
+
 class AbstractTestEnvironmentMask(ITestEnvironmentMask, StandardOptionDict, abc.ABC):
 
     def __init__(self):
-        ITestEnvironment.__init__(self)
+        ITestEnvironmentMask.__init__(self)
+
+
+class DefaultTestEnvironmentMask(ITestEnvironmentMask, DefaultAnonymuousOptionObject):
+
+    def __init__(self, fields: Iterable[str]):
+        ITestEnvironmentMask.__init__(self)
+        DefaultAnonymuousOptionObject.__init__(self, fields)
 
 
 class AbstractTestContextMask(ITestContextMask, abc.ABC):
@@ -612,10 +746,11 @@ class AbstractTestContextMask(ITestContextMask, abc.ABC):
     def __init__(self, ut: "IStuffUnderTestMask", te: "ITestEnvironmentMask"):
         ITestContextMask.__init__(self, ut=ut, te=te)
 
-    def __eq__(self, other: "ITestContextMask"):
-        if other is None:
-            return False
-        return self.ut == other.ut and self.te == other.te
+
+class DefaultTestContextMask(ITestContextMask):
+
+    def __init__(self, ut: "IStuffUnderTestMask", te: "ITestEnvironmentMask"):
+        ITestContextMask.__init__(self, ut=ut, te=te)
 
 
 def _query_by_mask(m: "ITestContextMask", iterable: Iterable["ITestContext"]) -> Iterable["ITestContext"]:

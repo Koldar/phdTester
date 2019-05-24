@@ -253,14 +253,6 @@ class IOptionDict(abc.ABC):
         """
         pass
 
-    @abc.abstractmethod
-    def __init__(self):
-        """
-        Generate a new instance of this structure, with uninitialized fields
-        :return: a new instance of this structure
-        """
-        pass
-
     def contains_option(self, name: str) -> bool:
         """
 
@@ -320,10 +312,22 @@ class IOptionDict(abc.ABC):
         :return:
         """
         copy_function = copy_function if copy_function is not None else copy.copy
-        result = self.__class__()
+        result = self._create_empty()
         for o in self.options():
             result.set_option(o, copy_function(self.get_option(o)))
         return result
+
+    @abc.abstractmethod
+    def _create_empty(self) -> "IOptionDict":
+        """
+        A method which create a new instance of self.
+
+        The instance generated can be empty (even with no options set)
+
+        :return: a blank instance of the same class
+        """
+        pass
+
 
     def __contains__(self, option: str) -> bool:
         """
@@ -509,6 +513,7 @@ class ITestContext(IOptionDictWithKS, abc.ABC):
     data can be used to generate values.
     """
 
+    @abc.abstractmethod
     @commons.inputs_not_none("ut", "te")
     def __init__(self, ut: "IStuffUnderTest", te: "ITestEnvironment"):
         IOptionDictWithKS.__init__(self)
@@ -531,6 +536,11 @@ class ITestContext(IOptionDictWithKS, abc.ABC):
         :return: the test environment related to this test context
         """
         return self._te
+
+    def _create_empty(self) -> "IOptionDict":
+        ut = self.ut._create_empty()
+        te = self.te._create_empty()
+        return self.__class__(ut, te)
 
     def options(self) -> Iterable[str]:
         yield from self._ut.options()
@@ -626,6 +636,19 @@ class IStuffUnderTest(IOptionDictWithKS, ILabelable, ABC):
     def clone(self, copy_function: Callable[[Any], Any] = None) -> "IStuffUnderTest":
         return super(IStuffUnderTest, self).clone(copy_function=copy_function)
 
+    def get_label(self) -> str:
+        """
+        The label is used whenever we need to generate something readable for the user.
+
+        By default it is just the list of the options/options value this stuff under test has
+
+        :return: the label representing the stuff under test
+        """
+        result = []
+        for name in sorted(self.options()):
+            result.append(f"name={self.get_option(name)}")
+        return ' '.join(result)
+
 
 class ITestEnvironment(IOptionDictWithKS, ILabelable, ABC):
 
@@ -633,12 +656,22 @@ class ITestEnvironment(IOptionDictWithKS, ILabelable, ABC):
         IOptionDictWithKS.__init__(self)
         ILabelable.__init__(self)
 
-    @abc.abstractmethod
     def get_order_key(self) -> str:
         """
+        A string that is used whenever we need to sort several test environment and we need to decide which environment
+        needs to be positioned before another one
+
+        By default we use `get_label`
 
         :return: a string generated for order several test environment
         """
+        return self.get_label()
+
+    def get_label(self):
+        result = []
+        for name in sorted(self.options()):
+            result.append(f"name={self.get_option(name)}")
+        return ' '.join(result)
 
     def clone(self, copy_function: Callable[[Any], Any] = None) -> "ITestEnvironment":
         return super(ITestEnvironment, self).clone(copy_function=copy_function)
@@ -762,6 +795,7 @@ class ITestEnvironmentMask(IMask, abc.ABC):
 
 class ITestContextMask(IMask, abc.ABC):
 
+    @abc.abstractmethod
     def __init__(self, ut: "IStuffUnderTestMask", te: "ITestEnvironmentMask"):
         IMask.__init__(self)
         self._ut = ut
@@ -774,6 +808,16 @@ class ITestContextMask(IMask, abc.ABC):
     @property
     def te(self) -> "ITestEnvironmentMask":
         return self._te
+
+    def __eq__(self, other: "ITestContextMask"):
+        if other is None:
+            return False
+        return self.ut == other.ut and self.te == other.te
+
+    def _create_empty(self) -> "IOptionDict":
+        ut = self.ut._create_empty()
+        te = self.te._create_empty()
+        return self.__class__(ut, te)
 
     def options(self) -> Iterable[str]:
         yield from self.ut.options()
