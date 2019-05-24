@@ -6,6 +6,7 @@ import itertools
 import logging
 import multiprocessing
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Any, Iterable, List, Tuple, Callable, Union
 
@@ -364,6 +365,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         Run the experiments for this template
 
         :param cli_commands: a list of strings that will be injected to the CLI parser. usually `sys.argv[1:]` is good.
+            Defaults to `sys.argv[1:]`
         :param args: set of positional arguments that will be stored as-is. you will be able to fetch them via
             `factory.run_args`. They are not explicitly used by the framework.
         :param kwargs:set of dictionary argument that will be stored as-is. You will be able to fetch them via
@@ -380,6 +382,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         ###################################################
         logging.info("parsing option graph")
         self.__option_graph = self.generate_option_graph()
+        cli_commands = cli_commands if cli_commands is not None else sys.argv[1:]
         parse_output = self._generate_parser_from_option_graph(self.__option_graph, cli_commands)
 
         ###################################################
