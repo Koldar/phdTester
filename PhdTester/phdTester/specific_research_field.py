@@ -46,9 +46,12 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         self.__option_graph: OptionGraph = None
         self.__under_test_dict_values: Dict[str, List[Any]] = None
         self.__test_environment_dict_values: Dict[str, List[Any]] = None
+        self.__tests_repository: "ITestContextRepo" = None
         """
-        A lock to use if multiple processes are trying to access to the same shared resource
+        A collection used to save all the test context we need to execute. You can also query the
+        collection
         """
+
         self.__datasource: "IDataSource" = None
         self.__filesystem_datasource: "filesystem_sources.FileSystem" = None
 
@@ -161,6 +164,12 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         if self.__option_graph is None:
             raise ValueError(f"we still haven't set the option graph yet!")
         return self.__option_graph
+
+    @property
+    def tests_repository(self) -> ITestContextRepo:
+        if self.__tests_repository is None:
+            raise ValueError(f"We still haven't set the test context repository!")
+        return self.__tests_repository
 
     @abc.abstractmethod
     def setup_filesystem_datasource(self, filesystem: "filesystem_sources.FileSystem", settings: "IGlobalSettings"):
@@ -435,13 +444,13 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 # generate tests to perform
                 ###################################################
                 logging.info("generating all the tests which are worthwhile...")
-                tests_to_perform = self.generate_test_context_repo(global_settings)
+                self.__tests_repository = self.generate_test_context_repo(global_settings)
                 # this tests need to be sorted by test environment. In this way for every test enviroment we test in pack
                 # all the algorithms under test
                 for r in commons.distinct(self._generate_test_contexts_from_option_graph(self.__option_graph, self.__under_test_dict_values, self.__test_environment_dict_values)):
                     logging.critical(f"new test! {r}")
-                    tests_to_perform.append(r)
-                logging.critical(f"DONE with {len(tests_to_perform)} tests")
+                    self.__tests_repository.append(r)
+                logging.critical(f"DONE with {len(self.tests_repository)} tests")
 
                 ###################################################
                 # perform the tests
@@ -449,8 +458,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 logging.info("performing tests...")
 
                 self.begin_perform_test(self.under_test_dict_values, self.test_environment_dict_values, global_settings)
-                for i, tc in enumerate(sorted(tests_to_perform, key=lambda t: t.te.get_order_key())):
-                    logging.critical("performing {} over {} ({}%)".format(i, len(tests_to_perform), ((i*100.)/len(tests_to_perform))))
+                for i, tc in enumerate(sorted(self.tests_repository, key=lambda t: t.te.get_order_key())):
+                    percentage = (i*100.)/len(self.tests_repository)
+                    logging.critical("performing {} over {} ({}%)".format(i, len(self.tests_repository), percentage))
                     logging.critical(f"test environment is {tc.te}")
                     self.perform_test(tc, global_settings)
                 self.end_perform_test(self.under_test_dict_values, self.test_environment_dict_values, global_settings)
@@ -609,10 +619,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         if mask_options is None:
             mask_options = get_empty_mask_options
         tcm_visited = []
-        for te in commons.distinct(map(lambda tc2: tc2.te, self._generate_test_contexts_from_option_graph(
-                self.option_graph,
-                self.under_test_dict_values,
-                self.test_environment_dict_values))):
+        for te in commons.distinct(map(lambda tc2: tc2.te, self.tests_repository)):
             # we consider only all the environment possibilities when generating plots, discarding the under test stuff
             # (which are displayed in the actual plots). For each of the possibility, we generate a plot
 
@@ -852,10 +859,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         if mask_options is None:
             mask_options = get_empty_mask_options
         tcm_visited = []
-        for te in commons.distinct(map(lambda tc2: tc2.te, self._generate_test_contexts_from_option_graph(
-                self.option_graph,
-                self.under_test_dict_values,
-                self.test_environment_dict_values))):
+        for te in commons.distinct(map(lambda tc2: tc2.te, self.tests_repository)):
             # we consider only all the environment possibilities when generating plots, discarding the under test stuff
             # (which are displayed in the actual plots). For each of the possibility, we generate a plot
 
