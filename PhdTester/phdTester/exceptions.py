@@ -11,3 +11,10 @@ class ResourceNotFoundError(Exception):
 
 class ResourceTypeUnhandledError(Exception):
     pass
+
+
+class OptionConversionError(Exception):
+    """
+    Exception to generate when we can't convert an option in IOptionType
+    """
+    pass

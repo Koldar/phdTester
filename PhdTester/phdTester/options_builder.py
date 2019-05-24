@@ -109,13 +109,13 @@ class OptionBuilder(abc.ABC):
     def add_settings_multiplexer(self, name: str, possible_values: List[str], ahelp: str) -> "OptionBuilder":
         return self._add_multiplexer(name, possible_values, ahelp, OptionBelonging.SETTINGS)
 
-    def _add_value(self, name: str, option_type: type, ahelp: str, belonging: OptionBelonging, default: Any = None) -> "OptionBuilder":
-        if not issubclass(option_type, IOptionType):
+    def _add_value(self, name: str, option_type: "IOptionType", ahelp: str, belonging: OptionBelonging, default: Any = None) -> "OptionBuilder":
+        if not isinstance(option_type, IOptionType):
             raise TypeError(f"allowed values for \"option_type\" are only those inheriting from \"IOptionType\"! Got {type(option_type)}")
         self.option_graph.add_vertex(aid=name, payload=ValueNode(name, option_type, ahelp, belonging, default=default))
         return self
 
-    def add_under_testing_value(self, name: str, option_type: type, ahelp: str, default: Any = None) -> "OptionBuilder":
+    def add_under_testing_value(self, name: str, option_type: "IOptionType", ahelp: str, default: Any = None) -> "OptionBuilder":
         """
         Adds a node in the option graph representing a "stuff under test" option which can have infinite possible
         values. For example you can use it when you need to declare a integer option.
@@ -130,7 +130,7 @@ class OptionBuilder(abc.ABC):
         """
         return self._add_value(name, option_type, ahelp, OptionBelonging.UNDER_TEST, default=default)
 
-    def add_environment_value(self, name: str, option_type: type, ahelp: str, default: Any = None) -> "OptionBuilder":
+    def add_environment_value(self, name: str, option_type: "IOptionType", ahelp: str, default: Any = None) -> "OptionBuilder":
         """
         Adds a node in the option graph representing a "test environment" option which can have infinite possible
         values. For example you can use it when you need to declare a integer option.
@@ -145,7 +145,7 @@ class OptionBuilder(abc.ABC):
         """
         return self._add_value(name, option_type, ahelp, OptionBelonging.ENVIRONMENT, default)
 
-    def add_settings_value(self, name: str, option_type: type, ahelp: str, default: Any = None) -> "OptionBuilder":
+    def add_settings_value(self, name: str, option_type: "IOptionType", ahelp: str, default: Any = None) -> "OptionBuilder":
         return self._add_value(name, option_type, ahelp, OptionBelonging.SETTINGS, default)
 
     # conditions

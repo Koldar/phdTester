@@ -38,7 +38,37 @@ class IOptionType(abc.ABC):
     """
     A interface representing the root element of every type which is accepted inside an option node in a option graph
     """
-    pass
+
+    @abc.abstractmethod
+    def __init__(self):
+        pass
+
+    @abc.abstractmethod
+    def to_argparse(self) -> type:
+        """
+
+        :return: a value accepted by :type: parameters of ArgParse.add_argument
+        """
+        pass
+
+    @abc.abstractmethod
+    def convert(self, value: Any) -> Any:
+        """
+        Tries to convert a value into a compliant value for thhis option
+
+
+        For example if the option represents an int the method should be something like this:
+        ```
+        def convert(self, value: Any) -> int:
+            return int(value)
+        ```
+
+
+        :param value: the value to convert. Can be of any type (but it will probably be either a string or a number)
+        :raises OptionConversionError: if value cannot be converted into the type represented by self
+        :return: the value of the type represented by self
+        """
+        pass
 
 
 class IDependencyCondition(abc.ABC):
@@ -99,11 +129,11 @@ class IOptionNode(abc.ABC):
 
     """
 
-    def __init__(self, kind: OptionNodeKind, long_name: str, option_type: type, ahelp: str, belonging: OptionBelonging):
+    def __init__(self, kind: OptionNodeKind, long_name: str, option_type: IOptionType, ahelp: str, belonging: OptionBelonging):
         self.kind = kind
         self.long_name = long_name
         self.help = ahelp
-        self.option_type = option_type
+        self.option_type: "IOptionType" = option_type
         self.belonging = belonging
 
     def get_parser_name(self) -> str:

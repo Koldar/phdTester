@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Dict, List, Any
 
-from phdTester import default_models, commons, masks, options
+from phdTester import default_models, commons, masks, options, option_types
 from phdTester.datasources import filesystem_sources
 from phdTester.datasources.filesystem_sources import FileSystem
 from phdTester.default_models import SimpleTestContextRepo
@@ -42,27 +42,27 @@ class SortResearchField(AbstractSpecificResearchFieldFactory):
             ahelp="""The algorithm we want to test""",
         ).add_environment_value(
             name="sequenceSize",
-            option_type=options.Int,
+            option_type=option_types.Int(),
             ahelp="""The size of the sequence to test""",
         ).add_environment_value(
             name="sequenceType",
-            option_type=options.Str,
+            option_type=option_types.Str(),
             ahelp="""The type of the sequence to test under""",
         ).add_environment_value(
             name="lowerBound",
-            option_type=options.Int,
+            option_type=option_types.Int(),
             ahelp="""lowerbound of any number generated in the sequence""",
         ).add_environment_value(
             name="upperBound",
-            option_type=options.Int,
+            option_type=option_types.Int(),
             ahelp="""upperbound of any number generated in the sequence""",
         ).add_environment_value(
             name="run",
-            option_type=options.Int,
+            option_type=option_types.Int(),
             ahelp="""number of runs to execute for each test context""",
         ).add_settings_value(
             name="outputDirectory",
-            option_type=options.Str,
+            option_type=option_types.Str(),
             ahelp="""the absolute path of the directory where everything will be generated"""
         ).get_option_graph()
 
