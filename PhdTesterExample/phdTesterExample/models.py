@@ -1,7 +1,3 @@
-# TODO create __init__ which automatically import everything
-
-
-# TODO make ut and te properties abstract: in this way the developer can override them
 from typing import Dict
 
 import phdTester as phd
@@ -38,7 +34,6 @@ class SortAlgorithm(phd.AbstractStuffUnderTest):
         phd.AbstractStuffUnderTest.__init__(self)
         self.algorithm: str = None
 
-    # TODO create default implementation (like looking at the sorted sequence)
     def get_label(self) -> str:
         return f"{self.algorithm}"
 
@@ -71,7 +66,6 @@ class SortEnvironment(phd.AbstractTestingEnvironment):
         self.upperBound: int = None
         self.run: int = None
 
-    # TODO create default implementation (like looking at the sorted sequence)
     def get_label(self) -> str:
         return f"size={self.sequenceSize} type={self.sequenceType} lb={self.lowerBound} ub={self.upperBound} run={self.run}"
 

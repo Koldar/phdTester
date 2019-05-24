@@ -8,7 +8,6 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     factory = SortResearchField()
-    # TODO alter run parameters (by adding *arg, **kwargs
     factory.run(cli_commands=sys.argv[1:])
 
     logging.critical("DONE!")

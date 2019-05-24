@@ -416,7 +416,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         with self._generate_filesystem_datasource(global_settings) as self.__filesystem_datasource:
             with self._generate_datasource(global_settings) as self.__datasource:
 
-                # TODO remove. the file system is managed by a data source now
                 # ###################################################
                 # # initialize output directory
                 # ###################################################

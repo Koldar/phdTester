@@ -99,7 +99,6 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         try:
             executor.execute_external_program(
                 program=' '.join(program),
-                # TODO this should be moved to cwd
                 working_directory=self.filesystem_datasource.get_path("cwd")
             )
         except subprocess.CalledProcessError as e:
@@ -135,8 +134,6 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         user_tcm = self.generate_test_context_mask()
         user_tcm.ut.algorithm = phd.masks.CannotBeNull()
 
-        # TODO generate an automatic generation of subtitle
-        # TODO generate path function interface
         self.generate_batch_of_plots(
             xaxis_name="run id",
             yaxis_name="time (us)",
