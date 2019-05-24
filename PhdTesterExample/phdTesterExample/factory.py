@@ -171,7 +171,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             return tc.te.sequenceSize
 
         user_tcm = self.generate_test_context_mask()
-        user_tcm.ut.algorithm = phd.masks.TestContextMaskNeedsNotNull()
+        user_tcm.ut.algorithm = phd.masks.CannotBeNull()
 
         # TODO generate an automatic generation of subtitle
         # TODO generate an interface for get_x_value function
@@ -190,7 +190,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         )
 
         user_tcm = self.generate_test_context_mask()
-        user_tcm.te.sequenceSize = phd.masks.TestContextMaskNeedsNotNull()
+        user_tcm.te.sequenceSize = phd.masks.CannotBeNull()
 
         self.generate_batch_of_plots(
             xaxis_name="sequence size",

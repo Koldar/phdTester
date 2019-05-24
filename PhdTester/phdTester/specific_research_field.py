@@ -586,7 +586,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # This because each plot should contain the "actual stuff under test"
             # so we don't want to discard some algorithms from scratch (this mask is used to gather algorithm csv)
             for o in self.generate_under_testing().options():
-                tcm_to_use.set_option(o, masks.TestContextMaskIgnore())
+                tcm_to_use.set_option(o, masks.Ignore())
 
             # first we need to set all the options from user_tcm: if the user wants to remove some algorithms, she can
             # do it here
@@ -600,9 +600,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # if the options in te are None, they are required to not be set
             for o in filter(lambda o2: tcm_to_use.get_option(o2) is None, te.options()):
                 if te.get_option(o) is not None:
-                    tcm_to_use.set_option(o, masks.TestContextMaskNeedToHaveValue(te.get_option(o)))
+                    tcm_to_use.set_option(o, masks.MustHaveValue(te.get_option(o)))
                 else:
-                    tcm_to_use.set_option(o, masks.TestContextMaskNeedsNull())
+                    tcm_to_use.set_option(o, masks.HasToBeNull())
 
             # some masks need to be first prepared in order to be correctly executed.
             # the parameters are mask dependent. To make this function generic, we have added a callable function
@@ -829,7 +829,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # This because each plot should contain the "actual stuff under test"
             # so we don't want to discard some algorithms from scratch (this mask is used to gather algorithm csv)
             for o in self.generate_under_testing().options():
-                tcm_to_use.set_option(o, masks.TestContextMaskIgnore())
+                tcm_to_use.set_option(o, masks.Ignore())
 
             # first we need to set all the options from user_tcm: if the user wants to remove some algorithms, she can
             # do it here
@@ -843,9 +843,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # if the options in te are None, they are required to not be set
             for o in filter(lambda o2: tcm_to_use.get_option(o2) is None, te.options()):
                 if te.get_option(o) is not None:
-                    tcm_to_use.set_option(o, masks.TestContextMaskNeedToHaveValue(te.get_option(o)))
+                    tcm_to_use.set_option(o, masks.MustHaveValue(te.get_option(o)))
                 else:
-                    tcm_to_use.set_option(o, masks.TestContextMaskNeedsNull())
+                    tcm_to_use.set_option(o, masks.HasToBeNull())
 
             # some masks need to be first prepared in order to be correctly executed.
             # the parameters are mask dependent. To make this function generic, we have added a callable function

@@ -6,12 +6,12 @@ from phdTester.model_interfaces import ITestContextMaskOption, ITestContext, ITe
     ISimpleTestContextMaskOption, IComplexTestContextMaskOption
 
 
-class TestContextMaskNeedsToBeSameAsNonComputation(ISimpleTestContextMaskOption):
+class MutHaveDynamicallyChosenValue(ISimpleTestContextMaskOption):
     """
     An option is compliant if it has the same value as the one generated in a previous computation.
 
-    This option mask is similar but very different than TestContextMaskNeedToHaveValue:
-    TestContextMaskNeedToHaveValue says that the value of the option needs to be static, while this one
+    This option mask is similar but very different than MustHaveValue:
+    MustHaveValue says that the value of the option needs to be static, while this one
     has avalue that may change during the same computation.
     """
 
@@ -69,7 +69,7 @@ class TestContextMaskNeedsToBeSameAsNonComputation(ISimpleTestContextMaskOption)
             return f"needs to be of a value dynamically obtained"
 
 
-class TestContextMaskNeedsToBeTheSameOverSet(IComplexTestContextMaskOption):
+class TestContextSetMustBeConstant(IComplexTestContextMaskOption):
     """
     An option value is compliant only if over a certain set remains the same
     """
@@ -106,7 +106,7 @@ class TestContextMaskNeedsToBeTheSameOverSet(IComplexTestContextMaskOption):
         return "has to be the same over a set"
 
 
-class TestContextMaskNeedsNotNull(ISimpleTestContextMaskOption):
+class CannotBeNull(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only if it's not null
     """
@@ -137,7 +137,7 @@ class TestContextMaskNeedsNotNull(ISimpleTestContextMaskOption):
         return "has not to be null"
 
 
-class TestContextMaskNeedToHaveValue(ISimpleTestContextMaskOption, commons.SlottedClass):
+class MustHaveValue(ISimpleTestContextMaskOption, commons.SlottedClass):
     """
     A concrete option value is compliant with this mask only if it has a very well specific value
     """
@@ -171,7 +171,7 @@ class TestContextMaskNeedToHaveValue(ISimpleTestContextMaskOption, commons.Slott
         return f"has to be {self.__value}"
 
 
-class TestContextMaskNeedsNotToHaveValue(ISimpleTestContextMaskOption):
+class CannotHaveValue(ISimpleTestContextMaskOption):
     """
     Option compliant with this mask are required not to be equal to a given value.
 
@@ -205,7 +205,7 @@ class TestContextMaskNeedsNotToHaveValue(ISimpleTestContextMaskOption):
         return f"can't have value {self.value}"
 
 
-class TestContextMaskNeedsToFollowPattern(ISimpleTestContextMaskOption):
+class HasToMatchPattern(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only its its string representation follow a specified regex
     """
@@ -237,7 +237,7 @@ class TestContextMaskNeedsToFollowPattern(ISimpleTestContextMaskOption):
         return f"needs to match regex \"{self._regex}\""
 
 
-class TestContextMaskNeedToBeInSet(ISimpleTestContextMaskOption):
+class MustBeInSet(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only if its value is inside a well specified set
     """
@@ -269,7 +269,7 @@ class TestContextMaskNeedToBeInSet(ISimpleTestContextMaskOption):
         return "has to be in [{}]".format(', '.join(map(str, self.values)))
 
 
-class NeedsNotToBeInSet(ISimpleTestContextMaskOption):
+class CannotBeInSet(ISimpleTestContextMaskOption):
 
     def __init__(self, prohibited_set: List[Any]):
         self.prohibited_set = prohibited_set
@@ -297,7 +297,7 @@ class NeedsNotToBeInSet(ISimpleTestContextMaskOption):
         return "has not to be in [{}]".format(', '.join(map(str, self.prohibited_set)))
 
 
-class TestContextMaskIgnore(ISimpleTestContextMaskOption):
+class Ignore(ISimpleTestContextMaskOption):
     """
     A concrete option value is always compliant with this mask
     """
@@ -325,7 +325,7 @@ class TestContextMaskIgnore(ISimpleTestContextMaskOption):
         return "ignore"
 
 
-class TestContextMaskNeedsNull(ISimpleTestContextMaskOption):
+class HasToBeNull(ISimpleTestContextMaskOption):
     """
     A concrete option value is compliant with this mask only if it is null
     """
