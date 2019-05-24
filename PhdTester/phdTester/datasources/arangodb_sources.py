@@ -292,9 +292,6 @@ class BinaryArangoDB(AbstractArangoDBResource):
     def _on_attached(self, datasource: "IDataSource"):
         pass
 
-    def can_handle_data_type(self, datasource: "IDataSource", data_type: str) -> bool:
-        return True
-
     def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str, content: Any):
         assert isinstance(datasource, ArangoDB)
 

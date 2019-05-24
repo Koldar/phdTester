@@ -1929,15 +1929,6 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def can_handle_data_type(self, datasource: "IDataSource", data_type: DataTypeStr) -> bool:
-        """
-        :param datasource: the data source we will operate on
-        :param data_type: the data_type of resource we need to check if this resource manager can effectively handle
-        :return: true if this resaource manager can handle `data_type`
-        """
-        pass
-
-    @abc.abstractmethod
     def _on_attached(self, datasource: "IDataSource"):
         """
         Code executed when the resource manager is registered to a particular datasource

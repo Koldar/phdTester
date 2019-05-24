@@ -11,9 +11,6 @@ class AbstractCsvResourceManager(ICsvResourceManager, abc.ABC):
     Add behaviours to a generic resource manager which can handle csvs
     """
 
-    def can_handle_data_type(self, datasource: "IDataSource", data_type: str) -> bool:
-        return data_type in ['csv']
-
     def iterate_over(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> Iterable[Dict[str, str]]:
         csv_content: str = self.get(datasource, path, ks001, data_type)
         with UnknownStringCsvReader(csv_content.splitlines()) as f:

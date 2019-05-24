@@ -116,9 +116,6 @@ class BinaryFileSystemResourceManager(AbstractFileSystemResourceManager):
     def is_compliant_with(self, datasource: "IDataSource") -> bool:
         return isinstance(datasource, FileSystem)
 
-    def can_handle_data_type(self, datasource: "IDataSource", data_type: str) -> bool:
-        return True
-
     def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str, content: Any):
         assert isinstance(datasource, FileSystem)
 
@@ -154,9 +151,6 @@ class ASCIIFileSystemResourceManager(AbstractFileSystemResourceManager):
 
     def is_compliant_with(self, datasource: "IDataSource") -> bool:
         return isinstance(datasource, FileSystem)
-
-    def can_handle_data_type(self, datasource: "IDataSource", data_type: str) -> bool:
-        return True
 
     def _on_attached(self, datasource: "IDataSource"):
         pass
