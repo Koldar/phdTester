@@ -144,7 +144,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def generate_option_graph(self) -> OptionGraph:
+    def _generate_option_graph(self) -> OptionGraph:
         """
         the option graph allows to setup dependencies between the options of your testing framework
         In my case, I had 2 heuristic functions (e.g., A and B), each with some set of options (A had alpha and beta
@@ -359,7 +359,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         # generate option graph and parse output
         ###################################################
         logging.info("parsing option graph")
-        self.__option_graph = self.generate_option_graph()
+        self.__option_graph = self._generate_option_graph()
         cli_commands = cli_commands if cli_commands is not None else sys.argv[1:]
         parse_output = self._generate_parser_from_option_graph(self.__option_graph, cli_commands)
 

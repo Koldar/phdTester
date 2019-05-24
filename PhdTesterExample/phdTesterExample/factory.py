@@ -25,7 +25,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
     def _get_ks001_equal(self, settings: "SortSettings") -> str:
         return "="
 
-    def generate_option_graph(self) -> "phd.OptionGraph":
+    def _generate_option_graph(self) -> "phd.OptionGraph":
 
         return phd.OptionBuilder().add_under_testing_multiplexer(
             name="algorithm",
