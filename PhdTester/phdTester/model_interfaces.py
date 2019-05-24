@@ -3,6 +3,7 @@ import copy
 import enum
 import itertools
 import logging
+import re
 
 import numpy as np
 import pandas as pd
@@ -11,7 +12,7 @@ from abc import ABC
 from typing import Any, Tuple, Iterable, Dict, List, Callable, Optional, Set
 
 from phdTester import commons
-from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, DataTypeStr
+from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, DataTypeStr, RegexStr
 from phdTester.exceptions import ResourceTypeUnhandledError
 from phdTester.graph import IMultiDirectedGraph
 from phdTester.ks001.ks001 import KS001, Aliases
@@ -1581,7 +1582,7 @@ class INaiveCsvFilter(ICsvFilter, abc.ABC):
     """
 
     @abc.abstractmethod
-    def is_valid(self, path: str, ks001: KS001Str, data_type: str, index: int) -> bool:
+    def is_valid(self, path: str, ks001: KS001Str, data_type: DataTypeStr, index: int) -> bool:
         """
         Check if a csv is valid based on its content
 
@@ -1612,7 +1613,7 @@ class ISingleCsvFilter(ICsvFilter, abc.ABC):
     """
 
     @abc.abstractmethod
-    def is_valid(self, path: str, csv_ks001str: KS001Str, csv_ks001: "KS001", data_type: str, index: int) -> bool:
+    def is_valid(self, path: str, csv_ks001str: KS001Str, csv_ks001: "KS001", data_type: DataTypeStr, index: int) -> bool:
         """
         Check if a csv is valid based on its content
 
@@ -1644,7 +1645,7 @@ class ITestContextCsvFilter(ICsvFilter, abc.ABC):
     """
 
     @abc.abstractmethod
-    def is_valid(self, path: str, csv_ks001str: KS001Str, data_type: str, csv_ks001: "KS001", tc: "ITestContext", index: int) -> bool:
+    def is_valid(self, path: str, csv_ks001str: KS001Str, data_type: DataTypeStr, csv_ks001: "KS001", tc: "ITestContext", index: int) -> bool:
         """
         Check if a csv is valid based on its content
 
@@ -1677,7 +1678,7 @@ class IComplexCsvFilter(ICsvFilter, abc.ABC):
     """
 
     @abc.abstractmethod
-    def is_valid(self, path: str, csv_ks0001str: KS001Str, csv_ks001: "KS001", data_type: str, index: int,
+    def is_valid(self, path: str, csv_ks0001str: KS001Str, csv_ks001: "KS001", data_type: DataTypeStr, index: int,
                  csv_data: List[GetSuchInfo]) -> bool:
         """
         Check if a csv is valid based on its content
@@ -1928,7 +1929,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def can_handle_data_type(self, datasource: "IDataSource", data_type: str) -> bool:
+    def can_handle_data_type(self, datasource: "IDataSource", data_type: DataTypeStr) -> bool:
         """
         :param datasource: the data source we will operate on
         :param data_type: the data_type of resource we need to check if this resource manager can effectively handle
@@ -1946,7 +1947,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str, content: Any):
+    def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: DataTypeStr, content: Any):
         """
         Upload a resource in the filesystem to the datasource by setting to a particular path
 
@@ -1963,7 +1964,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> Any:
+    def get(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: DataTypeStr) -> Any:
         """
         get the content of a particular file
 
@@ -1977,7 +1978,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_all(self, datasource: "IDataSource", path: str = None, data_type: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
+    def get_all(self, datasource: "IDataSource", path: str = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
         """
         get all the resources which are in `path` and have type `data_type`
 
@@ -1991,7 +1992,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def contains(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> bool:
+    def contains(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: DataTypeStr) -> bool:
         """
         Check if a resource exists in the data source
 
@@ -2006,7 +2007,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def remove(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str):
+    def remove(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: DataTypeStr):
         """
         Removes a resource in the data source
 
@@ -2022,7 +2023,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def iterate_over(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> Iterable[Any]:
+    def iterate_over(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: DataTypeStr) -> Iterable[Any]:
         """
         Open the resource specified and than perform an iteration of such resource.
 
@@ -2090,7 +2091,7 @@ class IDataSource(abc.ABC):
         Initialize the Datasource.
         """
         self.listeners = []
-        self.resource_managers: Dict[str, "IResourceManager"] = {}
+        self.resource_managers: List[Tuple[RegexStr, "IResourceManager"]] = []
 
     @abc.abstractmethod
     def __enter__(self) -> "IDataSource":
@@ -2125,15 +2126,27 @@ class IDataSource(abc.ABC):
         """
         pass
 
-    def get_manager_of(self, data_type: str) -> "IResourceManager":
+    def get_manager_of(self, data_type: DataTypeStr) -> "IResourceManager":
         """
         Get the manager responsible of handling resources of type `data_type`
-        :param data_type:
+        :param data_type: the extension whose resource manager we want to fetch
+        :raises ResourceTypeUnhandledError: if the data_type is not managed by anyone
+        :raises ValueError: if the data type is managed by multiple managers (this usually happens because the developer
+            used too broad patterns)
         :return:
         """
-        return self.resource_managers[data_type]
+        result = None
+        for (pattern, manager) in self.resource_managers:
+            if re.match(pattern, data_type):
+                if result is None:
+                    result = manager
+                else:
+                    raise ValueError(f"""data_type {data_type} can be managed both by {result} and by {manager}!""")
+        if result is None:
+            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
+        return result
 
-    def save_at(self, path: str, ks001: KS001Str, data_type: str, content: Any):
+    def save_at(self, path: str, ks001: KS001Str, data_type: DataTypeStr, content: Any):
         """
         Upload a file in the filesystem to the datasource by setting to a particular path
 
@@ -2146,12 +2159,10 @@ class IDataSource(abc.ABC):
         :param content: the content to upload to the database (as is, raw)
         :return:
         """
-        if data_type not in self.resource_managers:
-            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
 
-        self.resource_managers[data_type].save_at(self, path, ks001, data_type, content)
+        self.get_manager_of(data_type).save_at(self, path, ks001, data_type, content)
 
-    def get(self, path: str, ks001: KS001Str, data_type: str) -> Any:
+    def get(self, path: str, ks001: KS001Str, data_type: DataTypeStr) -> Any:
         """
         get the content of a particular file
         :param path: path of the file to load
@@ -2160,18 +2171,12 @@ class IDataSource(abc.ABC):
         :raises ResourceNotFoundError: if the resources was not present in the datasource
         :return:
         """
-        if data_type not in self.resource_managers:
-            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
+        return self.get_manager_of(data_type).get(self, path, ks001, data_type)
 
-        return self.resource_managers[data_type].get(self, path, ks001, data_type)
+    def get_all(self, path: str = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
+        return self.get_manager_of(data_type).get_all(self, path, data_type, colon, pipe, underscore, equal)
 
-    def get_all(self, path: str = None, data_type: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
-        if data_type not in self.resource_managers:
-            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
-
-        return self.resource_managers[data_type].get_all(self, path, data_type, colon, pipe, underscore, equal)
-
-    def contains(self, path: str, ks001: KS001Str, data_type: str) -> bool:
+    def contains(self, path: str, ks001: KS001Str, data_type: DataTypeStr) -> bool:
         """
         Check if a resource exists
 
@@ -2182,12 +2187,9 @@ class IDataSource(abc.ABC):
         :param data_type: type of the resource to check
         :return: true if the datasource has a resource as specified, false otherwise
         """
-        if data_type not in self.resource_managers:
-            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
+        return self.get_manager_of(data_type).contains(self, path, ks001, data_type)
 
-        return self.resource_managers[data_type].contains(self, path, ks001, data_type)
-
-    def remove(self, path: str, ks001: KS001Str, data_type: str):
+    def remove(self, path: str, ks001: KS001Str, data_type: DataTypeStr):
         """
         Removes a resource in the data source
 
@@ -2199,40 +2201,9 @@ class IDataSource(abc.ABC):
         :raises ResourceNotFoundError: if the resaource does not exist
         :return:
         """
-        if data_type not in self.resource_managers:
-            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
+        self.get_manager_of(data_type).remove(self, path, ks001, data_type)
 
-        self.resource_managers[data_type].remove(self, path, ks001, data_type)
-
-    # @abc.abstractmethod
-    # def save_csv_at(self, path: str, ks001: KS001Str, content: str):
-    #     """
-    #     Upload a csv in the data source
-    #
-    #     If the resources already exists, the function will overwrites it.
-    #     If the path was never used up until now, the function behaves normally.
-    #
-    #     :param path: path in the datasource where you want to save the csv to
-    #     :param ks001: the name of the resources we want to generate
-    #     :param content: the content of the resource we want to generate
-    #
-    #     :return:
-    #     """
-    #     # self.save_generic_data_at(csv_filename, path=path, data_type=data_type)
-    #     pass
-
-    # @abc.abstractmethod
-    # def get_csv(self, path: str, ks001: KS001Str) -> str:
-    #     """
-    #     get a csv string content from the datasource
-    #     :param path: the path where to fetch the csv
-    #     :param ks001: the name of the resource we want to load
-    #     :raises ResourceNotFoundError: if the resources was not present in the datasource
-    #     :return: the string containing the csv file content
-    #     """
-    #     pass
-
-    def iterate_over(self, path: str, ks001: KS001Str, data_type: str) -> Iterable[Any]:
+    def iterate_over(self, path: str, ks001: KS001Str, data_type: DataTypeStr) -> Iterable[Any]:
         """
         Open the resource specified and than perform an iteration of such resource.
 
@@ -2243,15 +2214,12 @@ class IDataSource(abc.ABC):
         :param data_type:
         :return:
         """
-        if data_type not in self.resource_managers:
-            raise ResourceTypeUnhandledError(f"{data_type} is not handled by {self.name()}")
-
-        yield from self.resource_managers[data_type].iterate_over(self, path, ks001, data_type)
+        yield from self.get_manager_of(data_type).iterate_over(self, path, ks001, data_type)
 
     def get_suchthat(self,
                             filters: List[ICsvFilter] = None,
                             test_context_template: "ITestContext" = None,
-                            path: str = None, data_type: str = None,
+                            path: str = None, data_type: DataTypeStr = None,
                             force_generate_ks001: bool = False, force_generate_textcontext: bool = False, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[GetSuchInfo]:
         """
         get all the csv data in the datasource which follows the condition
@@ -2286,7 +2254,7 @@ class IDataSource(abc.ABC):
         if test_context_template is None and (has_single_filters or has_testcontext_filters or has_complex_filters):
             raise ValueError(f"rtest context template is None but we strictly require it since you have specified either a single filter or a complex one!")
 
-        def handle_generic_data(i: int, path: str, ks001str: str, data_type: str) -> Tuple[bool, Optional["ITestContext"], Optional["KS001"], Optional[str]]:
+        def handle_generic_data(i: int, path: str, ks001str: str, data_type: DataTypeStr) -> Tuple[bool, Optional["ITestContext"], Optional["KS001"], Optional[str]]:
             logging.debug(f"considering {path}/{ks001str} (type={data_type})...")
             if not has_naive_filters and not has_single_filters and not has_testcontext_filters and not has_complex_filters:
                 # if there are no filters we accept everything!
@@ -2397,34 +2365,7 @@ class IDataSource(abc.ABC):
                 # we know for sure that both csv_ks001 and test_context are not None
                 yield GetSuchInfo(path, ks001str, data_type, csv_ks001, test_context)
 
-    # @abc.abstractmethod
-    # def contains_csv(self, path: str, ks001: KS001Str) -> bool:
-    #     """
-    #     Check if a csv resource exists
-    #
-    #     Function works even when this instance of path is used for the first time
-    #
-    #     :param path: the path of the resource
-    #     :param ks001: the name of the resource. name must be compliant with KS001 format
-    #     :return: true if the datasource has a resource as specified, false otherwise
-    #     """
-    #     pass
-    #
-    # @abc.abstractmethod
-    # def remove_csv(self, path: str, ks001: KS001Str):
-    #     """
-    #     Removes a resource in the data source
-    #
-    #     The function works even when this instance of path is used for the first time
-    #
-    #     :param path: the path of the resource
-    #     :param ks001: the name of the resource. name must be compliant with KS001 format
-    #     :raises ResourceNotFoundError: if the resaource does not exist
-    #     :return:
-    #     """
-    #     pass
-
-    def transfer_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: str, to_path: str = None, to_ks001: KS001Str = None, to_data_type: str = None, remove: bool = False):
+    def transfer_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: DataTypeStr, to_path: str = None, to_ks001: KS001Str = None, to_data_type: DataTypeStr = None, remove: bool = False):
         """
         Transfer the resource from the current data source to another one. You can optionally specify
         new path, data type and ks001 in the target data source.
@@ -2459,39 +2400,7 @@ class IDataSource(abc.ABC):
 
         other.save_at(to_path, to_ks001, to_data_type, generic_data)
 
-    # def transfer_csv_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str,
-    #                          to_path: str = None, to_ks001: KS001Str = None, remove: bool = False):
-    #     """
-    #     Transfer the csv resource from the current data source to another one. You can optionally specify
-    #     new path and ks001 in the target data source.
-    #
-    #     The function is garantueed to do nothing if self is equal to other and
-    #     the start position ids the same of end position
-    #
-    #     :param other: the other datasource that will receive the resources from the current one
-    #     :param from_path: the path of the resource to transfer in self
-    #     :param from_ks001: the name of the reosurce to trasnfer in self
-    #     :param to_path: the path the transferred resource will have in the other datasource. If None it will be
-    #         the same as before
-    #     :param to_ks001: the name the transferred resource will have in the other datasource. If None it will be
-    #         the same as before
-    #     :param remove: if True we will remove the resource from "self" datasource. Otherwise the resource will be
-    #         copied "as is"
-    #     :raises ResourceNotFoundError: if the resource does not exist in the current data source
-    #     :return:
-    #     """
-    #     to_path = to_path or from_path
-    #     to_ks001 = to_ks001 or from_ks001
-    #     if self == other and from_path == to_path and from_ks001 == to_ks001:
-    #         return
-    #
-    #     csv_content = self.get_csv(path=from_path, ks001=from_ks001)
-    #     if remove:
-    #         self.remove_csv(from_path, from_ks001)
-    #
-    #     other.save_csv_at(to_path, to_ks001, csv_content)
-
-    def move_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: str,
+    def move_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: DataTypeStr,
                              to_path: str = None, to_ks001: KS001Str = None):
         """
         Shortcut for transfer_csv_to  with remove set to True
@@ -2507,7 +2416,7 @@ class IDataSource(abc.ABC):
                          to_path=to_path, to_ks001=to_ks001, to_data_type=from_data_type, remove=True
                          )
 
-    def copy_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: str,
+    def copy_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: DataTypeStr,
                     to_path: str = None, to_ks001: KS001Str = None):
         """
         Shortcut for transfer_csv_to  with remove set to False
@@ -2528,7 +2437,7 @@ class IDataSource(abc.ABC):
     def move_to_suchthat(self,
                               other: "IDataSource",
                               from_path: str,
-                              data_type: str = None, to_path: str = None,
+                              data_type: DataTypeStr = None, to_path: str = None,
                               filters: List[ICsvFilter] = None,
                               test_context_template: "ITestContext" = None):
         for getsuchinfo in self.get_suchthat(
@@ -2539,7 +2448,7 @@ class IDataSource(abc.ABC):
     def copy_to_suchthat(self,
                               other: "IDataSource",
                               from_path: str,
-                              data_type: str = None, to_path: str = None,
+                              data_type: DataTypeStr = None, to_path: str = None,
                               filters: List[ICsvFilter] = None,
                               test_context_template: "ITestContext" = None):
         for getsuchinfo in self.get_suchthat(
@@ -2549,7 +2458,7 @@ class IDataSource(abc.ABC):
 
     def remove_suchthat(self,
                                 from_path: str,
-                                data_type: str = None,
+                                data_type: DataTypeStr = None,
                                 filters: List[ICsvFilter] = None,
                                 test_context_template: "ITestContext" = None):
         for getsuchinfo in self.get_suchthat(
@@ -2557,15 +2466,43 @@ class IDataSource(abc.ABC):
                 path=from_path, data_type=data_type):
             self.remove(getsuchinfo.path, getsuchinfo.name, data_type)
 
-    def register_resource_manager(self, resource_type: str, manager: "IResourceManager"):
-        self.resource_managers[resource_type] = manager
+    def register_resource_manager(self, resource_type: RegexStr, manager: "IResourceManager"):
+        """
+        Plugin a resource manager that will manage the given resource type
+
+        :param resource_type: pattern representing all the extensions the manager will manage. The pattern is in form
+            of python regex. For example "csv" or "c[a-z]*v"
+        :param manager: the manager to register
+        :raises KeyError: if the `resource_type` pattern is already present
+        :return:
+        """
+        for (pattern, _) in self.resource_managers:
+            if pattern == resource_type:
+                raise KeyError(f"{resource_type} is already present in the managers!")
+
+        self.resource_managers.append((resource_type, manager))
         manager._on_attached(self)
 
-    def unregister_resource_manager(self, resource_type: str):
-        del self.resource_managers[resource_type]
+    def unregister_resource_manager(self, resource_type: RegexStr):
+        """
+        Unregister a pattern
+
+        Do nothing if the pattern is not present in the managers
+
+        :param resource_type: the pattern of resource type to unregister
+        :return:
+        """
+        for (i, (pattern, manager)) in enumerate(self.resource_managers):
+            if pattern == resource_type:
+                del self.resource_managers[i]
+                break
 
     def unregister_all_resource_managers(self):
-        self.resource_managers = {}
+        """
+        Unregister all resoruce managers
+        :return:
+        """
+        self.resource_managers = []
 
     def add_datasource_listener(self, listener: "IDataSourceListener"):
         self.listeners.append(listener)

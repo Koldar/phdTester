@@ -7,6 +7,9 @@ from phdTester.model_interfaces import IResourceManager, IDataSource, ICsvResour
 
 
 class AbstractCsvResourceManager(ICsvResourceManager, abc.ABC):
+    """
+    Add behaviours to a generic resource manager which can handle csvs
+    """
 
     def can_handle_data_type(self, datasource: "IDataSource", data_type: str) -> bool:
         return data_type in ['csv']

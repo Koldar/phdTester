@@ -2,6 +2,10 @@
 KS001Str = str
 PathStr = str
 DataTypeStr = str
+RegexStr = str
+"""
+A string representing a python3.6 regular expression
+"""
 
 
 class GetSuchInfo(object):

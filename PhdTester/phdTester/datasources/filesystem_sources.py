@@ -8,7 +8,7 @@ import pandas as pd
 
 from phdTester import commons
 from phdTester.common_types import KS001Str, PathStr, DataTypeStr
-from phdTester.datasources.resource_mangers import AbstractCsvResourceManager
+from phdTester.datasources.resource_managers import AbstractCsvResourceManager
 from phdTester.exceptions import ResourceNotFoundError
 from phdTester.model_interfaces import IDataSource, IResourceManager
 
@@ -50,7 +50,10 @@ class FileSystem(IDataSource):
         os.makedirs(os.path.abspath(os.path.join(self.root, *p)), exist_ok=True)
 
 
-class AbstractFileSystem(IResourceManager, abc.ABC):
+class AbstractFileSystemResourceManager(IResourceManager, abc.ABC):
+    """
+    A generic resource manager compliant only with FileSystem data source
+    """
 
     def recursive_files_iterator(self, path: str, relative_to: str) -> Iterable[str]:
         for x in os.scandir(path):
@@ -105,7 +108,7 @@ class AbstractFileSystem(IResourceManager, abc.ABC):
         return os.path.abspath(result)
 
 
-class BinaryFileSystem(AbstractFileSystem):
+class BinaryFileSystemResourceManager(AbstractFileSystemResourceManager):
 
     def _on_attached(self, datasource: "IDataSource"):
         pass
@@ -144,8 +147,42 @@ class BinaryFileSystem(AbstractFileSystem):
                 yield c
 
 
-#TODO are we sure this should be intherit from file system and not only from resource manager???
-class CsvFileSystem(AbstractFileSystem, AbstractCsvResourceManager):
+class ASCIIFileSystemResourceManager(AbstractFileSystemResourceManager):
+    """
+    A resource manager which reads an ASCII file and can iterate the file line by line
+    """
+
+    def is_compliant_with(self, datasource: "IDataSource") -> bool:
+        return isinstance(datasource, FileSystem)
+
+    def can_handle_data_type(self, datasource: "IDataSource", data_type: str) -> bool:
+        return True
+
+    def _on_attached(self, datasource: "IDataSource"):
+        pass
+
+    def save_at(self, datasource: "FileSystem", path: PathStr, ks001: KS001Str, data_type: DataTypeStr, content: Any):
+        abs_filename = self._gen_absfile(datasource, path, basename=ks001, extension='csv')
+        os.makedirs(os.path.dirname(abs_filename), exist_ok=True)
+        with open(abs_filename, "w") as f:
+            f.write(content)
+
+    def get(self, datasource: "FileSystem", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Any:
+        abs_filename = self._gen_absfile(datasource, path, basename=ks001, extension=data_type)
+        if not os.path.exists(abs_filename):
+            raise ResourceNotFoundError(f"resource {abs_filename} not found!")
+        with open(abs_filename, "r") as f:
+            return f.read()
+
+    def iterate_over(self, datasource: "FileSystem", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Iterable[Any]:
+        abs_filename = self._gen_absfile(datasource, path, basename=ks001, extension=data_type)
+        if not os.path.exists(abs_filename):
+            raise ResourceNotFoundError(f"resource {abs_filename} not found!")
+        with open(abs_filename, "r") as f:
+            yield from f.readlines()
+
+
+class CsvFileSystemResourceManager(AbstractFileSystemResourceManager, AbstractCsvResourceManager):
 
     def __init__(self):
         IResourceManager.__init__(self)

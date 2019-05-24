@@ -9,7 +9,7 @@ from arango.database import Database
 
 from phdTester import commons
 from phdTester.common_types import KS001Str, PathStr, DataTypeStr
-from phdTester.datasources.resource_mangers import AbstractCsvResourceManager
+from phdTester.datasources.resource_managers import AbstractCsvResourceManager
 from phdTester.exceptions import ResourceNotFoundError
 from phdTester.model_interfaces import IDataSource, IResourceManager
 

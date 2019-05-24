@@ -63,18 +63,18 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
     # TODO might be default to datasource if _generate_datasource is a FileSystem
     def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.datasources.FileSystem":
         result = phd.datasources.FileSystem(root=settings.outputDirectory)
-        # orgqanize the filesystem as well
-        result.make_folders("cwd")
-        result.make_folders("csvs")
         # TODO bny default the file system cannot handle even csv... we should correct this
         result.register_resource_manager(
-            resource_type="csv",
-            manager=phd.datasources.CsvFileSystem()
+            resource_type=r"(c)?sv",
+            manager=phd.datasources.CsvFileSystemResourceManager()
         )
 
         return result
 
     def generate_output_directory_structure(self, filesystem: "phd.datasources.FileSystem", settings: "SortSettings"):
+        filesystem.make_folders("images")
+        filesystem.make_folders("csvs")
+        filesystem.make_folders("cwd")
         # TODO remove it because it's dependent to file system data sourc
         pass
 
@@ -157,7 +157,6 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             from_data_type='csv',
             to_path="csvs",
         )
-
 
     def generate_plots(self, settings: "phd.ITestingGlobalSettings",
                        under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
