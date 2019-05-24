@@ -546,8 +546,8 @@ class AbstractTestContext(ITestContext, abc.ABC):
     def __init__(self, ut: "IStuffUnderTest", te: "ITestEnvironment"):
         ITestContext.__init__(self, ut=ut, te=te)
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def ut(self) -> "IStuffUnderTest":
         """
         Return the stuff under test
@@ -570,8 +570,8 @@ class AbstractTestContext(ITestContext, abc.ABC):
         """
         pass
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def te(self) -> "ITestEnvironment":
         """
         Return the test environment
