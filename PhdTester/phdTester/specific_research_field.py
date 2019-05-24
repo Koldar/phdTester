@@ -25,7 +25,6 @@ from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestC
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
     ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict
 from phdTester.options_builder import OptionGraph
-from phdTester.paths import ImportantPaths
 from phdTester.plotting import matplotlib_plotting
 from phdTester.plotting.common import DefaultAxis, DefaultText, DefaultSinglePlot, StringPlotTextFormatter
 
@@ -42,7 +41,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
     def __init__(self):
         # used only when generating plot as cache. No other purposes
         self.__option_graph: OptionGraph = None
-        self.__paths: ImportantPaths = None
         self.__under_test_dict_values: Dict[str, List[Any]] = None
         self.__test_environment_dict_values: Dict[str, List[Any]] = None
         """
@@ -145,22 +143,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         pass
 
-    # FIXME I think ImportantPaths structure is now deprecated in favor of FileSystem datasource!
-    @abc.abstractmethod
-    def generate_paths(self, settings: "ITestingGlobalSettings") -> ImportantPaths:
-        """
-        generates a structure containing all the important paths of your research field
-        :param settings: the global immutable settings driving the test
-        :return:
-        """
-        pass
-
-    @property
-    def paths(self) -> "ImportantPaths":
-        if self.__paths is None:
-            raise ValueError(f"we still haven't set the path!")
-        return self.__paths
-
     @abc.abstractmethod
     def generate_option_graph(self) -> OptionGraph:
         """
@@ -179,10 +161,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         return self.__option_graph
 
     @abc.abstractmethod
-    def generate_output_directory_structure(self, paths: "ImportantPaths", settings: "ITestingGlobalSettings"):
+    def generate_output_directory_structure(self, filesystem: "filesystem_sources.FileSystem", settings: "ITestingGlobalSettings"):
         """
         generate the structure in the output folder needed to generate the tests
-        :param paths:
+        :param filesystem: a datasource representing the root of the output directory
         :param settings:
         """
         pass
@@ -272,11 +254,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def generate_test_context_repo(self, paths: "ImportantPaths", settings: "ITestingGlobalSettings") -> "ITestContextRepo":
+    def generate_test_context_repo(self, settings: "ITestingGlobalSettings") -> "ITestContextRepo":
         """
         generate an object contaiing all the tests we need to perform.
-        This object may be queried againts
-        :param paths: structure containing all the interesting paths in the framework
+        This object may be queried against
         :param settings: structure containing all the global options in the framework
         :return:
         """
@@ -317,24 +298,23 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def perform_test(self, paths: ImportantPaths, tc: ITestContext, global_settings: "ITestingGlobalSettings"):
+    def perform_test(self, tc: ITestContext, global_settings: "ITestingGlobalSettings"):
         pass
 
     @abc.abstractmethod
-    def generate_plots(self, paths: ImportantPaths, settings: "ITestingGlobalSettings", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
+    def generate_plots(self, settings: "ITestingGlobalSettings", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
         pass
 
     @abc.abstractmethod
-    def generate_csvs(self, paths: ImportantPaths, settings: "ITestingGlobalSettings", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
+    def generate_csvs(self, psettings: "ITestingGlobalSettings", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
         pass
 
 
     @abc.abstractmethod
-    def generate_report(self, paths: ImportantPaths, settings: "ITestingGlobalSettings", tests_performed: "ITestContextRepo", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
+    def generate_report(self, settings: "ITestingGlobalSettings", tests_performed: "ITestContextRepo", under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
         """
         Generate a report containing the test outcome images
 
-        :param paths: structure used to fetch important paths from the file system
         :param settings:  structure containing important global options
         :param tests_performed: the tests we have performed in the previous steps
         :param under_test_values: set of options set for the stuff under test
@@ -396,29 +376,13 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         with self._generate_filesystem_datasource(global_settings) as self.__filesystem_datasource:
             with self._generate_datasource(global_settings) as self.__datasource:
-                self.__paths = self.generate_paths(global_settings)
-
-                ###################################################
-                # Reset tmp directory
-                ###################################################
-                #self.datasource.clear()
-                try:
-                    pass
-                    # FIXME readd shutil.rmtree(self.__paths.get_tmp_dir())
-                except FileNotFoundError:
-                    # the direcotry does not exist. We do nothing
-                    pass
 
                 # TODO remove. the file system is managed by a data source now
                 # ###################################################
                 # # initialize output directory
                 # ###################################################
-                # logging.info("generating output directory structure...")
-                # os.makedirs(self.paths.get_cwd_dir(), exist_ok=True)
-                # os.makedirs(self.paths.get_csv_dir(), exist_ok=True)
-                # os.makedirs(self.paths.get_image_dir(), exist_ok=True)
-                # os.makedirs(self.paths.get_tmp_dir(), exist_ok=True)
-                # self.generate_output_directory_structure(self.__paths, global_settings)
+                logging.info("setupping filesystem output directory structure...")
+                self.generate_output_directory_structure(self.filesystem_datasource, global_settings)
 
                 ###################################################
                 # generate all the possible values each option can have
@@ -433,7 +397,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 # generate tests to perform
                 ###################################################
                 logging.info("generating all the tests which are worthwhile...")
-                tests_to_perform = self.generate_test_context_repo(self.__paths, global_settings)
+                tests_to_perform = self.generate_test_context_repo(global_settings)
                 # this tests need to be sorted by test environment. In this way for every test enviroment we test in pack
                 # all the algorithms under test
                 for r in commons.distinct(self._generate_test_contexts_from_option_graph(self.__option_graph, self.__under_test_dict_values, self.__test_environment_dict_values)):
@@ -450,7 +414,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 for i, tc in enumerate(sorted(tests_to_perform, key=lambda t: t.te.get_order_key())):
                     logging.critical("performing {} over {} ({}%)".format(i, len(tests_to_perform), ((i*100.)/len(tests_to_perform))))
                     logging.critical(f"test environment is {tc.te}")
-                    self.perform_test(self.__paths, tc, global_settings)
+                    self.perform_test(tc, global_settings)
                 self.end_perform_test(self.under_test_dict_values, self.test_environment_dict_values, global_settings)
 
                 ###################################################
@@ -458,14 +422,14 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 ###################################################
 
                 logging.info("generating csvs...")
-                self.generate_csvs(self.__paths, global_settings, self.__under_test_dict_values, self.__test_environment_dict_values)
+                self.generate_csvs(global_settings, self.__under_test_dict_values, self.__test_environment_dict_values)
 
 
                 ###################################################
                 # generate the plots
                 ###################################################
                 logging.info("generating plots...")
-                self.generate_plots(self.__paths, global_settings, self.__under_test_dict_values, self.__test_environment_dict_values)
+                self.generate_plots(global_settings, self.__under_test_dict_values, self.__test_environment_dict_values)
 
                 ###################################################
                 # generate an automatic report
@@ -911,7 +875,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             logging.info(f"test context template is {tcm_to_use}")
             result = self.generate_plot_from_template(
                 test_context_template=tcm_to_use,
-                paths=self.__paths,
                 xaxis_name=xaxis_name,
                 yaxis_name=yaxis_name,
                 title=title,
@@ -1022,7 +985,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                     get_y_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
                                     get_x_value: Callable[["ITestContext", PathStr, KS001Str, pd.DataFrame, int, ICsvRow], float],
                                     y_aggregator: IAggregator,
-                                    paths: "ImportantPaths",
                                     xaxis_name: str,
                                     yaxis_name: str,
                                     title: str,
@@ -1059,7 +1021,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             It returns the float variable representing the x value
         :param y_aggregator: class which allows the merging of 2 y values with the same x value (associated to a specific
         stuff under test)
-        :param paths: structure containing all the relevant paths for your research
         :param xaxis_name: name of the x axis
         :param yaxis_name: name of the y axis
         :param title: title of the plot
@@ -1110,7 +1071,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             xaxis_name=xaxis_name,
             functions_to_print=functions_to_print,
             test_context_template=test_context_template,
-            paths=paths,
             image_suffix=image_suffix,
             subtitle_function=subtitle_function,
             title=title,
@@ -1387,7 +1347,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
     def _print_images(self,
                       functions_to_print: "IFunctionsDict",
-                      paths: "ImportantPaths",
                       test_context_template: ITestContextMask,
                       xaxis_name: str,
                       yaxis_name: str,
@@ -1399,7 +1358,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         Creates an image inside the file system datasource, under "images" folder
 
         :param functions_to_print: the functions to print
-        :param paths:
         :param test_context_template: the mask we will use to generate the name. a parameter will be included in the
             name only if it represents a well specified value
         :param xaxis_name: name of the x axis

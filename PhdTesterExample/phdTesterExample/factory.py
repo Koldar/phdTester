@@ -74,12 +74,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
 
         return result
 
-
-    def generate_paths(self, settings: "SortSettings") -> "ImportantPaths":
-        # TODO remove it since it's not used anymore
-        pass
-
-    def generate_output_directory_structure(self, paths: "ImportantPaths", settings: "SortSettings"):
+    def generate_output_directory_structure(self, filesystem: "phd.datasources.FileSystem", settings: "SortSettings"):
         # TODO remove it because it's dependent to file system data sourc
         pass
 
@@ -111,8 +106,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         return SortTestContextMask(ut=self.generate_stuff_under_test_mask(), te=self.generate_test_environment_mask())
 
     # todo remove. It's not used anywhere
-    def generate_test_context_repo(self, paths: "ImportantPaths",
-                                   settings: "phd.ITestingGlobalSettings") -> "ITestContextRepo":
+    def generate_test_context_repo(self, settings: "phd.ITestingGlobalSettings") -> "ITestContextRepo":
         return SimpleTestContextRepo()
 
     #TODO optional. Used only to execute code before the test
@@ -126,7 +120,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         pass
 
     #TODO paths should be removed
-    def perform_test(self, paths: "ImportantPaths", tc: SortTestContext, global_settings: "SortSettings"):
+    def perform_test(self, tc: SortTestContext, global_settings: "SortSettings"):
         output_template_ks001 = tc.to_ks001(identifier='main')
         performance_ks001 = output_template_ks001.append(
             phd.KS001.from_template(output_template_ks001, label="kind", type="main"), in_place=False
@@ -165,7 +159,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         )
 
 
-    def generate_plots(self, paths: "ImportantPaths", settings: "phd.ITestingGlobalSettings",
+    def generate_plots(self, settings: "phd.ITestingGlobalSettings",
                        under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
 
         def get_run_id(tc: "SortTestContext", path: str, data_type: str, content: pd.DataFrame, rowid: int, row: "PerformanceCsvRow") -> float:
@@ -212,11 +206,11 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             path_function=lambda tcm: "csvs",
         )
 
-    def generate_csvs(self, paths: "ImportantPaths", settings: "phd.ITestingGlobalSettings",
+    def generate_csvs(self, settings: "phd.ITestingGlobalSettings",
                       under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
         pass
 
-    def generate_report(self, paths: "ImportantPaths", settings: "phd.ITestingGlobalSettings",
+    def generate_report(self, settings: "phd.ITestingGlobalSettings",
                         tests_performed: "ITestContextRepo", under_test_values: Dict[str, List[Any]],
                         test_environment_values: Dict[str, List[Any]]):
         pass
