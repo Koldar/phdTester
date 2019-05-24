@@ -43,3 +43,11 @@ sudo apt-get install tex-live
 Concepts
 ========
 
+In the following we will list important concepts that needs to be understood in order to use the framework:
+
+Stuff under test
+----------------
+
+The "stuff under test" is the algorithm, procedure, model that you want to benchmark together with every configuration attached to it. For example if you want to test sorting algorithms, "stuffs under test" is the quicksort, bubblesort, mergesort, heapsort, randomsort. If a "stuff under test" has a parameter (for instance, heapsort implementation may require the maximum size of the underlying heap), such parameter is included in the "stuff under test". "Stuff under test" is treated in a special way when computing plots and csvs, so be sure to correctly identifying it;
+
+
