@@ -1,6 +1,7 @@
 import re
 from typing import Any, Iterable, List
 
+from phdTester import commons
 from phdTester.model_interfaces import ITestContextMaskOption, ITestContext, ITestEnvironment, \
     ISimpleTestContextMaskOption, IComplexTestContextMaskOption
 
@@ -136,19 +137,25 @@ class TestContextMaskNeedsNotNull(ISimpleTestContextMaskOption):
         return "has not to be null"
 
 
-class TestContextMaskNeedToHaveValue(ISimpleTestContextMaskOption):
+class TestContextMaskNeedToHaveValue(ISimpleTestContextMaskOption, commons.SlottedClass):
     """
     A concrete option value is compliant with this mask only if it has a very well specific value
     """
+
+    __slots__ = ('__value', )
+
+    def __init__(self, value: Any):
+        ITestContextMaskOption.__init__(self)
+        self.__value = value
 
     def represents_a_well_specified_value(self) -> bool:
         return True
 
     def get_well_specified_value_as_string(self) -> str:
-        return str(self.value)
+        return str(self.__value)
 
     def get_well_specified_value(self) -> Any:
-        return self.value  # TODO make value private or protected
+        return self.__value
 
     def set_params(self, **kwargs):
         pass
@@ -157,15 +164,11 @@ class TestContextMaskNeedToHaveValue(ISimpleTestContextMaskOption):
     def can_operate(self) -> bool:
         return True
 
-    def __init__(self, value: Any):
-        ITestContextMaskOption.__init__(self)
-        self.value = value
-
     def is_compliant(self, actual: "Any") -> bool:
-        return actual == self.value
+        return actual == self.__value
 
     def __str__(self):
-        return f"has to be {self.value}"
+        return f"has to be {self.__value}"
 
 
 class TestContextMaskNeedsNotToHaveValue(ISimpleTestContextMaskOption):
