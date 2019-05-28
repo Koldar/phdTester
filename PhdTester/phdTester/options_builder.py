@@ -135,7 +135,6 @@ class OptionBuilder(abc.ABC):
         Adds a node in the option graph representing a "test environment" option which can have infinite possible
         values. For example you can use it when you need to declare a integer option.
 
-
         :param name: name of the option. If you add "foo" you will need to write in CLI "--foo_values"
         :param option_type: the type of the option
         :param ahelp: description of the option
