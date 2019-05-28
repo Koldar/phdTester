@@ -1337,6 +1337,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 # force the creation of a dictionary from the pandas data structures
                 d = {k: d[k] for k in d.keys()}
                 csv_outcome = self.get_csv_row(d, csv_info.ks001)
+                csv_outcome.set_options(d)
                 try:
                     x_value = float(get_x_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome))
                     y_value = float(get_y_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome))

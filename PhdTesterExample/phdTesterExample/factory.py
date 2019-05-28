@@ -171,10 +171,8 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         pass
 
     # TODO allows multiple csv rows. This should be done by removing this method
-    # TODO maybe we should also automatize the set of "d" set_options(d)
     def get_csv_row(self, d: Dict[str, str], ks_csv: "phd.KS001") -> "PerformanceCsvRow":
         result = PerformanceCsvRow()
-        result.set_options(d)
         return result
 
 
