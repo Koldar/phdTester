@@ -59,23 +59,23 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         filesystem.make_folders("csvs")
         filesystem.make_folders("cwd")
 
-    # def generate_environment(self) -> "phd.ITestEnvironment":
-    #     return SortEnvironment()
-    #
-    # def generate_under_testing(self) -> "phd.IStuffUnderTest":
-    #     return SortAlgorithm()
-    #
-    # def _generate_test_context(self, ut: "SortAlgorithm", te: "SortEnvironment") -> "phd.ITestContext":
-    #     return SortTestContext(ut=ut, te=te)
+    def generate_environment(self) -> "phd.ITestEnvironment":
+        return SortEnvironment()
 
-    # def generate_stuff_under_test_mask(self) -> "SortAlgorithmMask":
-    #     return SortAlgorithmMask()
-    #
-    # def generate_test_environment_mask(self) -> "SortEnvironmentMask":
-    #     return SortEnvironmentMask()
-    #
-    # def _generate_test_context_mask(self, ut: "SortAlgorithmMask", te: "SortEnvironmentMask") -> "SortTestContextMask":
-    #     return SortTestContextMask(ut=self.generate_stuff_under_test_mask(), te=self.generate_test_environment_mask())
+    def generate_under_testing(self) -> "phd.IStuffUnderTest":
+        return SortAlgorithm()
+
+    def _generate_test_context(self, ut: "SortAlgorithm", te: "SortEnvironment") -> "phd.ITestContext":
+        return SortTestContext(ut=ut, te=te)
+
+    def generate_stuff_under_test_mask(self) -> "SortAlgorithmMask":
+        return SortAlgorithmMask()
+
+    def generate_test_environment_mask(self) -> "SortEnvironmentMask":
+        return SortEnvironmentMask()
+
+    def _generate_test_context_mask(self, ut: "SortAlgorithmMask", te: "SortEnvironmentMask") -> "SortTestContextMask":
+        return SortTestContextMask(ut=self.generate_stuff_under_test_mask(), te=self.generate_test_environment_mask())
 
     def perform_test(self, tc: "phd.ITestContext", global_settings: "phd.IGlobalSettings"):
         output_template_ks001 = tc.to_ks001(identifier='main')

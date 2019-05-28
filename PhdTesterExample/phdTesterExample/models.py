@@ -1,5 +1,7 @@
 from typing import Dict
 
+import string_utils
+
 import phdTester as phd
 
 
@@ -43,20 +45,19 @@ class SortEnvironment(phd.AbstractTestingEnvironment):
     def get_order_key(self) -> str:
         return "_".join(map(lambda o: f"{o}={str(self.get_option(o))}", self.options()))
 
-    # TODO I should generate a mewthod which creates alias automatically (by looking at the camelCase
-    @property
-    def key_alias(self) -> Dict[str, str]:
-        return {
-            "sequenceSize": "ss",
-            "sequenceType": "st",
-            "lowerBound": "lb",
-            "upperBound": "ub",
-            "run": "r",
-        }
-
-    @property
-    def value_alias(self) -> Dict[str, str]:
-        return {}
+    # @property
+    # def key_alias(self) -> Dict[str, str]:
+    #     return {
+    #         "sequenceSize": "ss",
+    #         "sequenceType": "st",
+    #         "lowerBound": "lb",
+    #         "upperBound": "ub",
+    #         "run": "r",
+    #     }
+    #
+    # @property
+    # def value_alias(self) -> Dict[str, str]:
+    #     return {}
 
     def __init__(self):
         phd.AbstractTestingEnvironment.__init__(self)

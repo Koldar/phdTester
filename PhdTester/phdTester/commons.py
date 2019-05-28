@@ -14,11 +14,39 @@ from multiprocessing import Process
 from typing import Any, Iterable, Callable, Union, Dict, Tuple, List
 
 import pandas
+import string_utils
 
 
 class SlottedClass(object):
 
     __slots__ = ()
+
+
+def generate_aliases(strings: List[str]) -> Dict[str, str]:
+    """
+    generate a set of aliases from the given set of strings.
+
+
+
+    :param strings:
+    :return:
+    """
+    result = {}
+    for option in strings:
+        if string_utils.is_camel_case(option):
+            # fetch the first an all the uppercase characters to generate the alias
+            alias: str = option[0] + ''.join(filter(lambda x: x.isupper(), option))
+        elif string_utils.is_snake_case(option, "_"):
+            # TODO implement
+            raise NotImplementedError()
+        elif option.islower() and re.match(r"^[a-z0-9]+$", option):
+            # ok maybe it's camel case of snake case but it contains only one word (e.g., run)
+            alias: str = option.lower()
+        else:
+            raise ValueError(f"option \"{option}\" is not neither camelcase nor snakecase!")
+        alias = alias.lower()
+        result[option] = alias
+    return result
 
 
 def time_profile(sort: List[str], limit: int = None):

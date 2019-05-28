@@ -4,6 +4,7 @@ from typing import Iterable, List, Any, Tuple, Dict
 
 import numpy as np
 import pandas as pd
+import string_utils
 
 from phdTester import commons
 from phdTester.common_types import PathStr
@@ -62,8 +63,6 @@ class DefaultSubtitleGenerator(ISubtitleGenerator):
         return tcm.te.get_have_value_string(ignore_some_tcm_keys=[])
 
 
-
-
 class AbstractTestingGlobalSettings(IGlobalSettings, StandardOptionDict, abc.ABC):
 
     def __init__(self):
@@ -88,6 +87,10 @@ class AbstractStuffUnderTest(IStuffUnderTest, StandardOptionDict, abc.ABC):
         IStuffUnderTest.__init__(self)
         StandardOptionDict.__init__(self)
 
+    @property
+    def key_alias(self) -> Dict[str, str]:
+        return commons.generate_aliases(list(self.options()))
+
 
 class DefaultStuffUnderTest(IStuffUnderTest, DefaultAnonymuousOptionObject):
     """
@@ -102,7 +105,7 @@ class DefaultStuffUnderTest(IStuffUnderTest, DefaultAnonymuousOptionObject):
 
     @property
     def key_alias(self) -> Dict[str, str]:
-        return {}
+        return commons.generate_aliases(list(self.options()))
 
     @property
     def value_alias(self) -> Dict[str, str]:
@@ -114,6 +117,14 @@ class AbstractTestingEnvironment(ITestEnvironment, StandardOptionDict, abc.ABC):
     def __init__(self):
         ITestEnvironment.__init__(self)
         StandardOptionDict.__init__(self)
+
+    @property
+    def key_alias(self) -> Dict[str, str]:
+        return commons.generate_aliases(list(self.options()))
+
+    @property
+    def value_alias(self) -> Dict[str, str]:
+        return {}
 
 
 class DefaultTestEnvironment(ITestEnvironment, DefaultAnonymuousOptionObject):
@@ -129,7 +140,7 @@ class DefaultTestEnvironment(ITestEnvironment, DefaultAnonymuousOptionObject):
 
     @property
     def key_alias(self) -> Dict[str, str]:
-        return {}
+        return commons.generate_aliases(list(self.options()))
 
     @property
     def value_alias(self) -> Dict[str, str]:
