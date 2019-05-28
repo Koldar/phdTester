@@ -46,11 +46,6 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
 
     def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.datasources.FileSystem":
         result = phd.datasources.FileSystem(root=settings.outputDirectory)
-        # TODO bny default the file system cannot handle even csv... we should correct this
-        result.register_resource_manager(
-            resource_type=r"(c)?sv",  # we could have written r"csv" but it just to show off regex capabilities
-            manager=phd.datasources.CsvFileSystemResourceManager()
-        )
 
         return result
 

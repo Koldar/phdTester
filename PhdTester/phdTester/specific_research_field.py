@@ -16,6 +16,7 @@ from phdTester import commons, masks
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr
 from phdTester.commons import StringCsvWriter
 from phdTester.datasources import filesystem_sources
+from phdTester.datasources.filesystem_sources import CsvFileSystemResourceManager
 from phdTester.default_models import SimpleTestContextRepo, \
     DefaultGlobalSettings, DefaultTestEnvironment, DefaultStuffUnderTest, DefaultTestContext, DefaultStuffUnderTestMask, \
     DefaultTestEnvironmentMask, DefaultTestContextMask, DefaultSubtitleGenerator
@@ -414,6 +415,11 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         self.__equal = self._get_ks001_equal(global_settings)
 
         with self._generate_filesystem_datasource(global_settings) as self.__filesystem_datasource:
+            # register csv in the filesystem
+            self.__filesystem_datasource.register_resource_manager(
+                resource_type=r"csv",
+                manager=CsvFileSystemResourceManager()
+            )
             with self._generate_datasource(global_settings) as self.__datasource:
 
                 # ###################################################
