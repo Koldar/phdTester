@@ -16,7 +16,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
 
         return phd.OptionBuilder().add_under_testing_multiplexer(
             name="algorithm",
-            possible_values=["BUBBLESORT", "MERGESORT", ],
+            possible_values=["BUBBLESORT", "MERGESORT", "COUNTSORT", "RADIXSORT", ],
             ahelp="""The algorithm we want to test""",
         ).add_environment_value(
             name="sequenceSize",

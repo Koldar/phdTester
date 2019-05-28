@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <cstdio>
 #include <chrono>
+#include <cstring>
+#include <algorithm>
 
 int _sequenceSize;
 std::string _algorithm;
@@ -102,6 +104,110 @@ public:
 }
 };
 
+class CountSort: public ISortAlgorithm {
+private:
+    int max;
+public:
+    CountSort(int max): max{max} {}
+    virtual ~CountSort() {}
+    virtual void reset() {}
+    std::vector<int>& sort(std::vector<int>& sequence) {
+        // see https://www.geeksforgeeks.org/counting-sort/
+
+        // The output character array  
+        // that will have sorted arr  
+        char output[sequence.size()];  
+    
+        // Create a count array to store count of inidividul  
+        // characters and initialize count array as 0  
+        int count[max + 1], i;  
+        memset(count, 0, sizeof(count));  
+    
+        // Store count of each character  
+        for(i = 0; i<sequence.size(); ++i) {
+            ++count[sequence[i]];  
+        }
+    
+        // Change count[i] so that count[i] now contains actual  
+        // position of this character in output array  
+        for (i = 1; i <= max; ++i) {
+            count[i] += count[i-1]; 
+        } 
+    
+        // Build the output character array  
+        for (i = 0; i < sequence.size(); ++i) {  
+            output[count[sequence[i]]-1] = sequence[i];  
+            --count[sequence[i]];  
+        }  
+    
+        /*  
+        For Stable algorithm  
+        for (i = sizeof(arr)-1; i>=0; --i)  
+        {  
+            output[count[arr[i]]-1] = arr[i];  
+            --count[arr[i]];  
+        }  
+        
+        For Logic : See implementation  
+        */
+    
+        // Copy the output array to arr, so that arr now  
+        // contains sorted characters  
+        for (i = 0; i < sequence.size(); ++i) {
+            sequence[i] = output[i];
+        }
+
+        return sequence;
+    }
+};
+
+class RadixSort: public ISortAlgorithm {
+public:
+    RadixSort() {}
+    virtual ~RadixSort() {}
+    virtual void reset() {}
+    std::vector<int>& sort(std::vector<int>& sequence) {
+        // Find the maximum number to know number of digits 
+        int m = *max_element(std::begin(sequence), std::end(sequence));
+    
+        // Do counting sort for every digit. Note that instead 
+        // of passing digit number, exp is passed. exp is 10^i 
+        // where i is current digit number 
+        for (int exp = 1; m/exp > 0; exp *= 10) {
+            this->countSort(sequence, exp); 
+        } 
+        return sequence;
+    }
+private:
+    void countSort(std::vector<int>& sequence, int exp) { 
+        int output[sequence.size()]; // output array 
+        int i, count[10] = {0}; 
+    
+        // Store count of occurrences in count[] 
+        for (i = 0; i < sequence.size(); i++) {
+            count[ (sequence[i]/exp)%10 ]++; 
+        }
+    
+        // Change count[i] so that count[i] now contains actual 
+        //  position of this digit in output[] 
+        for (i = 1; i < 10; i++) {
+            count[i] += count[i - 1]; 
+        }
+    
+        // Build the output array 
+        for (i = sequence.size() - 1; i >= 0; i--) { 
+            output[count[ (sequence[i]/exp)%10 ] - 1] = sequence[i]; 
+            count[ (sequence[i]/exp)%10 ]--; 
+        } 
+    
+        // Copy the output array to arr[], so that arr[] now 
+        // contains sorted numbers according to current digit 
+        for (i = 0; i < sequence.size(); i++) {
+            sequence[i] = output[i]; 
+        }
+    } 
+};
+
 class MergeSort : public ISortAlgorithm {
 public:
     MergeSort() {}
@@ -180,7 +286,7 @@ int main(const int argc, const char* args[]) {
 
     app.add_option("--sequenceSize", _sequenceSize, "Size of the array to sort");
     app.add_option("--sequenceType", _sequenceType, "type of the sequence to sort: RANDOM, SAME, SORTED, REVERSESORTED");
-    app.add_option("--algorithm", _algorithm, "algorithm to test. BUBBLESORT, MERGESORT");
+    app.add_option("--algorithm", _algorithm, "algorithm to test. BUBBLESORT, MERGESORT, COUNTSORT, RADIXSORT");
     app.add_option("--lowerBound", _lowerBound, "Minimum number we might generate");
     app.add_option("--upperBound", _upperBound, "Maximum number we might generate");
     app.add_option("--runs", _runs, "Number of run we need to perform (execution of the same trial)");
@@ -196,6 +302,10 @@ int main(const int argc, const char* args[]) {
         alg = new BubbleSort{};
     } else if (_algorithm == std::string{"MERGESORT"}) {
         alg = new MergeSort{};
+    } else if (_algorithm == std::string{"COUNTSORT"}) {
+        alg = new CountSort{_upperBound};
+    } else if (_algorithm == std::string{"RADIXSORT"}) {
+        alg = new RadixSort{};
     } else {
         throw std::domain_error{"invalid algorithm!"};
     }

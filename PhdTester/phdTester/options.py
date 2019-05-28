@@ -40,7 +40,7 @@ class MultiPlexerNode(IOptionNode):
     def add_to_cli_option(self, parser: Any) -> None:
         parser.add_argument(self.get_parser_name(),
                             type=self.option_type.to_argparse(),
-                            required=True,
+                            required=False,
                             help="""{}. Accepted values are {}""".format(
                                 self.help,
                                 "\n".join(map(lambda x: str(x), self.values))
