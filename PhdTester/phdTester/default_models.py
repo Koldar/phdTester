@@ -209,6 +209,7 @@ class DefaultTestContext(ITestContext):
 
 class AbstractStuffUnderTestMask(IStuffUnderTestMask, StandardOptionDict, abc.ABC):
 
+    @abc.abstractmethod
     def __init__(self):
         IStuffUnderTestMask.__init__(self)
 

@@ -78,10 +78,8 @@ class SortSettings(phd.AbstractTestingGlobalSettings):
         self.outputDirectory = None
 
 
-# TODO this can be generated automatically. Make abstract the ut and te properties
 class SortTestContextMask(phd.AbstractTestContextMask):
 
-    # TODO should be automatically set
     def __init__(self, ut: "SortAlgorithmMask", te: "SortEnvironmentMask"):
         phd.AbstractTestContextMask.__init__(self, ut=ut, te=te)
 

@@ -520,6 +520,7 @@ class ITestContext(IOptionDictWithKS, abc.ABC):
         self._ut = ut
         self._te = te
 
+    @abc.abstractmethod
     @property
     def ut(self) -> "IStuffUnderTest":
         """
@@ -529,6 +530,7 @@ class ITestContext(IOptionDictWithKS, abc.ABC):
         """
         return self._ut
 
+    @abc.abstractmethod
     @property
     def te(self) -> "ITestEnvironment":
         """
@@ -801,10 +803,12 @@ class ITestContextMask(IMask, abc.ABC):
         self._ut = ut
         self._te = te
 
+    @abc.abstractmethod
     @property
     def ut(self) -> "IStuffUnderTestMask":
         return self._ut
 
+    @abc.abstractmethod
     @property
     def te(self) -> "ITestEnvironmentMask":
         return self._te
