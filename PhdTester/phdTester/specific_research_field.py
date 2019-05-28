@@ -1,13 +1,10 @@
 import abc
 import argparse
-import configparser
 import io
 import itertools
 import logging
-import multiprocessing
 import os
 import sys
-from pathlib import Path
 from typing import Dict, Any, Iterable, List, Tuple, Callable, Union, Optional
 
 import pandas as pd
@@ -378,6 +375,15 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         pass
 
+    def _configure_logging(self, settings: "IGlobalSettings"):
+        """
+        Sequence of step to configure the log
+        :param settings: the settings fetched from the CLI
+        :return:
+        """
+        if settings.contains_option("logLevel"):
+            logging.basicConfig(level=getattr(logging, settings.logLevel))
+
     def run(self, *args, cli_commands: List[str] = None, **kwargs):
         """
         Run the experiments for this template
@@ -398,7 +404,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         ###################################################
         # generate option graph and parse output
         ###################################################
-        logging.info("parsing option graph")
         self.__option_graph = self._generate_option_graph()
         cli_commands = cli_commands if cli_commands is not None else sys.argv[1:]
         parse_output = self._generate_parser_from_option_graph(self.__option_graph, cli_commands)
@@ -406,8 +411,12 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         ###################################################
         # fetch global structure
         ###################################################
-        logging.info("generating global structures...")
         global_settings = self._generate_global_test_settings(self.__option_graph, parse_output)
+
+        ###################################################
+        # Configure log, if present
+        ###################################################
+        self._configure_logging(global_settings)
 
         self.__colon = self._get_ks001_colon(global_settings)
         self.__pipe = self._get_ks001_pipe(global_settings)

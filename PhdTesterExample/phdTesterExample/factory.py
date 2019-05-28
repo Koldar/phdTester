@@ -38,14 +38,11 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             name="run",
             option_type=phd.option_types.Int(),
             ahelp="""number of runs to execute for each test context""",
-        ).add_settings_value(
-            name="outputDirectory",
-            option_type=phd.option_types.Str(),
-            ahelp="""the absolute path of the directory where everything will be generated"""
+        ).add_default_settings(
         ).get_option_graph()
 
     def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.datasources.FileSystem":
-        result = phd.datasources.FileSystem(root=settings.outputDirectory)
+        result = phd.datasources.FileSystem(root=settings.buildDirectory)
 
         return result
 

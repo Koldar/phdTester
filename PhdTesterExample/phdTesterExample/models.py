@@ -75,7 +75,8 @@ class SortSettings(phd.AbstractTestingGlobalSettings):
 
     def __init__(self):
         phd.AbstractTestingGlobalSettings.__init__(self)
-        self.outputDirectory = None
+        self.buildDirectory = None
+        self.logLevel = None
 
 
 class SortTestContextMask(phd.AbstractTestContextMask):
