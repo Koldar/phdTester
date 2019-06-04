@@ -498,3 +498,283 @@ class SimpleMultiDirectedGraph(IMultiDirectedGraph):
             if n in self._edges[source]:
                 for payload in self._edges[source][n]:
                     yield (source, n, payload)
+
+
+class IMultiDirectedHyperGraph(abc.ABC):
+    """
+    A hyper graph. Each edge is actually an hyper edge with one source and several sinks. Each hyper edge
+    has attacched a single payload.
+
+    Between the same source and sinks we have have several hyperedges
+
+    """
+
+    class HyperEdge(object):
+        """
+        Represents an hyper edge inside an hyperedge graph.
+
+        For example
+
+        A -> (B, C, D)
+        """
+        def __init__(self, source: Any, sinks: Iterable[Any], payload: Any):
+            """
+            Create a new hyper edge
+            :param source: the vertex representing the sourc eof the hyperedge
+            :param sinks: sorted list of the sinks of the hyperedge
+            :param payload: object attached to the hyperedge
+            """
+            self.source = source
+            self.sinks = list(sinks)
+            self.payload = payload
+
+        def is_compliant(self, source: Any, sinks: Iterable[Any]) -> bool:
+            """
+
+            :param source:
+            :param sinks:
+            :return: true if the source and the sinks of 2 hyper edges are the same
+            """
+            return self.source == source and set(self.sinks) == set(sinks)
+
+    @abc.abstractmethod
+    def add_vertex(self, payload, aid: Any = None) -> Any:
+        """
+        Insert a new vertex in the hypergraph
+
+        :param payload: the paylaod attached to the vertex
+        :param aid: the id of the vertex
+        :raises KeyError: if aid is already an id of a vertex in this graph. If None we will set an id
+        :return: the id of the newly generated vrtex
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_vertex(self, aid: Any) -> Any:
+        """
+
+        :param aid: the id of the vertex we're looking for
+        :raises KeyError: if aid is not an id of a vertex in the graph
+        :return: the payload of the vertex we're looking for
+        """
+        pass
+
+    @abc.abstractmethod
+    def contains_vertex(self, aid: Any) -> bool:
+        """
+
+        :param aid: the id of the vertex we're looking for
+        :return: true if aid is an id of a vertex inside th graph, false otehrwise
+        """
+        pass
+
+    @abc.abstractmethod
+    def vertices(self) -> Iterable[Tuple[Any, Any]]:
+        """
+        Iterable of all the vertices inside the graph
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def size(self) -> int:
+        """
+
+        :return: number of vertices in the graph
+        """
+
+        pass
+
+    def is_empty(self) -> bool:
+        """
+
+        :return: true if the graph has no vertex, false otherwise
+        """
+        return self.size() == 0
+
+    def get_vertices_number(self) -> int:
+        return self.size()
+
+    @abc.abstractmethod
+    def add_edge(self, source: Any, sinks: Iterable[Any], payload) -> "IMultiDirectedHyperGraph.HyperEdge":
+        """
+        add a new hyper edge in the hyper graph. between the same source and sink there can be
+        multiple albeit different edges
+        :param source: the source of the edge
+        :param sinks: a sorted list of sinks of the hyper edge
+        :param payload: the payload attached to the given hyper edge
+        :return: the hyperedge representing the edge we want
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_edge(self, source: Any, sinks: Iterable[Any]) -> Iterable[HyperEdge]:
+        """
+        get the edges between a source and several hyperedge sinks
+        :param source: the source of the hyperedge we want
+        :param sinks: the sinks of the hyper edge we want
+        :return: an iterable of all the hyper edges having source `source` and exactly the sinks in `sinks`
+        """
+        pass
+
+    @abc.abstractmethod
+    def contains_edge(self, source: Any, sinks: Iterable[Any]) -> bool:
+        """
+        Check if an hyper edge with such source and sinks exists in the graph
+        :param source: the id of the source of the hyper graph
+        :param sinks: the ids of the sinks of the hyper graph
+        :return: true if there is at least one hyper edge with exactly the source and the sinks given, false otherwise
+        """
+
+        pass
+
+    @abc.abstractmethod
+    def successors(self, source: Any) -> Iterable[Any]:
+        """
+        vertices which are connected to a direct hyperedge whose source is `source`
+        :param source: id of the node handle
+        :return: iterable of all the vertices which are successors to the node `source`
+        """
+        pass
+
+    @abc.abstractmethod
+    def predecessors(self, sink: Any) -> Iterable[Any]:
+        """
+        vertices which are connected with a direct hyper edge whose at **least** one sink is `sink`
+        :param sink: id of a sink
+        :return: iterable of vertices which has at least one sink identical to `sink`
+        """
+        pass
+
+    @abc.abstractmethod
+    def out_edges(self, source: Any) -> Iterable[HyperEdge]:
+        """
+        iterable of hyper edges going out from a vertex
+
+        :param source: the key of the vertex whose out edges we want to compute
+        :return: hyper edges going out from source.
+        """
+        pass
+
+    @abc.abstractmethod
+    def in_edges(self, source: Any) -> Iterable[HyperEdge]:
+        """
+        iterable of hyper edges going in a vertex
+
+        :param source: the key of the node whose in edges we want to compute
+        :return: edges going in source. it returns an iterable of 3 elements: the key of the source,
+            the key of the sink and the payload attached to the edge
+        """
+        pass
+
+    def in_degree(self, n: Any) -> int:
+        """
+
+        :param n: the key of the vertex
+        :return: number of hyper edges going inside the vertex n
+        """
+        return len(list(self.in_edges(n)))
+
+    def out_degree(self, n: Any) -> int:
+        """
+
+        :param n: the key of a vertex
+        :return: number of hyper edges going out from n
+        """
+        return len(list(self.out_edges(n)))
+
+    @property
+    def roots(self) -> Iterable[Tuple[Any, Any]]:
+        """
+        roots are vertices in the graph which have no predecessors
+        :return: an iterable of tuples where the first element is the key of a root while the second one is the payload
+            associated to the vertex
+        """
+        for n, payload in self.vertices():
+            if self.in_degree(n) == 0:
+                yield (n, payload)
+
+
+class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
+
+    next_id = 0
+
+    def __init__(self):
+        self.__vertices: Dict[int, Any] = {}
+        self.__edges: List["IMultiDirectedHyperGraph.HyperEdge"] = []
+        """
+        List of hyper edges.
+        """
+
+    @staticmethod
+    def _generate_vertex_id() -> int:
+        """
+        generates a new vertex id
+        :return:
+        """
+        result = DefaultMultiDirectedHyperGraph.next_id
+        DefaultMultiDirectedHyperGraph.next_id += 1
+        return result
+
+    def add_vertex(self, payload, aid: Any = None) -> Any:
+        if aid is None:
+            aid = DefaultMultiDirectedHyperGraph._generate_vertex_id()
+        if aid in self.__vertices:
+            raise KeyError(f"key {aid} is already an id of a vertex in this hypergraph!")
+        self.__vertices[aid] = payload
+        return aid
+
+    def get_vertex(self, aid: Any) -> Any:
+        return self.__vertices[aid]
+
+    def contains_vertex(self, aid: Any) -> bool:
+        return aid in self.__vertices
+
+    def vertices(self) -> Iterable[Tuple[Any, Any]]:
+        return self.__vertices.items()
+
+    def size(self) -> int:
+        return len(self.__vertices)
+
+    def add_edge(self, source: Any, sinks: Iterable[Any], payload) -> "IMultiDirectedHyperGraph.HyperEdge":
+        result = IMultiDirectedHyperGraph.HyperEdge(source=source, sinks=list(sinks), payload=payload)
+        self.__edges.append(result)
+        return result
+
+    def get_edge(self, source: Any, sinks: Iterable[Any]) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
+        for edge in self.__edges:
+            if edge.is_compliant(source, sinks):
+                yield edge
+
+    def contains_edge(self, source: Any, sinks: Iterable[Any]) -> bool:
+        for edge in self.__edges:
+            if edge.is_compliant(source, sinks):
+                return True
+        else:
+            return False
+
+    def successors(self, source: Any) -> Iterable[Any]:
+        visited = set()
+        for edge in self.__edges:
+            if edge.source == source:
+                for sink in edge.sinks:
+                    if sink not in visited:
+                        visited.add(sink)
+                        yield sink
+
+    def predecessors(self, sink: Any) -> Iterable[Any]:
+        visited = set()
+        for edge in self.__edges:
+            if sink in edge.sinks and edge.source not in visited:
+                visited.add(sink)
+                yield edge.source
+
+    def out_edges(self, source: Any) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
+        for edge in self.__edges:
+            if edge.source == source:
+                yield edge
+
+    def in_edges(self, source: Any) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
+        for edge in self.__edges:
+            if source in edge.sinks:
+                yield edge
