@@ -342,7 +342,7 @@ def safe_eval(s: str) -> Any:
     safe_dict['list_with_extension'] = list_with_extension
     safe_dict['sorted'] = sorted
 
-    logging.info(f"string is {s}")
+    logging.info(f"""string we're going to evaluate is \n{s}""")
     return eval(s, {"__builtins__": None}, safe_dict)
 
 
