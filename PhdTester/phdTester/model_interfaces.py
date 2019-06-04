@@ -17,14 +17,6 @@ from phdTester.exceptions import ResourceTypeUnhandledError
 from phdTester.graph import IMultiDirectedGraph, IMultiDirectedHyperGraph
 from phdTester.ks001.ks001 import KS001, Aliases
 
-
-class OptionNodeKind(enum.Enum):
-    FLAG = 0
-    MULTIPLEXER = 1
-    VALUE = 2
-    SETTING = 3
-
-
 class OptionBelonging(enum.Enum):
     SETTINGS = 0
     UNDER_TEST = 1
@@ -112,8 +104,7 @@ class IOptionNode(abc.ABC):
 
     """
 
-    def __init__(self, kind: OptionNodeKind, long_name: str, option_type: IOptionType, ahelp: str, belonging: OptionBelonging):
-        self.kind = kind
+    def __init__(self, long_name: str, option_type: IOptionType, ahelp: str, belonging: OptionBelonging):
         self.long_name = long_name
         self.help = ahelp
         self.option_type: "IOptionType" = option_type
