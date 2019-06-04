@@ -337,14 +337,22 @@ int main(const int argc, const char* args[]) {
 
     CLI::App app{"Sorting algorithm tester"};
 
-    app.add_option("--sequenceSize", _sequenceSize, "Size of the array to sort");
-    app.add_option("--sequenceType", _sequenceType, "type of the sequence to sort: RANDOM, SAME, SORTED, REVERSESORTED");
-    app.add_option("--algorithm", _algorithm, "algorithm to test. BUBBLESORT, MERGESORT, COUNTSORT, RADIXSORT, COMBSORT");
-    app.add_option("--lowerBound", _lowerBound, "Minimum number we might generate");
-    app.add_option("--upperBound", _upperBound, "Maximum number we might generate");
-    app.add_option("--runs", _runs, "Number of run we need to perform (execution of the same trial)");
-    app.add_option("--seed", _seed, "Seed for random generator");
-    app.add_option("--outputTemplate", _outputTemplate);
+    app.add_option("--sequenceSize", _sequenceSize, "Size of the array to sort")
+        ->required();
+    app.add_option("--sequenceType", _sequenceType, "type of the sequence to sort: RANDOM, SAME, SORTED, REVERSESORTED")
+    ->required();
+    app.add_option("--algorithm", _algorithm, "algorithm to test. BUBBLESORT, MERGESORT, COUNTSORT, RADIXSORT, COMBSORT")
+    ->required();
+    app.add_option("--lowerBound", _lowerBound, "Minimum number we might generate")
+    ->required();
+    app.add_option("--upperBound", _upperBound, "Maximum number we might generate")
+    ->required();
+    app.add_option("--runs", _runs, "Number of run we need to perform (execution of the same trial)")
+    ->required();
+    app.add_option("--seed", _seed, "Seed for random generator")
+    ->required();
+    app.add_option("--outputTemplate", _outputTemplate)
+    ->required();
 
     app.add_option("--shrinkFactor", _shrinkFactor, "factor used to shrink the gap of combsort. Used only in COMBSORT algorithm");
 
