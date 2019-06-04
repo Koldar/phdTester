@@ -3,27 +3,59 @@ from typing import List, Any, Callable, Tuple, Iterable, Set, Dict
 
 from phdTester import conditions, option_types
 from phdTester.conditions import IDependencyCondition
-from phdTester.graph import SimpleMultiDirectedGraph
+from phdTester.graph import SimpleMultiDirectedGraph, DefaultMultiDirectedHyperGraph
 from phdTester.model_interfaces import ITestContext, IOptionNode, OptionBelonging, IOptionType
 from phdTester.options import ValueNode, FlagNode, MultiPlexerNode
 
 
-class OptionGraph(SimpleMultiDirectedGraph):
+class OptionGraph(DefaultMultiDirectedHyperGraph):
+    """
+    A graph which represents which allows us to understand if a test context represents a valid tests or not
+    """
 
     def is_compliant_with(self, tc: "ITestContext", followed_vertices: Set[str]) -> bool:
+        """
+        Check if a test context is compliant with the option graph
+
+        To check if a test context is compliant with the option graph we use the following algorithm.
+
+        First of all we pickup the sources of the graph (i.e., vertices which aren't sinks). We then run a DFS on
+        unvisited vertices.
+
+        if, during the DFS, a vertex hasalready been visited we avoid handling it.
+        Otherwise we mark it as visited and we check all its outgoing conditions.
+         - If a required condition is not satisfied the test context is deemed as "uncompliant";
+         - If a condition which has "enable_sink_visit" set is encountered, we call the DFS on it; otherwise
+           we continue.
+
+        We stop when we have processed all the sources of the option graph.
+
+        :param tc:
+        :param followed_vertices:
+        :return:
+        """
 
         visited = set()
         followed_vertices.clear()
 
-        def is_compliant_with_dfs(option_graph: "OptionGraph", node_name) -> bool:
+        def is_compliant_with_dfs(option_graph: "OptionGraph", node_name: str) -> bool:
             if node_name in visited:
                 return True
             visited.add(node_name)
-            for source, sink, condition in option_graph.out_edges(node_name):
+            for hyperedge in option_graph.out_edges(node_name):
+                condition = hyperedge.payload
+                source_name = hyperedge.source
+                sinks = hyperedge.sinks
                 if not isinstance(condition, IDependencyCondition):
                     raise TypeError(f"edge payload needs to be instance of IDependencyCondition!")
 
-                valid = condition.accept(self, source, sink, tc)
+                valid = condition.accept(
+                    graph=self, tc=tc,
+                    source_name=source_name,
+                    source_option=option_graph.get_vertex(source_name),
+                    source_value=tc.get_option(source_name),
+                    sinks=list(map(lambda sink_name: (sink_name, option_graph.get_vertex(sink_name), tc.get_option(sink_name)), sinks))
+                )
                 if condition.is_required():
                     # the condition is marked as "required". If it's invalid the combination is immediately marked as
                     # "invalid".
@@ -34,10 +66,10 @@ class OptionGraph(SimpleMultiDirectedGraph):
                     # ok, the condition may or may not be required. If it allows the visit of the sinks,
                     # we check if the condition is valid. If it's valid we recursively go in the sinks
                     if valid:
-                        if not is_compliant_with_dfs(option_graph, sink):
-                            return False
-                        followed_vertices.add(sink)
-
+                        for sink in sinks:
+                            if not is_compliant_with_dfs(option_graph, sink):
+                                return False
+                            followed_vertices.add(sink)
 
             return True
 
@@ -186,24 +218,21 @@ class OptionBuilder(abc.ABC):
 
     # conditions
 
-    def option_value_allows_other_option(self, option1_considered: str, option_1_values: List[Any], option2_enabled: str) -> "OptionBuilder":
+    def option_value_allows_other_option(self, enabling_option: str, enabling_values: List[Any], enabled_option: str) -> "OptionBuilder":
         """
-        if `option1` value is within the given set, then `option2` can't be set to None
-        :param option1_considered: the option which can have the values `option_1_values`
-        :param option_1_values: the values accepted
-        :param option2_enabled: the option which can be set if `option1_considered` has values in `option_1_values`
+        if `option1` value is within the given set, then `option2` can't be set to None but requires to be set as well
+
+        :param enabling_option: the option which can activate the option `enabled_option`
+        :param enabling_values: the values which `enabling_option` needs to have in order to activate `enabled_option`
+        :param enabled_option: the option which can be set if `option1_considered` has values in `option_1_values`
         :return:
         """
 
-        def condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
-            return option1_value in option_1_values
-
-        self.option_graph.add_edge(option1_considered, option2_enabled, conditions.Satisfy(
+        self.option_graph.add_edge(enabling_option, [enabled_option], conditions.NeedsToBeIn(
             is_required=False,
-            allows_sink_visit=True,
-            condition=condition,
+            enable_sink_visit=True,
+            allowed_values=enabling_values,
         ))
-
         return self
 
     def option_value_prohibits_other_option(self, option1: str, values: List[Any], options_prohibited: str) -> "OptionBuilder":
