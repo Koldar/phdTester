@@ -21,23 +21,24 @@ class SortTestContext(phd.AbstractTestContext):
 
 class SortAlgorithm(phd.AbstractStuffUnderTest):
 
-    @property
-    def key_alias(self) -> Dict[str, str]:
-        return {
-            "algorithm": "a",
-        }
+    # @property
+    # def key_alias(self) -> Dict[str, str]:
+    #     return {
+    #         "algorithm": "a",
+    #     }
 
-    @property
-    def value_alias(self) -> Dict[str, str]:
-        # No alias
-        return {}
+    # @property
+    # def value_alias(self) -> Dict[str, str]:
+    #     # No alias
+    #     return {}
 
     def __init__(self):
         phd.AbstractStuffUnderTest.__init__(self)
         self.algorithm: str = None
+        self.shrinkFactor: float = None
 
-    def get_label(self) -> str:
-        return f"{self.algorithm}"
+    # def get_label(self) -> str:
+    #     return f"{self.algorithm}"
 
 
 class SortEnvironment(phd.AbstractTestingEnvironment):
@@ -98,6 +99,7 @@ class SortAlgorithmMask(phd.AbstractStuffUnderTestMask):
     def __init__(self):
         phd.AbstractStuffUnderTestMask.__init__(self)
         self.algorithm: "phd.ITestContextMaskOption" = None
+        self.shrinkFactor: "phd.ITestContextMaskOption" = None
 
 
 class SortEnvironmentMask(phd.AbstractTestEnvironmentMask):
