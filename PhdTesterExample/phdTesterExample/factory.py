@@ -16,8 +16,12 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
 
         return phd.OptionBuilder().add_under_testing_multiplexer(
             name="algorithm",
-            possible_values=["BUBBLESORT", "MERGESORT", "COUNTSORT", "RADIXSORT", ],
+            possible_values=["BUBBLESORT", "MERGESORT", "COUNTSORT", "RADIXSORT", "COMBSORT"],
             ahelp="""The algorithm we want to test""",
+        ).add_under_testing_value(
+            name="shrinkFactor",
+            option_type=phd.option_types.Float(),
+            ahelp="Shrink factor for COMBSORT",
         ).add_environment_value(
             name="sequenceSize",
             option_type=phd.option_types.Int(),
@@ -39,6 +43,10 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             option_type=phd.option_types.Int(),
             ahelp="""number of runs to execute for each test context""",
         ).add_default_settings(
+        ).option_value_allows_other_option(
+            enabling_option="algorithm",
+            enabling_values=["COMBSORT"],
+            enabled_option="shrinkFactor",
         ).get_option_graph()
 
     def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.datasources.FileSystem":
