@@ -40,8 +40,10 @@ def generate_aliases(strings: List[str]) -> Dict[str, str]:
             # TODO implement
             raise NotImplementedError()
         elif option.islower() and re.match(r"^[a-z0-9]+$", option):
-            # ok maybe it's camel case of snake case but it contains only one word (e.g., run)
-            alias: str = option.lower()
+            # ok maybe it's camel case of snake case but it contains only one word (e.g., run), HENCE
+            # we need to handle words like "algorithm" or "run" which are special case
+            # of camel case (they do not have upper letters)
+            alias: str = option.lower()[0]
         else:
             raise ValueError(f"option \"{option}\" is not neither camelcase nor snakecase!")
         alias = alias.lower()
