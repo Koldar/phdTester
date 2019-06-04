@@ -2,7 +2,7 @@ import abc
 from typing import Callable, Any, List, Tuple, Iterable
 
 from phdTester.graph import IMultiDirectedGraph, IMultiDirectedHyperGraph
-from phdTester.model_interfaces import ITestContext, IDependencyCondition, IOptionNode
+from phdTester.model_interfaces import ITestContext, IDependencyCondition, AbstractOptionNode
 
 # class SatisfyMultiEdge(IDependencyCondition):
 #     """
@@ -10,7 +10,7 @@ from phdTester.model_interfaces import ITestContext, IDependencyCondition, IOpti
 #     are involved in the decision of satisfying the constraint.
 #     """
 #
-#     def __init__(self, condition: Callable[[IOptionNode, Any, IOptionNode, Any, List[Tuple[IOptionNode, Any]]], bool], third_party_nodes: List[str], allows_sink_visit: bool,
+#     def __init__(self, condition: Callable[[AbstractOptionNode, Any, AbstractOptionNode, Any, List[Tuple[AbstractOptionNode, Any]]], bool], third_party_nodes: List[str], allows_sink_visit: bool,
 #                  is_required: bool):
 #         IDependencyCondition.__init__(self)
 #         self._allowed_sink_visit = allows_sink_visit
@@ -34,7 +34,7 @@ from phdTester.model_interfaces import ITestContext, IDependencyCondition, IOpti
 #
 # class Satisfy(IDependencyCondition):
 #
-#     def __init__(self, condition: Callable[[IOptionNode, Any, IOptionNode, Any], bool], allows_sink_visit: bool, is_required: bool):
+#     def __init__(self, condition: Callable[[AbstractOptionNode, Any, AbstractOptionNode, Any], bool], allows_sink_visit: bool, is_required: bool):
 #         IDependencyCondition.__init__(self)
 #         self._allowed_sink_visit = allows_sink_visit
 #         self._is_required = is_required
@@ -73,5 +73,5 @@ class NeedsToBeIn(AbstractDependencyCondition):
         self.__allowed_values = allowed_values
 
     def accept(self, graph: "IMultiDirectedHyperGraph", tc: "ITestContext", source_name: str,
-               source_option: "IOptionNode", source_value: Any, sinks: List[Tuple[str, "IOptionNode", Any]]) -> bool:
+               source_option: "AbstractOptionNode", source_value: Any, sinks: List[Tuple[str, "AbstractOptionNode", Any]]) -> bool:
         return source_value in self.__allowed_values

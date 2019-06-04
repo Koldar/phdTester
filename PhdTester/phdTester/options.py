@@ -1,18 +1,18 @@
 from typing import Any, List, Union
 
 from phdTester import commons, option_types
-from phdTester.model_interfaces import IOptionNode, OptionBelonging, OptionNodeKind, IOptionType
+from phdTester.model_interfaces import AbstractOptionNode, OptionBelonging, OptionNodeKind, IOptionType
 
 
-class FlagNode(IOptionNode):
+class FlagNode(AbstractOptionNode):
 
     def __init__(self, long_name: str, ahelp: str, belonging: OptionBelonging):
-        IOptionNode.__init__(self,
-                             long_name=long_name,
-                             option_type=option_types.Bool(),
-                             ahelp=ahelp,
-                             belonging=belonging,
-                             )
+        AbstractOptionNode.__init__(self,
+                                    long_name=long_name,
+                                    option_type=option_types.Bool(),
+                                    ahelp=ahelp,
+                                    belonging=belonging,
+                                    )
 
     def add_to_cli_option(self, parser: Any) -> None:
         parser.add_argument(self.get_parser_name(),
@@ -24,7 +24,7 @@ class FlagNode(IOptionNode):
         return bool(value)
 
 
-class MultiPlexerNode(IOptionNode):
+class MultiPlexerNode(AbstractOptionNode):
     """
     An option node which can have one of finite number of possible values.
 
@@ -32,12 +32,12 @@ class MultiPlexerNode(IOptionNode):
     """
 
     def __init__(self, long_name: str, values: List[str], ahelp: str, belonging: OptionBelonging):
-        IOptionNode.__init__(self,
-                             long_name=long_name,
-                             option_type=option_types.Str(),
-                             ahelp=ahelp,
-                             belonging=belonging,
-                             )
+        AbstractOptionNode.__init__(self,
+                                    long_name=long_name,
+                                    option_type=option_types.Str(),
+                                    ahelp=ahelp,
+                                    belonging=belonging,
+                                    )
         self.values = values
 
     def add_to_cli_option(self, parser: Any) -> None:
@@ -60,7 +60,7 @@ class MultiPlexerNode(IOptionNode):
         return str(value)
 
 
-class SingleValueNode(IOptionNode):
+class SingleValueNode(AbstractOptionNode):
     """
     An option in the option grapjh which can **always** have at most one actual value.
 
@@ -71,12 +71,12 @@ class SingleValueNode(IOptionNode):
     """
 
     def __init__(self, long_name: str, optional_type: IOptionType, ahelp: str, belonging: OptionBelonging, default_value: Any = None):
-        IOptionNode.__init__(self,
-                             long_name=long_name,
-                             option_type=optional_type,
-                             ahelp=ahelp,
-                             belonging=belonging,
-                             )
+        AbstractOptionNode.__init__(self,
+                                    long_name=long_name,
+                                    option_type=optional_type,
+                                    ahelp=ahelp,
+                                    belonging=belonging,
+                                    )
         self.__default_value = default_value
 
     def add_to_cli_option(self, parser: Any) -> None:
@@ -101,7 +101,7 @@ class SingleValueNode(IOptionNode):
         return self.option_type.convert(value)
 
 
-class ValueNode(IOptionNode):
+class ValueNode(AbstractOptionNode):
     """
     An option node which can have a value which can be a list of values (which can be inifinte, e.g., integers).
 
@@ -110,12 +110,12 @@ class ValueNode(IOptionNode):
     """
 
     def __init__(self, long_name: str, optional_type: IOptionType, ahelp: str, belonging: OptionBelonging):
-        IOptionNode.__init__(self,
-                             long_name=long_name,
-                             option_type=optional_type,
-                             ahelp=ahelp,
-                             belonging=belonging,
-                             )
+        AbstractOptionNode.__init__(self,
+                                    long_name=long_name,
+                                    option_type=optional_type,
+                                    ahelp=ahelp,
+                                    belonging=belonging,
+                                    )
 
     def add_to_cli_option(self, parser: Any) -> None:
 

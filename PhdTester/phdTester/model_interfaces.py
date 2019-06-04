@@ -81,8 +81,8 @@ class IDependencyCondition(abc.ABC):
 
     @abc.abstractmethod
     def accept(self, graph: "IMultiDirectedHyperGraph", tc: "ITestContext",
-               source_name: str, source_option: "IOptionNode", source_value: Any,
-               sinks: List[Tuple[str, "IOptionNode", Any]]
+               source_name: str, source_option: "AbstractOptionNode", source_value: Any,
+               sinks: List[Tuple[str, "AbstractOptionNode", Any]]
                ) -> bool:
         """
         Procedure to be perform to check if a hyperedge is satisfied or not
@@ -98,7 +98,7 @@ class IDependencyCondition(abc.ABC):
         pass
 
 
-class IOptionNode(abc.ABC):
+class AbstractOptionNode(abc.ABC):
     """
     An node in the Option Graph representing a single option.
 

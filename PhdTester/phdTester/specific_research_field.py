@@ -22,7 +22,7 @@ from phdTester.functions import DataFrameFunctionsDict
 from phdTester.image_computer import aggregators
 from phdTester.ks001.ks001 import KS001
 from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestContext, IGlobalSettings, \
-    ICsvRow, OptionBelonging, IOptionNode, ITestContextMask, \
+    ICsvRow, OptionBelonging, AbstractOptionNode, ITestContextMask, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
     ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict, \
     IDataRowExtrapolator, IDataContainerPathGenerator, ISubtitleGenerator
@@ -963,8 +963,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         parser = argparse.ArgumentParser()
 
         for _, vertex in g.vertices():
-            if not isinstance(vertex, IOptionNode):
-                raise ValueError(f"vertex is not of instance IOptionNode!")
+            if not isinstance(vertex, AbstractOptionNode):
+                raise ValueError(f"vertex is not of instance AbstractOptionNode!")
 
             vertex.add_to_cli_option(parser)
 

@@ -4,7 +4,7 @@ from typing import List, Any, Callable, Tuple, Iterable, Set, Dict
 from phdTester import conditions, option_types
 from phdTester.conditions import IDependencyCondition
 from phdTester.graph import SimpleMultiDirectedGraph, DefaultMultiDirectedHyperGraph
-from phdTester.model_interfaces import ITestContext, IOptionNode, OptionBelonging, IOptionType
+from phdTester.model_interfaces import ITestContext, AbstractOptionNode, OptionBelonging, IOptionType
 from phdTester.options import ValueNode, FlagNode, MultiPlexerNode
 
 
@@ -82,10 +82,10 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
                 return False
         return True
 
-    def options(self) -> Iterable[Tuple[str, IOptionNode]]:
+    def options(self) -> Iterable[Tuple[str, AbstractOptionNode]]:
         for name, v in self.vertices():
-            if not isinstance(v, IOptionNode):
-                raise TypeError(f"overtex is not IOptionNode!")
+            if not isinstance(v, AbstractOptionNode):
+                raise TypeError(f"overtex is not AbstractOptionNode!")
             yield (name, v)
 
 
@@ -245,7 +245,7 @@ class OptionBuilder(abc.ABC):
         :return: option builder
         """
 
-        def condition(source: IOptionNode, source_value: Any, sink: IOptionNode, sink_value: Any):
+        def condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
             return source_value not in values
 
         self.option_graph.add_edge(option1, options_prohibited, conditions.Satisfy(
@@ -270,7 +270,7 @@ class OptionBuilder(abc.ABC):
         :return: the graph builder
         """
 
-        def cond(source: IOptionNode, source_value: Any, sink: IOptionNode, sink_value: Any, side_options: List[Tuple[IOptionNode, Any]]) -> bool:
+        def cond(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any, side_options: List[Tuple[AbstractOptionNode, Any]]) -> bool:
             if source_value not in values1:
                 return True
             if sink_value not in values2:
@@ -292,10 +292,10 @@ class OptionBuilder(abc.ABC):
 
     def option_values_mutually_exclusive(self, option1: str, values1: List[Any], option2: str, values2: List[Any]) -> "OptionBuilder":
 
-        def condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
+        def condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
             return option1_value not in values1 and option2_value not in values2
 
-        def condition2(source: IOptionNode, source_value: Any, sink: IOptionNode, sink_value: Any):
+        def condition2(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
             return source_value not in values2 and sink_value not in values1
 
         self.option_graph.add_edge(option1, option2, conditions.Satisfy(
@@ -310,10 +310,10 @@ class OptionBuilder(abc.ABC):
         ))
         return self
 
-        # def condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
+        # def condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
         #     return option1_value not in option2
         #
-        # def should_visit_condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
+        # def should_visit_condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
         #     return True
         #
         # self.option_graph.add_edge(option1, options_prohibited, conditions.Satisfy(
@@ -327,12 +327,12 @@ class OptionBuilder(abc.ABC):
     def option_can_be_used_only_when_other_string_satisfy(self, option_to_use: str, option_to_have_values: str,
                                                      condition: Callable[[str, str], bool]) -> "OptionBuilder":
 
-        # def inner_condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
+        # def inner_condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
         #     assert isinstance(option1_value, str)
         #     assert isinstance(option2_value, str)
         #     return condition(option1_value, option2_value)
         #
-        # def should_visit_condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
+        # def should_visit_condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
         #     return True
         #
         # self.option_graph.add_edge(option_to_use, option_to_have_values,
@@ -342,7 +342,7 @@ class OptionBuilder(abc.ABC):
         #                            ))
         # return self
 
-        def other_condition(source: IOptionNode, source_value: Any, sink: IOptionNode, sink_value: Any):
+        def other_condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
             assert isinstance(source_value, str)
             assert isinstance(sink_value, str)
             return condition(source_value, sink_value)
@@ -358,17 +358,17 @@ class OptionBuilder(abc.ABC):
     def option_can_be_used_only_when_other_has_value(self, option_to_use: str, option_to_have_values: str,
                                                      values_to_have: List[Any]) -> "OptionBuilder":
 
-        # def condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
+        # def condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
         #     return True
         #
-        # def should_condition(option1: IOptionNode, option1_value: Any, option2: IOptionNode, option2_value: Any):
+        # def should_condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
         #     return option2_value in values_to_have
         #
         # self.option_graph.add_edge(option_to_use, option_to_have_values,
         #                            NeedsToHaveValuesCondition(condition=condition, shoud_visit_condition=should_condition))
         # return self
 
-        def condition(source: IOptionNode, source_value: Any, sink: IOptionNode, sink_value: Any):
+        def condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
             return sink_value in values_to_have
 
         self.option_graph.add_edge(option_to_use, option_to_have_values, conditions.Satisfy(
@@ -384,7 +384,7 @@ class OptionBuilder(abc.ABC):
         # self.option_graph.add_edge(option_to_use, option_to_be_present, True)
         # return self
 
-        def condition(source: IOptionNode, source_value: Any, sink: IOptionNode, sink_value: Any):
+        def condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
             return source_value is not None
 
         self.option_graph.add_edge(option_to_be_present, option_to_use, conditions.Satisfy(
