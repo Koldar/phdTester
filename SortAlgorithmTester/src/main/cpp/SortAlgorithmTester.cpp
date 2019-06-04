@@ -16,6 +16,8 @@ int _upperBound;
 int _runs;
 std::string _outputTemplate;
 
+double _shrinkFactor;
+
 int generateRandomNumber(int lb, int ub, bool lbIn, bool ubIn) {
     lb += lbIn ? 0: 1;
     ub += ubIn ? 1: 0;
@@ -280,18 +282,71 @@ private:
     }
 };
 
+class CombSort: public ISortAlgorithm {
+private:
+    double shrinkFactor;
+public:
+    CombSort(double shrinkFactor) : shrinkFactor{shrinkFactor} {}
+    virtual ~CombSort() {
+
+    }
+    virtual void reset() {
+
+    }
+    std::vector<int>& sort(std::vector<int>& sequence) {
+        // Initialize gap 
+        int gap = sequence.size(); 
+    
+        // Initialize swapped as true to make sure that 
+        // loop runs 
+        bool swapped = true; 
+    
+        // Keep running while gap is more than 1 and last 
+        // iteration caused a swap 
+        while (gap != 1 || swapped == true) { 
+            // Find next gap 
+            gap = this->getNextGap(gap); 
+    
+            // Initialize swapped as false so that we can 
+            // check if swap happened or not 
+            swapped = false; 
+    
+            // Compare all elements with current gap 
+            for (int i=0; i<sequence.size()-gap; i++) { 
+                if (sequence[i] > sequence[i+gap]) { 
+                    auto tmp = sequence[i];
+                    sequence[i] = sequence[i+gap];
+                    sequence[i+gap] = tmp;
+                    swapped = true; 
+                } 
+            } 
+        } 
+        return sequence;
+    }
+private:
+    int getNextGap(int gap) { 
+        // Shrink gap by Shrink factor (best shrink factor: 10/13)
+        gap = (gap * shrinkFactor);
+        if (gap < 1) 
+            return 1; 
+        return gap; 
+    } 
+};
+
 int main(const int argc, const char* args[]) {
 
     CLI::App app{"Sorting algorithm tester"};
 
     app.add_option("--sequenceSize", _sequenceSize, "Size of the array to sort");
     app.add_option("--sequenceType", _sequenceType, "type of the sequence to sort: RANDOM, SAME, SORTED, REVERSESORTED");
-    app.add_option("--algorithm", _algorithm, "algorithm to test. BUBBLESORT, MERGESORT, COUNTSORT, RADIXSORT");
+    app.add_option("--algorithm", _algorithm, "algorithm to test. BUBBLESORT, MERGESORT, COUNTSORT, RADIXSORT, COMBSORT");
     app.add_option("--lowerBound", _lowerBound, "Minimum number we might generate");
     app.add_option("--upperBound", _upperBound, "Maximum number we might generate");
     app.add_option("--runs", _runs, "Number of run we need to perform (execution of the same trial)");
     app.add_option("--seed", _seed, "Seed for random generator");
     app.add_option("--outputTemplate", _outputTemplate);
+
+    app.add_option("--shrinkFactor", _shrinkFactor, "factor used to shrink the gap of combsort. Used only in COMBSORT algorithm");
 
     CLI11_PARSE(app, argc, args);
 
@@ -306,6 +361,8 @@ int main(const int argc, const char* args[]) {
         alg = new CountSort{_upperBound};
     } else if (_algorithm == std::string{"RADIXSORT"}) {
         alg = new RadixSort{};
+    } else if (_algorithm == std::string{"COMBSORT"}) {
+        alg = new CombSort{_shrinkFactor};
     } else {
         throw std::domain_error{"invalid algorithm!"};
     }
