@@ -643,12 +643,15 @@ class IStuffUnderTest(IOptionDictWithKS, ILabelable, ABC):
         The label is used whenever we need to generate something readable for the user.
 
         By default it is just the list of the options/options value this stuff under test has
+        ignoring None values
 
         :return: the label representing the stuff under test
         """
         result = []
         for name in sorted(self.options()):
-            result.append(f"name={self.get_option(name)}")
+            if self.get_option(name) is None:
+                continue
+            result.append(f"{name}={self.get_option(name)}")
         return ' '.join(result)
 
 
