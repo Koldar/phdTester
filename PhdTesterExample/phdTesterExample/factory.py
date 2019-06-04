@@ -1,5 +1,4 @@
-
-
+import logging
 from typing import Dict, List, Any
 
 import subprocess
@@ -151,6 +150,9 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             image_suffix=phd.KS001.single_labelled("image", type="time-over-runid"),
             user_tcm=user_tcm,
             path_function=phd.path_generators.CsvDataContainerPathGenerator(),
+            curve_changer=[
+                phd.curves_changers.Print(log_function=logging.info)
+            ]
         )
 
         user_tcm = self.generate_test_context_mask()

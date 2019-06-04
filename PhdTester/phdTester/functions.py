@@ -169,6 +169,24 @@ class SeriesFunction(commons.SlottedClass, IFunction2D):
         return pd.DataFrame(self._series)
 
 
+class BoxData(commons.SlottedClass):
+    """
+    Dumb object containing box plot data
+    """
+
+    __slots__ = ('count', 'min', 'max', 'lower_percentile', 'upper_percentile', 'median', 'mean', 'std')
+
+    def __init__(self, count: int, min: float, lower_percentile: float, median: float, mean: float, upper_percentile: float, max: float, std: float):
+        self.count = count
+        self.min = min
+        self.max = max
+        self.lower_percentile = lower_percentile
+        self.upper_percentile = upper_percentile
+        self.median = median
+        self.mean = mean
+        self.std = std
+
+
 class PandasFunction(commons.SlottedClass, IFunction2D):
 
     __slots__ = ('df', )
@@ -444,3 +462,16 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
 
     def max_of_function(self, name: str) -> float:
         return self._dataframe[name].max(skipna=True)
+
+    def get_statistics(self, name: str, lower_percentile: float = 0.25, upper_percentile: float = 0.75) -> BoxData:
+        result = self._dataframe[name].describe()
+        return BoxData(
+            count=result['count'],
+            min=result['min'],
+            max=result['max'],
+            lower_percentile=result[f'{lower_percentile*100}%'],
+            upper_percentile=result[f'{upper_percentile * 100}%'],
+            median=result['50%'],
+            mean=result['mean'],
+            std=result['std'],
+        )

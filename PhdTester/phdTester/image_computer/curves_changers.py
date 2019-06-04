@@ -7,10 +7,9 @@ import numpy as np
 import pandas as pd
 
 from phdTester import commons
-from phdTester.default_models import PandasFunction, Function2D, SeriesFunction, DataFrameFunctionsDict
+from phdTester.functions import DataFrameFunctionsDict, SeriesFunction
 from phdTester.image_computer import aggregators
-from phdTester.model_interfaces import ICurvesChanger, IFunction2D, ITestContext, XAxisSharingEnum, \
-    XAxisGeneratedEnum, IFunctionsDict
+from phdTester.model_interfaces import ICurvesChanger, IFunction2D, ITestContext, IFunctionsDict
 
 
 class AbstractTransform(ICurvesChanger, abc.ABC):

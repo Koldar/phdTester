@@ -34,5 +34,6 @@ from phdTester.datasources import filesystem_sources as datasources
 from phdTester import masks
 from phdTester.image_computer import aggregators
 from phdTester import path_generators
+from phdTester.image_computer import curves_changers as curves_changers
 
 
