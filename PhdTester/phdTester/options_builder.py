@@ -5,7 +5,7 @@ from phdTester import conditions, option_types
 from phdTester.conditions import IDependencyCondition
 from phdTester.graph import SimpleMultiDirectedGraph, DefaultMultiDirectedHyperGraph
 from phdTester.model_interfaces import ITestContext, AbstractOptionNode, OptionBelonging, IOptionType
-from phdTester.options import ValueNode, FlagNode, MultiPlexerNode
+from phdTester.options import ValueNode, FlagNode, MultiplexerNode
 
 
 class OptionGraph(DefaultMultiDirectedHyperGraph):
@@ -110,7 +110,7 @@ class OptionBuilder(abc.ABC):
         return self._add_flag(name, ahelp, OptionBelonging.SETTINGS)
 
     def _add_multiplexer(self, name: str, possible_values: List[str], ahelp: str, belonging: OptionBelonging) -> "OptionBuilder":
-        self.option_graph.add_vertex(aid=name, payload=MultiPlexerNode(name, possible_values, ahelp, belonging))
+        self.option_graph.add_vertex(aid=name, payload=MultiplexerNode(name, possible_values, ahelp, belonging))
         return self
 
     def add_under_testing_multiplexer(self, name: str, possible_values: List[str], ahelp: str) -> "OptionBuilder":

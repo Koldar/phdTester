@@ -24,7 +24,7 @@ class FlagNode(AbstractOptionNode):
         return bool(value)
 
 
-class MultiPlexerNode(AbstractOptionNode):
+class MultiplexerNode(AbstractOptionNode):
     """
     An option node which can have one of finite number of possible values.
 
