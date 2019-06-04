@@ -5,7 +5,7 @@ from phdTester import conditions, option_types
 from phdTester.conditions import IDependencyCondition
 from phdTester.graph import SimpleMultiDirectedGraph, DefaultMultiDirectedHyperGraph
 from phdTester.model_interfaces import ITestContext, AbstractOptionNode, OptionBelonging, IOptionType
-from phdTester.options import ValueNode, FlagNode, MultiplexerNode
+from phdTester.options import MultiValueNode, FlagNode, MultiplexerNode
 
 
 class OptionGraph(DefaultMultiDirectedHyperGraph):
@@ -144,7 +144,7 @@ class OptionBuilder(abc.ABC):
     def _add_value(self, name: str, option_type: "IOptionType", ahelp: str, belonging: OptionBelonging, default: Any = None) -> "OptionBuilder":
         if not isinstance(option_type, IOptionType):
             raise TypeError(f"allowed values for \"option_type\" are only those inheriting from \"IOptionType\"! Got {type(option_type)}")
-        self.option_graph.add_vertex(aid=name, payload=ValueNode(name, option_type, ahelp, belonging, default=default))
+        self.option_graph.add_vertex(aid=name, payload=MultiValueNode(name, option_type, ahelp, belonging, default=default))
         return self
 
     def add_under_testing_value(self, name: str, option_type: "IOptionType", ahelp: str, default: Any = None) -> "OptionBuilder":

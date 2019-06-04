@@ -101,11 +101,11 @@ class SingleValueNode(AbstractOptionNode):
         return self.option_type.convert(value)
 
 
-class ValueNode(AbstractOptionNode):
+class MultiValueNode(AbstractOptionNode):
     """
     An option node which can have a value which can be a list of values (which can be inifinte, e.g., integers).
 
-    For example in CombSort, the shrink factor is a ValueNode since it can have several different values in different
+    For example in CombSort, the shrink factor is a MultiValueNode since it can have several different values in different
     test contexts
     """
 
