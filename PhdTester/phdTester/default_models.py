@@ -91,6 +91,10 @@ class AbstractStuffUnderTest(IStuffUnderTest, StandardOptionDict, abc.ABC):
     def key_alias(self) -> Dict[str, str]:
         return commons.generate_aliases(list(self.options()))
 
+    @property
+    def value_alias(self):
+        return {}
+
 
 class DefaultStuffUnderTest(IStuffUnderTest, DefaultAnonymuousOptionObject):
     """
