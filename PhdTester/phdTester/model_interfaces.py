@@ -14,7 +14,7 @@ from typing import Any, Tuple, Iterable, Dict, List, Callable, Optional, Set
 from phdTester import commons
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, DataTypeStr, RegexStr
 from phdTester.exceptions import ResourceTypeUnhandledError
-from phdTester.graph import IMultiDirectedGraph
+from phdTester.graph import IMultiDirectedGraph, IMultiDirectedHyperGraph
 from phdTester.ks001.ks001 import KS001, Aliases
 
 
@@ -81,48 +81,29 @@ class IDependencyCondition(abc.ABC):
 
     @abc.abstractmethod
     def is_required(self) -> bool:
+        """
+
+        :return:
+        """
         pass
 
     @abc.abstractmethod
-    def accept(self, graph: IMultiDirectedGraph, source_name: str, sink_name: str, tc: "ITestContext") -> bool:
-        pass
+    def accept(self, graph: "IMultiDirectedHyperGraph", tc: "ITestContext",
+               source_name: str, source_option: "IOptionNode", source_value: Any,
+               sinks: List[Tuple[str, "IOptionNode", Any]]
+               ) -> bool:
+        """
+        Procedure to be perform to check if a hyperedge is satisfied or not
 
-    # @property
-    # @abc.abstractmethod
-    # def kind(self) -> ConditionKind:
-    #     """
-    #     Type of condition
-    #     :return:
-    #     """
-    #     pass
-    #
-    # @abc.abstractmethod
-    # def should_visit(self, graph: ISingleDirectedGraph, source_name: str, sink_name: str, tc: "ITestContext") -> bool:
-    #     """
-    #     check if we should check the compliance of this condition
-    #
-    #     :param graph: the graph containing source_name and sink_name
-    #     :param source_name: the source vertex of the condition
-    #     :param sink_name: the sink vertex of the condition
-    #     :param tc: the test context
-    #     :return: true if we should check the accept method of this edge and follow this edge), false if the text
-    #     context is not applicable to
-    #     this edge
-    #     """
-    #     pass
-    #
-    # @abc.abstractmethod
-    # def accept(self, graph: ISingleDirectedGraph, source_name: str, sink_name: str, tc: "ITestContext") -> bool:
-    #     """
-    #     Check if this constraint is valid
-    #
-    #     :param graph: the graph containing the whole contraints
-    #     :param source_name: name of the source node of this constraint
-    #     :param sink_name: name of the sink node of this constraint
-    #     :param tc: test context we're applying the constraint to
-    #     :return: true if `tc` satisfies this constraint, false otherwise
-    #     """
-    #     pass
+        :param graph: the hyper graph involved
+        :param source_name: id of the source vertex of the hyper edge
+        :param source_option: option represented by the vertex whose id is source_name
+        :param sinks: list of sink data. Each cell contains the vertex id, the associated option and the value
+            of the option inside `tc` variuable
+        :param tc: test context to check the condition against
+        :return: true if the hyper edge is satisfied, false otherwise
+        """
+        pass
 
 
 class IOptionNode(abc.ABC):
