@@ -25,7 +25,7 @@ from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestC
     ICsvRow, OptionBelonging, AbstractOptionNode, ITestContextMask, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
     ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict, \
-    IDataRowExtrapolator, IDataContainerPathGenerator, ISubtitleGenerator
+    IDataRowExtrapolator, IDataContainerPathGenerator, ISubtitleGenerator, Priority
 from phdTester.options_builder import OptionGraph
 from phdTester.path_generators import CsvDataContainerPathGenerator
 from phdTester.plotting import matplotlib_plotting
@@ -987,35 +987,52 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         :param parse_output: a structure representing the parser the user has used to generate the options values
         :return:
         """
-        under_test = []
-        test_environment = []
-        under_testing_labels = []
-        test_environment_labels = []
+        under_test = {}
+        test_environment = {}
         for option_name, option in filter(lambda name_value: name_value[1].belonging != OptionBelonging.SETTINGS,
                                           g.options()):
             # get the value the user has passed to the command line.
             value = getattr(parse_output, option.get_parser_attribute())
+            if value is None:
+                # if the option is not required and there is no default set, value will be None.
+                # in this one possible value of the option will be None. We use a list because
+                # it fits in the extends mechanics
+                to_add = [None]
+            else:
+                # otherwise we expect an iterable of values. We generate the list from it
+                logging.info(f"fetching values of option {option_name} from string {value}.")
+                to_add = list(commons.safe_eval(value))  # to_add is always a list of values
+                logging.info(f"converting option {option_name}")
+                to_add = [option.convert_value(x) for x in to_add]
 
-            # generate the list from it
-            logging.info(f"fetching values of option {option_name} from string {value}.")
-            to_add = list(commons.safe_eval(value))  # to_add is always a list of values
-            logging.info(f"converting option {option_name}")
-            to_add = [option.convert_value(x) for x in to_add]
             if option.belonging == OptionBelonging.UNDER_TEST:
-                under_testing_labels.append(option.long_name)
-                under_test.append(to_add)
+                dict_to_alter = under_test
             elif option.belonging == OptionBelonging.ENVIRONMENT:
-                test_environment_labels.append(option.long_name)
-                test_environment.append(to_add)
+                dict_to_alter = test_environment
             else:
                 raise TypeError(f"invalid belonging {option.belonging}!")
 
-        assert len(under_testing_labels) == len(under_test)
-        assert len(test_environment_labels) == len(test_environment)
+            if option.long_name not in dict_to_alter:
+                dict_to_alter[option.long_name] = []
+            # to_add is always a list
+            dict_to_alter[option.long_name].extend(to_add)
 
-        return \
-            {k: under_test[i] for i, k in enumerate(under_testing_labels)}, \
-            {k: test_environment[i] for i, k in enumerate(test_environment_labels)}
+        # we need to ensure that the possible values of an option are either a single None or a list of non-None values
+        for k, values in under_test.items():
+            if len(values) == 0:
+                raise ValueError(f"we cannot have an empty list for under stuff option {k}")
+            if len(values) > 1 and None in values:
+                raise ValueError(f"there are several values inside stuff under test option {k} and one of them is None!")
+
+        # we need to ensure that the possible values of an option are either a single None or a list of non-None values
+        for k, values in test_environment.items():
+            if len(values) == 0:
+                raise ValueError(f"we cannot have an empty list for under stuff option {k}")
+            if len(values) > 1 and None in values:
+                raise ValueError(
+                    f"there are several values inside stuff under test option {k} and one of them is None!")
+
+        return under_test, test_environment
 
     def _generate_test_contexts_from_option_graph(self, g: OptionGraph, under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]) -> Iterable[ITestContext]:
         under_testing_labels = list(under_test_values.keys())
@@ -1035,12 +1052,17 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
             test_context_to_add = self.__generate_test_context(ut, te)
             logging.debug(f"checking if {test_context_to_add} is a valid test...")
-            followed_vertices = set()
-            if not g.is_compliant_with(test_context_to_add, followed_vertices):
+            # fetch the options which are relevant for the ITestContext
+            success, followed_vertices = g.fetches_options_to_consider(test_context_to_add, Priority.IMPORTANT)  # the relevant options have values set to 100
+            if not success:
+                # the test context is not compliant with even the most basic options
                 continue
             # followed_vertices contains the set fo vertices which are semantically useful
-            # we remove from tc all the options which are semantically useless
+            # check if the other constraints are satisfied
+            if not g.is_compliant_with_test_context(test_context_to_add, followed_vertices, priority_to_ignore=Priority.IMPORTANT):
+                continue
 
+            # we remove from tc all the options which are semantically useless
             for useless in set(test_context_to_add.options()) - followed_vertices:
                 test_context_to_add.set_option(useless, None)
 

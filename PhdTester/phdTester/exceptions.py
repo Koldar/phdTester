@@ -18,3 +18,10 @@ class OptionConversionError(Exception):
     Exception to generate when we can't convert an option in IOptionType
     """
     pass
+
+
+class UncompliantTestContextError(Exception):
+    """
+    Thrown when a ITestContext is not compliant with the option graph
+    """
+    pass

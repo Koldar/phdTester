@@ -3,9 +3,11 @@ from typing import List, Any, Callable, Tuple, Iterable, Set, Dict
 
 from phdTester import conditions, option_types
 from phdTester.conditions import IDependencyCondition
-from phdTester.graph import SimpleMultiDirectedGraph, DefaultMultiDirectedHyperGraph
-from phdTester.model_interfaces import ITestContext, AbstractOptionNode, OptionBelonging, IOptionType
-from phdTester.options import MultiValueNode, FlagNode, MultiplexerNode
+from phdTester.exceptions import UncompliantTestContextError
+from phdTester.graph import SimpleMultiDirectedGraph, DefaultMultiDirectedHyperGraph, IMultiDirectedHyperGraph
+from phdTester.model_interfaces import ITestContext, AbstractOptionNode, OptionBelonging, IOptionType, Priority, \
+    ConditionOutcome
+from phdTester.options import MultiValueNode, SingleFlagNode, MultiChoiceNode, SingleChoiceNode, SingleValueNode
 
 
 class OptionGraph(DefaultMultiDirectedHyperGraph):
@@ -13,74 +15,194 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
     A graph which represents which allows us to understand if a test context represents a valid tests or not
     """
 
-    def is_compliant_with(self, tc: "ITestContext", followed_vertices: Set[str]) -> bool:
+    def is_compliant_with_test_context(self, tc: "ITestContext", vertices_to_consider: Set[str], priority_to_ignore: Priority) -> bool:
         """
-        Check if a test context is compliant with the option graph
+        Check if all the hyper edges which lays over `vertices_to_consider` have their constraint satisfied
 
-        To check if a test context is compliant with the option graph we use the following algorithm.
+        This function is not a DFS, but it just iterate over a list.
 
-        First of all we pickup the sources of the graph (i.e., vertices which aren't sinks). We then run a DFS on
-        unvisited vertices.
-
-        if, during the DFS, a vertex hasalready been visited we avoid handling it.
-        Otherwise we mark it as visited and we check all its outgoing conditions.
-         - If a required condition is not satisfied the test context is deemed as "uncompliant";
-         - If a condition which has "enable_sink_visit" set is encountered, we call the DFS on it; otherwise
-           we continue.
-
-        We stop when we have processed all the sources of the option graph.
-
-        :param tc:
-        :param followed_vertices:
+        :param tc: the test context whose compliance we need to check
+        :param vertices_to_consider:
+        :param priority_to_ignore:
         :return:
         """
 
-        visited = set()
-        followed_vertices.clear()
+        # we just iterate over all the hyper edges and we consider only the ones laid over the vertices to consider.
+        # we ignore the hyperedges with high priority (since we assume they are true)
 
-        def is_compliant_with_dfs(option_graph: "OptionGraph", node_name: str) -> bool:
-            if node_name in visited:
-                return True
-            visited.add(node_name)
-            for hyperedge in option_graph.out_edges(node_name):
-                condition = hyperedge.payload
-                source_name = hyperedge.source
-                sinks = hyperedge.sinks
-                if not isinstance(condition, IDependencyCondition):
-                    raise TypeError(f"edge payload needs to be instance of IDependencyCondition!")
+        for hyperedge in self.edges():
+            source_name = hyperedge.source
+            sinks = hyperedge.sinks
+            condition = hyperedge.payload
 
-                valid = condition.accept(
-                    graph=self, tc=tc,
-                    source_name=source_name,
-                    source_option=option_graph.get_vertex(source_name),
-                    source_value=tc.get_option(source_name),
-                    sinks=list(map(lambda sink_name: (sink_name, option_graph.get_vertex(sink_name), tc.get_option(sink_name)), sinks))
-                )
-                if condition.is_required():
-                    # the condition is marked as "required". If it's invalid the combination is immediately marked as
-                    # "invalid".
-                    if not valid:
-                        return False
+            if not isinstance(condition, IDependencyCondition):
+                raise TypeError(f"edge payload needs to be instance of IDependencyCondition!")
+            if not hyperedge.is_laid_on(vertices_to_consider):
+                continue
+            if hyperedge.payload.priority() >= priority_to_ignore:
+                continue
 
-                if condition.enable_sink_visit():
-                    # ok, the condition may or may not be required. If it allows the visit of the sinks,
-                    # we check if the condition is valid. If it's valid we recursively go in the sinks
-                    if valid:
-                        for sink in sinks:
-                            if not is_compliant_with_dfs(option_graph, sink):
-                                return False
-                            followed_vertices.add(sink)
+            valid = condition.accept(
+                graph=self, tc=tc,
+                source_name=source_name,
+                source_option=self.get_vertex(source_name),
+                source_value=tc.get_option(source_name),
+                sinks=list(
+                    map(lambda sink_name: (sink_name, self.get_vertex(sink_name), tc.get_option(sink_name)),
+                        sinks))
+            )
 
-            return True
+            if valid == ConditionOutcome.REJECT and condition.is_required():
+                return False
+
+        return True
+
+    def fetches_options_to_consider(self, tc: "ITestContext", priority: Priority) -> Tuple[bool, Set[str]]:
+        """
+        Generates a set of option nodes ids which are the set of options relevant to the ITestContext.
+
+        We assume that the only options which have greater priority than `priority` are those which, if followed,
+        generate the set of relevant options for `tc`
+
+        :param tc: the ITestContext under analysis
+        :param priority: the priority of the relevant options
+        :return: a tuple of 2 elements. The first is the success flag: if False the
+            ITestContext is not compliant with even the most basic cosntraints; in this case the second
+            value is semantically useless. If the flag is true, the second paramter is the set of relevant
+            options for `tc`.
+        """
+        result = set()
 
         for vertex_name, vertex_value in self.roots:
             # this is not a complete DFS. We start only from the roots of the option graph and we analyze only
             # nodes reached from there.
             # roots should always be marked as "followed"
-            followed_vertices.add(vertex_name)
-            if not is_compliant_with_dfs(self, vertex_name):
-                return False
-        return True
+            result.add(vertex_name)
+            try:
+                self.__follow_hyperedges(
+                    node_name=vertex_name,
+                    hyperedge_filter=lambda hyperedge: hyperedge.payload.priority() >= priority,
+                    visited=set(),
+                    tc=tc,
+                    followed=result
+                )
+            except UncompliantTestContextError:
+                return False, set()
+        return True, result
+
+    def __follow_hyperedges(self, node_name: str, hyperedge_filter: Callable[[IMultiDirectedHyperGraph.HyperEdge], bool], visited: Set[str], tc: "ITestContext", followed: Set[str]):
+        if node_name in visited:
+            return
+        visited.add(node_name)
+        for hyperedge in self.out_edges(node_name):
+            condition = hyperedge.payload
+            source_name = hyperedge.source
+            sinks = hyperedge.sinks
+
+            if not isinstance(condition, IDependencyCondition):
+                raise TypeError(f"edge payload needs to be instance of IDependencyCondition!")
+            if not hyperedge_filter(hyperedge):
+                # the edge is uncompliant. We ignore the hyperedge
+                continue
+            valid = condition.accept(
+                graph=self, tc=tc,
+                source_name=source_name,
+                source_option=self.get_vertex(source_name),
+                source_value=tc.get_option(source_name),
+                sinks=list(
+                    map(lambda sink_name: (sink_name, self.get_vertex(sink_name), tc.get_option(sink_name)),
+                        sinks))
+            )
+
+            if valid == ConditionOutcome.REJECT and condition.is_required():
+                # the condition is marked as "required". If it's invalid the combination is immediately marked as
+                # "invalid".
+                raise UncompliantTestContextError(f"condition {condition} failed")
+            elif valid == ConditionOutcome.SUCCESS and condition.enable_sink_visit():
+                # ok, the condition may or may not be required. If it allows the visit of the sinks,
+                # we check if the condition is valid. If it's valid we recursively go in the sinks
+                for sink in sinks:
+                    self.__follow_hyperedges(
+                        node_name=sink,
+                        hyperedge_filter=hyperedge_filter,
+                        visited=visited,
+                        tc=tc,
+                        followed=followed,
+                    )
+                    followed.add(sink)
+
+            #there are other cases: if valid is NOT_RELEVANT we basically ignore the condition
+
+
+
+    # def is_compliant_with(self, tc: "ITestContext", followed_vertices: Set[str]) -> bool:
+    #     """
+    #     Check if a test context is compliant with the option graph
+    #
+    #     To check if a test context is compliant with the option graph we use the following algorithm.
+    #
+    #     First of all we pickup the sources of the graph (i.e., vertices which aren't sinks). We then run a DFS on
+    #     unvisited vertices.
+    #
+    #     if, during the DFS, a vertex hasalready been visited we avoid handling it.
+    #     Otherwise we mark it as visited and we check all its outgoing conditions.
+    #      - If a required condition is not satisfied the test context is deemed as "uncompliant";
+    #      - If a condition which has "enable_sink_visit" set is encountered, we call the DFS on it; otherwise
+    #        we continue.
+    #
+    #     We stop when we have processed all the sources of the option graph.
+    #
+    #     :param tc:
+    #     :param followed_vertices:
+    #     :return:
+    #     """
+    #
+    #     visited = set()
+    #     followed_vertices.clear()
+    #
+    #     def is_compliant_with_dfs(option_graph: "OptionGraph", node_name: str) -> bool:
+    #         if node_name in visited:
+    #             return True
+    #         visited.add(node_name)
+    #         for hyperedge in option_graph.out_edges(node_name):
+    #             condition = hyperedge.payload
+    #             source_name = hyperedge.source
+    #             sinks = hyperedge.sinks
+    #             if not isinstance(condition, IDependencyCondition):
+    #                 raise TypeError(f"edge payload needs to be instance of IDependencyCondition!")
+    #
+    #             valid = condition.accept(
+    #                 graph=self, tc=tc,
+    #                 source_name=source_name,
+    #                 source_option=option_graph.get_vertex(source_name),
+    #                 source_value=tc.get_option(source_name),
+    #                 sinks=list(map(lambda sink_name: (sink_name, option_graph.get_vertex(sink_name), tc.get_option(sink_name)), sinks))
+    #             )
+    #             if condition.is_required():
+    #                 # the condition is marked as "required". If it's invalid the combination is immediately marked as
+    #                 # "invalid".
+    #                 if not valid:
+    #                     return False
+    #
+    #             if condition.enable_sink_visit():
+    #                 # ok, the condition may or may not be required. If it allows the visit of the sinks,
+    #                 # we check if the condition is valid. If it's valid we recursively go in the sinks
+    #                 if valid:
+    #                     for sink in sinks:
+    #                         if not is_compliant_with_dfs(option_graph, sink):
+    #                             return False
+    #                         followed_vertices.add(sink)
+    #
+    #         return True
+    #
+    #     for vertex_name, vertex_value in self.roots:
+    #         # this is not a complete DFS. We start only from the roots of the option graph and we analyze only
+    #         # nodes reached from there.
+    #         # roots should always be marked as "followed"
+    #         followed_vertices.add(vertex_name)
+    #         if not is_compliant_with_dfs(self, vertex_name):
+    #             return False
+    #     return True
 
     def options(self) -> Iterable[Tuple[str, AbstractOptionNode]]:
         for name, v in self.vertices():
@@ -94,9 +216,9 @@ class OptionBuilder(abc.ABC):
     def __init__(self):
         self.option_graph = OptionGraph()
 
-    def _add_flag(self, name: str, ahelp: str, belonging: OptionBelonging) -> "OptionBuilder":
-        self.option_graph.add_vertex(aid=name, payload=FlagNode(name, ahelp, belonging))
-        return self
+    ####################################
+    # FLAG
+    ####################################
 
     def add_settings_flag(self, name: str, ahelp: str) -> "OptionBuilder":
         """
@@ -107,11 +229,12 @@ class OptionBuilder(abc.ABC):
         :param ahelp: description of what this flag is doing
         :return: the option builder
         """
-        return self._add_flag(name, ahelp, OptionBelonging.SETTINGS)
-
-    def _add_multiplexer(self, name: str, possible_values: List[str], ahelp: str, belonging: OptionBelonging) -> "OptionBuilder":
-        self.option_graph.add_vertex(aid=name, payload=MultiplexerNode(name, possible_values, ahelp, belonging))
+        self.option_graph.add_vertex(aid=name, payload=SingleFlagNode(name, ahelp, OptionBelonging.SETTINGS))
         return self
+
+    ####################################
+    # CHOICE
+    ####################################
 
     def add_under_testing_multiplexer(self, name: str, possible_values: List[str], ahelp: str) -> "OptionBuilder":
         """
@@ -124,7 +247,11 @@ class OptionBuilder(abc.ABC):
         :param ahelp: description of what these values do
         :return: the option builder
         """
-        return self._add_multiplexer(name, possible_values, ahelp, OptionBelonging.UNDER_TEST)
+        self.option_graph.add_vertex(
+            aid=name,
+            payload=MultiChoiceNode(name, possible_values, ahelp, OptionBelonging.UNDER_TEST)
+        )
+        return self
 
     def add_environment_multiplexer(self, name: str, possible_values: List[str], ahelp: str) -> "OptionBuilder":
         """
@@ -136,10 +263,22 @@ class OptionBuilder(abc.ABC):
         :param ahelp: derscription of what this option means
         :return: the option builder
         """
-        return self._add_multiplexer(name, possible_values, ahelp, OptionBelonging.ENVIRONMENT)
+        self.option_graph.add_vertex(
+            aid=name,
+            payload=MultiChoiceNode(name, possible_values, ahelp, OptionBelonging.ENVIRONMENT)
+        )
+        return self
 
     def add_settings_multiplexer(self, name: str, possible_values: List[str], ahelp: str) -> "OptionBuilder":
-        return self._add_multiplexer(name, possible_values, ahelp, OptionBelonging.SETTINGS)
+        self.option_graph.add_vertex(
+            aid=name,
+            payload=SingleChoiceNode(name, possible_values, ahelp, OptionBelonging.SETTINGS)
+        )
+        return self
+
+    ####################################
+    # VALUE
+    ####################################
 
     def _add_value(self, name: str, option_type: "IOptionType", ahelp: str, belonging: OptionBelonging, default: Any = None) -> "OptionBuilder":
         if not isinstance(option_type, IOptionType):
@@ -147,7 +286,7 @@ class OptionBuilder(abc.ABC):
         self.option_graph.add_vertex(aid=name, payload=MultiValueNode(name, option_type, ahelp, belonging, default=default))
         return self
 
-    def add_under_testing_value(self, name: str, option_type: "IOptionType", ahelp: str, default: Any = None) -> "OptionBuilder":
+    def add_under_testing_value(self, name: str, option_type: "IOptionType", ahelp: str) -> "OptionBuilder":
         """
         Adds a node in the option graph representing a "stuff under test" option which can have infinite possible
         values. For example you can use it when you need to declare a integer option.
@@ -156,13 +295,16 @@ class OptionBuilder(abc.ABC):
         :param name: name of the option. If you add "foo" you will need to write in CLI "--foo_values"
         :param option_type: the type of the option
         :param ahelp: description of the option
-        :param default: if present, the option will have a default value. Otherwise it is considered as "required".
-            Represent sthe default value the option will have if no value is passed through the CLI
         :return: the option builder
         """
-        return self._add_value(name, option_type, ahelp, OptionBelonging.UNDER_TEST, default=default)
+        if not isinstance(option_type, IOptionType):
+            raise TypeError(f"allowed values for \"option_type\" are only those inheriting from \"IOptionType\"! Got {type(option_type)}")
+        self.option_graph.add_vertex(
+            aid=name,
+            payload=MultiValueNode(name, option_type, ahelp, OptionBelonging.UNDER_TEST))
+        return self
 
-    def add_environment_value(self, name: str, option_type: "IOptionType", ahelp: str, default: Any = None) -> "OptionBuilder":
+    def add_environment_value(self, name: str, option_type: "IOptionType", ahelp: str) -> "OptionBuilder":
         """
         Adds a node in the option graph representing a "test environment" option which can have infinite possible
         values. For example you can use it when you need to declare a integer option.
@@ -170,14 +312,22 @@ class OptionBuilder(abc.ABC):
         :param name: name of the option. If you add "foo" you will need to write in CLI "--foo_values"
         :param option_type: the type of the option
         :param ahelp: description of the option
-        :param default: if present, the option will have a default value. Otherwise it is considered as "required".
-            Represent sthe default value the option will have if no value is passed through the CLI
         :return: the option builder
         """
-        return self._add_value(name, option_type, ahelp, OptionBelonging.ENVIRONMENT, default)
+        if not isinstance(option_type, IOptionType):
+            raise TypeError(f"allowed values for \"option_type\" are only those inheriting from \"IOptionType\"! Got {type(option_type)}")
+        self.option_graph.add_vertex(
+            aid=name,
+            payload=MultiValueNode(name, option_type, ahelp, OptionBelonging.ENVIRONMENT))
+        return self
 
     def add_settings_value(self, name: str, option_type: "IOptionType", ahelp: str, default: Any = None) -> "OptionBuilder":
-        return self._add_value(name, option_type, ahelp, OptionBelonging.SETTINGS, default)
+        if not isinstance(option_type, IOptionType):
+            raise TypeError(f"allowed values for \"option_type\" are only those inheriting from \"IOptionType\"! Got {type(option_type)}")
+        self.option_graph.add_vertex(
+            aid=name,
+            payload=SingleValueNode(name, option_type, ahelp, OptionBelonging.SETTINGS, default_value=default))
+        return self
 
     def add_default_settings(self, log_level: str = "logLevel", build_directory: str = "buildDirectory") -> "OptionBuilder":
         """
@@ -216,22 +366,31 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    # conditions
+    #################################################
+    # CONDITIONS
+    #################################################
 
-    def option_value_allows_other_option(self, enabling_option: str, enabling_values: List[Any], enabled_option: str) -> "OptionBuilder":
+    def option_value_needs_other_option(self, enabling_option: str, enabling_values: List[Any], enabled_option: str) -> "OptionBuilder":
         """
-        if `option1` value is within the given set, then `option2` can't be set to None but requires to be set as well
+        if `option1` value is within the given set, then `option2` can't left set to None but it is required to
+        be set as well. `None` cannot be inside `enabling_values`.
+        If `option1` value is not in the given set, then everything is fine
 
         :param enabling_option: the option which can activate the option `enabled_option`
         :param enabling_values: the values which `enabling_option` needs to have in order to activate `enabled_option`
         :param enabled_option: the option which can be set if `option1_considered` has values in `option_1_values`
         :return:
         """
+        if None in enabling_values:
+            raise ValueError(f"None cannot be inside enabling_values!")
 
-        self.option_graph.add_edge(enabling_option, [enabled_option], conditions.NeedsToBeIn(
-            is_required=False,
+        # this condition has high priority since it is fundamental to detect which options are essential
+        # for the test context
+        self.option_graph.add_edge(enabling_option, [enabled_option], conditions.InSetImpliesNotNullSink(
+            is_required=True,  # it's required because test contexts uncompliant with this are not real tests
             enable_sink_visit=True,
             allowed_values=enabling_values,
+            priority=Priority.IMPORTANT,
         ))
         return self
 

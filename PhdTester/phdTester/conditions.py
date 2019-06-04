@@ -1,8 +1,11 @@
 import abc
+import enum
 from typing import Callable, Any, List, Tuple, Iterable
 
 from phdTester.graph import IMultiDirectedGraph, IMultiDirectedHyperGraph
-from phdTester.model_interfaces import ITestContext, IDependencyCondition, AbstractOptionNode
+from phdTester.model_interfaces import ITestContext, IDependencyCondition, AbstractOptionNode, Priority, \
+    ConditionOutcome
+
 
 # class SatisfyMultiEdge(IDependencyCondition):
 #     """
@@ -55,9 +58,10 @@ from phdTester.model_interfaces import ITestContext, IDependencyCondition, Abstr
 
 class AbstractDependencyCondition(IDependencyCondition, abc.ABC):
 
-    def __init__(self, enable_sink_visit: bool, is_required: bool):
+    def __init__(self, enable_sink_visit: bool, is_required: bool, priority: Priority):
         self.__enable_sink_visit = enable_sink_visit
         self.__is_required = is_required
+        self.__priority = priority
 
     def enable_sink_visit(self) -> bool:
         return self.__enable_sink_visit
@@ -65,13 +69,60 @@ class AbstractDependencyCondition(IDependencyCondition, abc.ABC):
     def is_required(self) -> bool:
         return self.__is_required
 
+    def priority(self) -> Priority:
+        return self.__priority
 
-class NeedsToBeIn(AbstractDependencyCondition):
 
-    def __init__(self, enable_sink_visit: bool, is_required: bool, allowed_values: List[Any]):
-        AbstractDependencyCondition.__init__(self, enable_sink_visit, is_required)
+class RequiresMapping(AbstractDependencyCondition):
+    """
+    The dependency is compliant when all endpoints of the hyperedge are not null and when the sink values are equal to
+    the appliance of a given mapping to the source value.
+
+    Example:
+
+        --algorithm=MERGE
+        --fullAlgorithm=MERGESORT, BUBBLESORT
+
+    They are compliant only when algorithm + 'SORT' = fullAlgorithm
+
+    """
+
+    def __init__(self, enable_sink_visit: bool, is_required: bool, priority: Priority, mapping: Callable[[Any], Any]):
+        AbstractDependencyCondition.__init__(self, enable_sink_visit, is_required, priority)
+        self.__mapping = mapping
+
+    def accept(self, graph: "IMultiDirectedHyperGraph", tc: "ITestContext", source_name: str,
+               source_option: "AbstractOptionNode", source_value: Any,
+               sinks: List[Tuple[str, "AbstractOptionNode", Any]]) -> ConditionOutcome:
+        if source_value is None:
+            return ConditionOutcome.REJECT
+        for sink_name, sink_option, sink_value in sinks:
+            if sink_value is None:
+                return ConditionOutcome.REJECT
+            if self.__mapping(source_value) != sink_value:
+                return ConditionOutcome.REJECT
+
+
+class InSetImpliesNotNullSink(AbstractDependencyCondition):
+    """
+    If the source value is inside a given set, then it is required that all sinks have not null values.
+
+    The condition is always true if the souirce value is not inside the given set
+    """
+
+    def __init__(self, enable_sink_visit: bool, is_required: bool, priority: Priority, allowed_values: List[Any]):
+        AbstractDependencyCondition.__init__(self, enable_sink_visit, is_required, priority)
         self.__allowed_values = allowed_values
 
     def accept(self, graph: "IMultiDirectedHyperGraph", tc: "ITestContext", source_name: str,
-               source_option: "AbstractOptionNode", source_value: Any, sinks: List[Tuple[str, "AbstractOptionNode", Any]]) -> bool:
-        return source_value in self.__allowed_values
+               source_option: "AbstractOptionNode", source_value: Any, sinks: List[Tuple[str, "AbstractOptionNode", Any]]) -> ConditionOutcome:
+        if source_value in self.__allowed_values:
+            for sink_name, sink_option, sink_value in sinks:
+                if sink_value is None:
+                    # a sink value in this condition is None, we cannot have it. The condition is uncompliant
+                    return ConditionOutcome.REJECT
+            else:
+                return ConditionOutcome.SUCCESS
+        else:
+            # source is not in the allowed values, hence
+            return ConditionOutcome.NOT_RELEVANT

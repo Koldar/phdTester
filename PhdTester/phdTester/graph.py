@@ -537,6 +537,14 @@ class IMultiDirectedHyperGraph(abc.ABC):
             """
             return self.source == source and set(self.sinks) == set(sinks)
 
+        def is_laid_on(self, vertices: Iterable[Any]) -> bool:
+            """
+
+            :param vertices: the set of vertices id to handle
+            :return: if all the endpoints belong to the given set, false otherwise
+            """
+            return self.source in vertices and all(map(lambda sink: sink in vertices, self.sinks))
+
     @abc.abstractmethod
     def add_vertex(self, payload, aid: Any = None) -> Any:
         """
@@ -643,6 +651,14 @@ class IMultiDirectedHyperGraph(abc.ABC):
         vertices which are connected with a direct hyper edge whose at **least** one sink is `sink`
         :param sink: id of a sink
         :return: iterable of vertices which has at least one sink identical to `sink`
+        """
+        pass
+
+    @abc.abstractmethod
+    def edges(self) -> Iterable[HyperEdge]:
+        """
+
+        :return: iterable of all the hyper edges in the graph
         """
         pass
 
@@ -768,6 +784,9 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
             if sink in edge.sinks and edge.source not in visited:
                 visited.add(sink)
                 yield edge.source
+
+    def edges(self) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
+        yield from self.__edges
 
     def out_edges(self, source: Any) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
         for edge in self.__edges:

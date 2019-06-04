@@ -65,6 +65,29 @@ class IOptionType(abc.ABC):
         pass
 
 
+class Priority(enum.Enum):
+    NORMAL = 50
+    IMPORTANT = 100
+
+    def __ge__(self, other):
+        return self.value >= other.value
+
+
+class ConditionOutcome(enum.Enum):
+    SUCCESS = enum.auto()
+    """
+    the condition could be evaluated and it was successful
+    """
+    REJECT = enum.auto()
+    """
+    the condition could be evaluated and it was unsuccessful
+    """
+    NOT_RELEVANT = enum.auto()
+    """
+    the condition cannot be applied at all
+    """
+
+
 class IDependencyCondition(abc.ABC):
 
     @abc.abstractmethod
@@ -80,10 +103,18 @@ class IDependencyCondition(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def priority(self) -> Priority:
+        """
+
+        :return: a value representing the weight bof this condition. 0 is the lowest, +infinity is the maximum
+        """
+
+
+    @abc.abstractmethod
     def accept(self, graph: "IMultiDirectedHyperGraph", tc: "ITestContext",
                source_name: str, source_option: "AbstractOptionNode", source_value: Any,
                sinks: List[Tuple[str, "AbstractOptionNode", Any]]
-               ) -> bool:
+               ) -> ConditionOutcome:
         """
         Procedure to be perform to check if a hyperedge is satisfied or not
 

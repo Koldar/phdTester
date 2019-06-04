@@ -22,6 +22,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             name="shrinkFactor",
             option_type=phd.option_types.Float(),
             ahelp="Shrink factor for COMBSORT",
+
         ).add_environment_value(
             name="sequenceSize",
             option_type=phd.option_types.Int(),
@@ -42,11 +43,11 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             name="run",
             option_type=phd.option_types.Int(),
             ahelp="""number of runs to execute for each test context""",
-        ).add_default_settings(
-        ).option_value_allows_other_option(
+        ).option_value_needs_other_option(
             enabling_option="algorithm",
             enabling_values=["COMBSORT"],
             enabled_option="shrinkFactor",
+        ).add_default_settings(
         ).get_option_graph()
 
     def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.datasources.FileSystem":
@@ -77,7 +78,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
     def _generate_test_context_mask(self, ut: "SortAlgorithmMask", te: "SortEnvironmentMask") -> "SortTestContextMask":
         return SortTestContextMask(ut=self.generate_stuff_under_test_mask(), te=self.generate_test_environment_mask())
 
-    def perform_test(self, tc: "phd.ITestContext", global_settings: "phd.IGlobalSettings"):
+    def perform_test(self, tc: "SortTestContext", global_settings: "phd.IGlobalSettings"):
         output_template_ks001 = tc.to_ks001(identifier='main')
         performance_ks001 = output_template_ks001.append(
             phd.KS001.from_template(output_template_ks001, label="kind", type="main"), in_place=False
@@ -94,6 +95,11 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             f'--outputTemplate="{output_template_ks001.dump_str()}"',
             f'--runs={tc.te.run}'
         ]
+
+        if tc.ut == "COMBSORT":
+            program.extend([
+                f"--shrinkFactor={tc.ut.shrinkFactor}"
+            ])
 
         executor = phd.ProgramExecutor()
         try:
