@@ -153,6 +153,30 @@ class CheckSameXAxis(ICurvesChanger):
         return XAxisStatus.SAME_X, curves
 
 
+class LowCurveRemoval(commons.SlottedClass, ICurvesChanger):
+    """
+    A changer that removes curves which maximum never go up a certain value
+    """
+
+    __slots__ = ('__threshold', '__threshold_included', )
+
+    def __init__(self, threshold: float, threshold_included: bool = False):
+        self.__threshold = threshold
+        self.__threshold_included = threshold_included
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple[XAxisStatus, "IFunctionsDict"]:
+
+        for name in curves.function_names():
+            m = curves.max_of_function(name)
+            if not((m > self.__threshold) or (math.isclose(m, self.__threshold) and self.__threshold_included is True)):
+                curves.remove_function(name)
+
+        return XAxisStatus.UNALTERED, curves
+
+
 
 
 
@@ -970,21 +994,5 @@ class ConditionCurveRemoval(ICurvesChanger):
         return curves
 
 
-class LowCurveRemoval(ICurvesChanger):
-    """
-    A changer that removes curves which maximum never go up a certain value
-    """
 
-    def __init__(self, threshold: float, threshold_included: bool = False):
-        self.threshold = threshold
-        self.threshold_included = threshold_included
-
-    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
-
-        for name in curves.function_names():
-            m = curves.max_of_function(name)
-            if not((m > self.threshold) or (m == self.threshold and self.threshold_included is True)):
-                curves.remove_function(name)
-
-        return curves
 
