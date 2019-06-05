@@ -35,5 +35,9 @@ from phdTester import masks
 from phdTester.image_computer import aggregators
 from phdTester import path_generators
 from phdTester.curve_changers import curves_changers as curves_changers
+from phdTester.function_splitters import function_splitters as function_splitters
+from phdTester.resource_filters import naive_filters as resource_filters
+from phdTester.resource_filters import single_filters as resource_filters
+from phdTester.resource_filters import complex_filters as resource_filters
 
 
