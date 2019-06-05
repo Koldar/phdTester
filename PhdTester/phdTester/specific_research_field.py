@@ -382,8 +382,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         :param settings: the settings fetched from the CLI
         :return:
         """
+
+        format = r"%(asctime)s %(filename)-27s@%(lineno)4d %(message)s"
         if settings.contains_option("logLevel"):
-            logging.basicConfig(level=getattr(logging, settings.logLevel))
+            logging.basicConfig(level=getattr(logging, settings.logLevel), format=format, datefmt="%j-%H:%M:%S")
 
     def run(self, *args, cli_commands: List[str] = None, **kwargs):
         """
@@ -1444,6 +1446,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                         under_test_function_key=current_function_label,
                         csv_tc=csv_info.tc,
                         csv_name=csv_info.name,
+                        csv_ks001=csv_info.ks001,
                         i=i,
                         csv_outcome=csv_outcome,
                     )
