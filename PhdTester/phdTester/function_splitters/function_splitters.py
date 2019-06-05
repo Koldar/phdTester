@@ -1,10 +1,13 @@
 import abc
 import os
 
+from phdTester import KS001
+from phdTester.common_types import KS001Str
+
 __doc__ = """
 This module contains all the splitter we natively support.
 
-Splitter allows you to generate images in a more advance way related to the vanilla way to generate them
+Splitter allows you to generate csvs in a more advance way related to the vanilla way to generate them
 """
 
 from typing import Tuple, Callable, Any
@@ -12,11 +15,40 @@ from typing import Tuple, Callable, Any
 from phdTester.model_interfaces import IFunctionSplitter, ITestContext, ICsvRow
 
 
-class SpitBasedOnCsv(IFunctionSplitter):
+class BasedOnCsv(IFunctionSplitter):
+    """
+    Create a new function for each csv we're currently analyzing.
 
-    def fetch_function(self, x: float, y: float, label: Any, under_test_function_key: str, csv_tc: "ITestContext", csv_name: str,
-                       i: int, csv_outcome: "ICsvRow") -> Tuple[float, float, Any, str]:
-        return x, y, label, os.path.basename(csv_name)
+    The function name will be the name of the csv we're analyzing
+    """
+
+    def fetch_function(self, x: float, y: float, under_test_function_key: str, csv_tc: "ITestContext",
+                       csv_name: KS001Str, csv_ks001: KS001,
+                       i: int, csv_outcome: "ICsvRow",
+                       colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Tuple[float, float, str]:
+
+        return x, y, os.path.basename(csv_name)
+
+
+class BaseOnCsvRow(IFunctionSplitter):
+    """
+    Create a new function for each csv row we're currently analyzing
+
+    The function name will be the name of the csv we're analyzing, attached with the row number information
+    """
+
+    def fetch_function(self, x: float, y: float, under_test_function_key: str, csv_tc: "ITestContext",
+                       csv_name: KS001Str, csv_ks001: KS001,
+                       i: int, csv_outcome: "ICsvRow",
+                       colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Tuple[float, float, str]:
+
+        new_name = KS001.from_merging(csv_ks001, label="functionSplitter", csvRow=i)
+        return x, y, new_name.dump_str(
+            colon=colon,
+            pipe=pipe,
+            underscore=underscore,
+            equal=equal,
+        )
 
 
 class GroupOnCSVContextSplitter(IFunctionSplitter, abc.ABC):
@@ -42,14 +74,14 @@ class GroupOnCSVContextSplitter(IFunctionSplitter, abc.ABC):
         """
         pass
 
-    def fetch_function(self, x: float, y: float, label: Any, under_test_function_key: str, csv_tc: "ITestContext",
+    def fetch_function(self, x: float, y: float, under_test_function_key: str, csv_tc: "ITestContext",
                        csv_name: str,
                        i: int, csv_outcome: "ICsvRow") -> Tuple[float, float, Any, str]:
 
         val = self.f(csv_tc, csv_name, i, csv_outcome)
         val = self.get_group(val, x, y, under_test_function_key, csv_tc, csv_name, i, csv_outcome)
         name = self.new_name(under_test_function_key, val)
-        return x, y, label, name
+        return x, y, name
 
 
 class GroupOnCSVValue(GroupOnCSVContextSplitter):
@@ -71,15 +103,15 @@ class GroupOnCSVContextValueSplitter(IFunctionSplitter):
         self.f = f
         self.new_name = new_name
 
-    def fetch_function(self, x: float, y: float, label: Any, under_test_function_key: str, csv_tc: "ITestContext",
+    def fetch_function(self, x: float, y: float, under_test_function_key: str, csv_tc: "ITestContext",
                        csv_name: str,
                        i: int, csv_outcome: "ICsvRow") -> Tuple[float, float, Any, str]:
         val = self.f(csv_tc, csv_name, i, csv_outcome)
 
         name = self.new_name(under_test_function_key, val)
-        return x, y, label, name
+        return x, y, name
 
-
+# TODO should we remove it?
 class GroupOnCSVSingleValueSplitter(IFunctionSplitter):
     """
     A Group on CSV splitter is a splitter which split the points generated in different plots all the same algorithm,
@@ -112,11 +144,11 @@ class GroupOnCSVSingleValueSplitter(IFunctionSplitter):
         self.csv_column_name = csv_column_name
         self.csv_column_cast = csv_column_cast
 
-    def fetch_function(self, x: float, y: float, label: Any, under_test_function_key: str, csv_tc: "ITestContext",
+    def fetch_function(self, x: float, y: float, under_test_function_key: str, csv_tc: "ITestContext",
                        csv_name: str,
                        i: int, csv_outcome: "ICsvRow") -> Tuple[float, float, Any, str]:
         option_value = csv_outcome.get_option(self.csv_column_name)
         option_value = self.csv_column_cast(option_value)
         name = self.new_name(under_test_function_key, self.csv_column_name, option_value)
 
-        return x, y, label, name
+        return x, y, name
