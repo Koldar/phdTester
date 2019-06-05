@@ -151,7 +151,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             user_tcm=user_tcm,
             path_function=phd.path_generators.CsvDataContainerPathGenerator(),
             curve_changer=[
-                phd.curves_changers.Print(log_function=logging.critical)
+                phd.curves_changers.Print(log_function=logging.critical),
             ]
         )
 
@@ -167,6 +167,9 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             y_aggregator=phd.aggregators.MeanAggregator(),
             image_suffix=phd.KS001.single_labelled("image", type="time-over-sequencesize"),
             user_tcm=user_tcm,
+            curve_changer=[
+                phd.curves_changers.RemoveSmallFunction(threshold=10)
+            ]
         )
 
     def generate_csvs(self, settings: "phd.IGlobalSettings",

@@ -153,7 +153,7 @@ class CheckSameXAxis(ICurvesChanger):
         return XAxisStatus.SAME_X, curves
 
 
-class LowCurveRemoval(commons.SlottedClass, ICurvesChanger):
+class RemoveSmallFunction(commons.SlottedClass, ICurvesChanger):
     """
     A changer that removes curves which maximum never go up a certain value
     """
