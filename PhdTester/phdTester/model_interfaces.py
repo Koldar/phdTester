@@ -1505,6 +1505,25 @@ class IFunctionSplitter(abc.ABC):
         pass
 
 
+class XAxisStatus(enum.Enum):
+    SAME_X = enum.auto()
+    """
+    When after applying a curve changer, we know that the x axis is the same for every function
+    """
+    DIFFERENT_X = enum.auto()
+    """
+    When after applying a curve changer, we know that the x axis is different for every function.
+    """
+    UNALTERED = enum.auto()
+    """
+    When after applying a curve changer, we know that the x axis has not been altered
+    """
+    UNKNOWN = enum.auto()
+    """
+    When you cannot possibly know if after applying the curve changer, all the functions shares the same x axis
+    """
+
+
 class ICurvesChanger(abc.ABC):
     """
     Curve changers are objects which take in input the set of curves you need to plot inside a single graph
@@ -1515,14 +1534,26 @@ class ICurvesChanger(abc.ABC):
     """
 
     @abc.abstractmethod
-    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
+    def require_same_xaxis(self) -> bool:
+        """
+        Check if, in order to apply this curve changer, it is essential that every function
+        shares the same X axis
+
+        :return: true if this curve changer requires that each function has the same X axis, false otherwise
+        """
+        pass
+
+    @abc.abstractmethod
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
         """
         perform the operation altering the curves
 
         :preconditions: We assume that x axis curves are compliant with
 
         :param curves: the curves to alter
-        :return: a new set of functions to plot
+        :return: a tuple where:
+         - the first element says if the x axis was changed for at least one function
+         - the new set of functions to plot
         """
         pass
 

@@ -9,10 +9,53 @@ import pandas as pd
 from phdTester import commons
 from phdTester.functions import DataFrameFunctionsDict, SeriesFunction
 from phdTester.image_computer import aggregators
-from phdTester.model_interfaces import ICurvesChanger, IFunction2D, ITestContext, IFunctionsDict
+from phdTester.model_interfaces import ICurvesChanger, IFunction2D, ITestContext, IFunctionsDict, XAxisStatus
 
 
-class AbstractTransform(ICurvesChanger, abc.ABC):
+class TransformX(ICurvesChanger):
+    """
+    Transform each xaxis of each curve passed to this changes
+
+    In this curve changer, every x value of every function will be put as input inside a mapping function and a new x
+    value will be generated.
+
+    For example if you have
+    ```
+    (0,3) (1,4) (2,5)
+    ```
+
+    you can pass x_new = x_old + 3
+    to obtain:
+    ```
+    (3,3) (4,4) (5,5)
+    ```
+    """
+
+    def __init__(self, mapping: Callable[[str, float, float], float]):
+        """
+
+        :param mapping: the mapping function. the parameters are the following:
+         - the name of the function
+         - the x value (that will be replaced)
+         - the y value the function `name` has at value `x`
+         - the return value is the new x value
+        """
+        AbstractTransformY.__init__(self)
+        self.mapping = mapping
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple[XAxisStatus, "IFunctionsDict"]:
+        result = DataFrameFunctionsDict.empty(functions=curves.function_names(), size=curves.max_function_length())
+
+        for name in curves.function_names():
+            for x, y in curves.get_ordered_xy(name):
+                result.update_function_point(name, self.mapping(name, x, y), y)
+        return XAxisStatus.UNKNOWN, result
+
+
+class AbstractTransformY(ICurvesChanger, abc.ABC):
 
     @abc.abstractmethod
     def _mapping(self, name: str, x: float, y: float) -> float:
@@ -25,28 +68,32 @@ class AbstractTransform(ICurvesChanger, abc.ABC):
         return curves
 
 
-class TransformX(ICurvesChanger):
-    """
-    Transform each xaxis of each curve passed to this changes
-    """
-
-    def __init__(self, mapping: Callable[[str, float, float], float]):
-        AbstractTransform.__init__(self)
-        self.mapping = mapping
-
-    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
-        result = DataFrameFunctionsDict.empty(functions=curves.function_names(), size=curves.max_function_length())
-
-        for name in curves.function_names():
-            for x, y in curves.get_ordered_xy(name):
-                result.update_function_point(name, self.mapping(name, x, y), y)
-        return result
 
 
-class RemapInvalidValues(AbstractTransform):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class RemapInvalidValues(AbstractTransformY):
 
     def __init__(self, value):
-        AbstractTransform.__init__(self)
+        AbstractTransformY.__init__(self)
         self.value = value
 
     def _mapping(self, name: str, x: float, y: float) -> float:
@@ -58,10 +105,10 @@ class RemapInvalidValues(AbstractTransform):
             return y
 
 
-class StandardTransform(AbstractTransform):
+class StandardTransformY(AbstractTransformY):
 
     def __init__(self, mapping: Callable[[str, float, float], float]):
-        AbstractTransform.__init__(self)
+        AbstractTransformY.__init__(self)
         self.mapping = mapping
 
     def _mapping(self, name: str, x: float, y: float) -> float:
