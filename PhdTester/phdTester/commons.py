@@ -23,6 +23,57 @@ class SlottedClass(object):
     __slots__ = ()
 
 
+def direct_call_or_method_call(obj, fallback_method_name: str, *args, **kwargs) -> Any:
+    """
+    Sometimes you need to call a generic function. Sometimes it's a lambdan while sometimes it's a method of an implementation
+    of a interface. For example:
+
+    ```
+    class ISort(abc.ABC):
+        @abc.abstractmethod
+        def sort(sequence):
+            pass
+
+    class MySort(ISort):
+        def sort(self, sequence):
+            # implementation
+
+    def mysort_function(sequence):
+        # other implementation
+
+    def generic_sort(sequence, sorter: Union[ISort, Callable[[List[int]], None]]):
+        # call sorter directly?
+        sorter(sequence)
+        # of by calling an interface method?
+        sorter.sort(sequence)
+
+    mySort = MySort()
+    # sometimes I call this:
+    generic_sort([1,3,2], mySort)
+    # someother times I call this:
+    generic_sort([1,3,2], mysort_function)
+    # some other times
+    generic_sort([1,3,2], lambda sequence: #lambda implementation)
+    ```
+
+    In `generic_sort` I need a way to either call the `sorter` directly (aka `sorter()`) or indirectly
+    (namely `sorter.sort()`). This function does this
+
+    :param obj: the obj which we need to decide if it's a function or an implementation
+    :param fallback_method_name: name of the method to call if the `obj` is not a callable
+    :param args: parameters of `fallback_method_name` or `obj` (if callable)
+    :param kwargs: parameters or `fallback_method_name` or `obj` (if callable)
+    :return: return value of the called function
+    """
+
+    # see https://stackoverflow.com/a/2435074/1887602
+    if hasattr(obj, "__call__"):
+        return obj(*args, **kwargs)
+    else:
+        return getattr(obj, fallback_method_name)(*args, **kwargs)
+
+
+
 def sequential_numbers(int_stream: Iterable[float], interval: float = 1.0) -> Tuple[float, float]:
     """
     Generate a sequence of ranges starting from a sequence
