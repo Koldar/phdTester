@@ -7,6 +7,7 @@ import re
 from typing import Any, Tuple, Iterable, Union, Dict, List, Optional
 
 from phdTester import commons
+from phdTester.common_types import KS001Str
 
 
 class LexicalError(Exception):
@@ -366,9 +367,13 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         This will change the `self` object
 
         Every dict in the `other` structure will be copied into the self value.
-        `other` identifier is ignored. Aliases are copied as well
+        `other` identifier is ignored. Self aliases are overwritten by other's
 
         We put not the values of `other`, but clones of `other` values, generated via copy.copy() function
+
+        :note: if other has a labelled dictionary and so does self, we will merge the 2 dictionaries. If other has
+        a nameless dictionary, it will be put at the tail of the return value (so we won't merge dictionaries with the
+        same index)
 
         :param other: the KS001 to append at the end of this structure
         :param in_place: true if you want to alter `self`, false if you want to create a new instance
@@ -599,7 +604,7 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
     @classmethod
     def single_labelled(cls, label: str, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None, **kwargs) -> "KS001":
         """
-        Creates a new KS001 instance with only one labelled dictionary
+        Creates a new KS001 instance with **only one** labelled dictionary
 
         :param label: the label of the dictionary
         :param key_alias: the aliases to use
@@ -618,7 +623,7 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
     @classmethod
     def single(cls, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None, **kwargs) -> "KS001":
         """
-        Creates a new KS001 instance with only one unnamed dictionary
+        Creates a new KS001 instance with **only one** unnamed dictionary
 
         :param key_alias: the aliases to use
         :param value_alias: the aliases to use
@@ -635,6 +640,17 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
 
     @classmethod
     def from_template(cls, template: "KS001", identifier: str = None, label: str = None, index: int = None, **kwargs):
+        """
+        Create one instance of KS001 with **one dict** by copying the aliases in `template` and by filling the KS001 with `kwargs` content
+
+
+        :param template: the KS001 instance where we will fetch alias information. It serves no other purpose
+        :param identifier: identifier of the KS001 instance to generate
+        :param label: label of the only dict in the KS001 to generate. If None the dict will be labelless
+        :param index: index of the only dict in the KS001 to generate.
+        :param kwargs: content of the KS001 instance to generate
+        :return:
+        """
 
         key_aliases = {k: template.key_aliases.get_alias(k) for k in template.key_aliases.names()}
         value_aliases = {k: template.value_aliases.get_alias(k) for k in template.value_aliases.names()}
@@ -648,6 +664,48 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
             key_alias=key_aliases,
             value_alias=value_aliases
         )
+
+    @classmethod
+    def from_merging(cls, template: Union["KS001", KS001Str], label: str = None, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=', **kwargs):
+        """
+        creates a new KS001 instance by merging a readonly KS001 instance with new attributes
+
+        :param template: the instance whose clone will be merged. It can also ca KS001Str. If so be sure to insert the aliases
+            (since we have no way to know the aliases otherwise)
+        :param label: an optional label representing the `kwarg` dictionary label. If `label` is present in `template`
+            as well, the 2 dictionmaries will be merged together.
+        :param key_alias: the key aliases for the return value. Ignored if `template` is a KS001 instance
+        :param value_alias: the key aliases for the return value. Ignored if `template` is a KS001 instance
+        :param colon: the character used to parse `template`. Ignored if `template` is a KS001 instance
+        :param pipe: the character used to parse `template`. Ignored if `template` is a KS001 instance
+        :param underscore: the character used to parse `template`. Ignored if `template` is a KS001 instance
+        :param equal: the character used to parse `template`. Ignored if `template` is a KS001 instance
+        :param kwargs: additional content to merge with `template`
+        :return:
+        """
+
+        if isinstance(template, KS001):
+            result = template.clone()
+        elif isinstance(template, KS001Str):
+            result = KS001.parse_str(
+                string=template,
+                key_alias=key_alias,
+                value_alias=value_alias,
+                colon=colon,
+                pipe=pipe,
+                underscore=underscore,
+                equal=equal,
+            )
+        else:
+            raise TypeError(f"invalid type of template! type={type(template)}")
+
+        if label is not None:
+            other = KS001.single_labelled(label=label, key_alias=result.key_aliases._aliases, value_alias=result.value_aliases._aliases, **kwargs)
+        else:
+            other = KS001.single(key_alias=result.key_aliases._aliases, value_alias=result.value_aliases._aliases, **kwargs)
+        result.append(other=other, in_place=True)
+
+        return result
 
     @classmethod
     def get_from(cls, d: Dict[Any, Any], identifier: str = None, label: str = None, index: int = None, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None):
