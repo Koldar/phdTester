@@ -3,6 +3,7 @@ import cProfile
 import inspect
 import io
 import logging
+import math
 import multiprocessing
 import os
 import pstats
@@ -20,6 +21,44 @@ import string_utils
 class SlottedClass(object):
 
     __slots__ = ()
+
+
+def sequential_numbers(int_stream: Iterable[float], interval: float = 1.0) -> Tuple[float, float]:
+    """
+    Generate a sequence of ranges starting from a sequence
+
+    for example
+    ```
+    1 2 3 4 7 8 9 10 11 12 15
+    ```
+    will generate
+    ```
+    (1,4) (7,12), (15, 15)
+    ```
+
+    :param int_stream: the stream to compress
+    :param interval: the difference between the current number and the previous one that we need to check
+        to understand when a sequence "breaks"
+    :return:
+    """
+    start = None
+    previous = None
+    for i in int_stream:
+        if start is None:
+            # we need to start a new sequence
+            start = i
+            previous = i
+        elif math.isclose(i, (previous + interval)):
+            # we're continuing a contiguous sequence of numbers
+            previous = i
+        else:
+            # we're breaking a sequence of numbers
+            yield (start, previous)
+            start = i
+            previous = i
+
+    # when we have finished we might need to close the last sequence of numbers
+    yield (start, i)
 
 
 def generate_aliases(strings: List[str]) -> Dict[str, str]:
