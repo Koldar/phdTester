@@ -10,7 +10,8 @@ from phdTester import commons
 from phdTester.curve_changers.shared_curves_changers import AbstractTransformX, AbstractTransformY
 from phdTester.functions import DataFrameFunctionsDict, SeriesFunction
 from phdTester.image_computer import aggregators
-from phdTester.model_interfaces import ICurvesChanger, IFunction2D, ITestContext, IFunctionsDict, XAxisStatus
+from phdTester.model_interfaces import ICurvesChanger, IFunction2D, ITestContext, IFunctionsDict, XAxisStatus, \
+    ITestContextMask
 
 
 class StandardTransformX(AbstractTransformX):
@@ -177,6 +178,202 @@ class RemoveSmallFunction(commons.SlottedClass, ICurvesChanger):
         return XAxisStatus.UNALTERED, curves
 
 
+class SortAll(ICurvesChanger):
+    """
+    The changer picks all the curves and just sort each cof them monotonically independently
+
+    This will of course destroy all the relation between them. This can be used to generate a **cactus plot**
+    """
+
+    def __init__(self):
+        ICurvesChanger.__init__(self)
+
+    def require_same_xaxis(self) -> bool:
+        return True
+
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
+        df = curves.to_dataframe()
+        df = df.apply(lambda x: x.sort_values().values)
+        return DataFrameFunctionsDict.from_dataframe(df)
+
+
+class QuantizeXAxis(ICurvesChanger):
+    """
+    Discretize the x axis in a finite number of values
+
+    Assume you have 3 curves over time in seconds, e.g.:
+
+     - A <0.10,3> <1.10,3> <2.30, 3>
+     - B <0.05,4> <1.11,4> <2.62, 4>
+     - C <0.35,5> <1.23,5> <2.43, 5>
+
+    These 3 plots are over 3 different X axis. To be able to plot them, you need to have the same axis.
+    This curve changer quantize the x axis in slots and then group the slots together. For example we can choose to
+    quantize the time in seconds, hence:
+
+     - first point of A,B and C goes into the first time slot (form 0.0s to 0.99s);
+     - second point of A,B and C goes into the second time slot (form 1.0s to 1.99s);
+     - third point of A,B and C goes into the third time slot (form 2.0s to 2.99s);
+
+    If several points of the same curve goes into the same slot, they will be merged with an aggregator.
+    If a function has no points in a quantum, we will give it the value "NaN"
+    """
+
+    class ISlotValueFetcher(abc.ABC):
+
+        @abc.abstractmethod
+        def fetch(self, lb: float, ub: float, lb_included: bool, ub_included: bool) -> float:
+            pass
+
+    class DefaultSlotValueFetcher(ISlotValueFetcher):
+
+        def fetch(self, lb: float, ub: float, lb_included: bool, ub_included: bool) -> float:
+            return ub
+
+    def __init__(self, quantization_levels: List[float], merge_method: str, slot_value: ISlotValueFetcher = None):
+        """
+        Initialize the quantization
+
+        :param quantization_levels: represents the quantization step we need to apply. You can set it in 2 ways.
+            First by listing the quantization level via a list (e.g., [1, 100, 500, 700]): so, if x=50, the quantization
+            level will be (1,100). An error is thrown if no quantization level is found (e.g., x=1000). A more robust
+            approach involve using a passing a lambda which has the following sigbnature:
+             - input x: the x axis value to quantize;
+             - output 1: the start value of the quantization level containing x;
+             - output 2: the end value of the quantization level containing x;
+            You can use IQuantizer class to implement the callable if you want
+        :param aggregator: aggregator used to aggregate values which end up having the same x value
+        :param slot_value: a function used to convert hte quantization level in a number. The function signature is
+            the following one:
+             - input 1: the x axis value that belongs to a certain quantization level
+             - input 2: the lower bound x value of the quantization level
+             - input 3: the upper bound x value of the quantization level
+             - output: the number which is the new x value of the function instead of input 1.
+            If not specified, the function will always return input 3.
+        """
+        ICurvesChanger.__init__(self)
+
+        self.__quantization_levels = quantization_levels
+        self.__merge_method = merge_method
+        self.__slot_value = slot_value or QuantizeXAxis.DefaultSlotValueFetcher()
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def __quantization_ranges(self) -> Iterable[Tuple[float, float]]:
+        yield from zip(self.__quantization_levels[:-1], self.__quantization_levels[1:])
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple[XAxisStatus, "IFunctionsDict"]:
+        df = curves.to_dataframe()
+
+        # see https://stackoverflow.com/a/52872853/1887602
+        # see https://stackoverflow.com/a/33761120/1887602
+        grouped = df.groupby(pd.cut(
+            x=df.index,
+            bins=pd.IntervalIndex.from_tuples(list(self.__quantization_ranges())),
+        ))
+
+        if self.__merge_method == 'min':
+            df = grouped.min()
+        elif self.__merge_method == 'max':
+            df = grouped.max()
+        else:
+            raise ValueError(f"invalid value {self.__merge_method}! Only min is accepted!")
+
+        # see https://stackoverflow.com/a/30590280/1887602
+        # see https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Interval.html
+        df.index = df.index.map(lambda interval: self.__slot_value.fetch(interval.left, interval.right, False, True))
+
+        # this may leave NaN inside the functions (if in the quantization level the function is not defined
+
+        # it's unknown because a function may be defined over every quantization level while another one maybe defined
+        # only over a subset of it. So we cannot be sure
+        return XAxisStatus.UNKNOWN, DataFrameFunctionsDict.from_dataframe(df)
+
+
+class StatisticsOfFunctionsPerX(ICurvesChanger):
+
+    class IFunctionGrouper(abc.ABC):
+
+        @abc.abstractmethod
+        def get_group(self, function_name: str, test_context: "ITestContext") -> str:
+            pass
+
+    class DefaultFunctionGroup(IFunctionGrouper):
+
+        def get_group(self, function_name: str, test_context: "ITestContext") -> str:
+            return test_context.ut.get_label()
+
+    def __init__(self, test_context_template: "ITestContext", function_grouper: DefaultFunctionGroup = None, lower_percentile: float = 0.25, upper_percentile: float = 0.75, include_infinities: bool = False, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '='):
+        self.__test_context_template = test_context_template
+        self.__lower_percentile = lower_percentile
+        self.__upper_percentile = upper_percentile
+        self.__function_grouper = function_grouper or StatisticsOfFunctionsPerX.DefaultFunctionGroup()
+        self.__include_infinities = include_infinities
+        self.__colon = colon
+        self.__pipe = pipe
+        self.__underscore = underscore
+        self.__equal = equal
+
+    def require_same_xaxis(self) -> bool:
+        return True
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        df: pd.DataFrame = curves.to_dataframe()
+
+        # maps function_grouper output with the list of function names which has generated such key
+        columns_mapping: Dict[str, List[str]] = {}
+        for name in curves.function_names():
+            tc = self.__test_context_template.clone()
+            tc.populate_from_ks001_string_on_index(
+                index=0,
+                string=name,
+                colon=self.__colon,
+                pipe=self.__pipe,
+                underscore=self.__underscore,
+                equal=self.__equal,
+            )
+            key = self.__function_grouper.get_group(name, tc)
+            if key not in columns_mapping:
+                columns_mapping[key] = []
+            columns_mapping[key].append(name)
+
+        # each value represent the subset of dataframe to generate
+        result: DataFrameFunctionsDict = DataFrameFunctionsDict()
+        df_result = result.to_dataframe()
+        for group_name, function_names in columns_mapping.items():
+            with_infinities = df[function_names]\
+                .transpose()\
+                .describe(percentiles=[self.__lower_percentile, 0.5, self.__upper_percentile]) \
+                .transpose()
+
+            df_result[f"{group_name} count"] = with_infinities['count']
+            df_result[f"{group_name} min"] = with_infinities['min']
+            df_result[f"{group_name} max"] = with_infinities['max']
+            df_result[f"{group_name} {int(self.__lower_percentile * 100)}%"] = with_infinities[f'{int(self.__lower_percentile * 100)}%']
+            df_result[f"{group_name} {int(self.__upper_percentile * 100)}%"] = with_infinities[f'{int(self.__upper_percentile * 100)}%']
+            df_result[f"{group_name} median"] = with_infinities[f'50%']
+            df_result[f"{group_name} mean"] = with_infinities[f'mean']
+
+            if self.__include_infinities:
+                without_infinities = df[function_names]\
+                    .replace([np.inf, -np.inf], np.nan)\
+                    .transpose()\
+                    .describe(percentiles=[self.__lower_percentile, 0.5, self.__upper_percentile]) \
+                    .transpose()
+
+                df_result[f"{group_name} count (no inf)"] = without_infinities['count']
+                df_result[f"{group_name} min (no inf)"] = without_infinities['min']
+                df_result[f"{group_name} max (no inf)"] = without_infinities['max']
+                df_result[f"{group_name} {int(self.__lower_percentile * 100)}% (no inf)"] = without_infinities[f'{int(self.__lower_percentile * 100)}%']
+                df_result[f"{group_name} {int(self.__upper_percentile* 100)}% (no inf)"] = without_infinities[f'{int(self.__upper_percentile * 100)}%']
+                df_result[f"{group_name} median (no inf)"] = without_infinities[f'50%']
+                df_result[f"{group_name} mean (no inf)"] = without_infinities[f'mean']
+
+        return XAxisStatus.UNALTERED, result
+
+
+
 
 
 
@@ -301,97 +498,7 @@ class SyntheticPercentage(SyntheticCount):
         return result/len(curves)
 
 
-class QuantizeXAxis(ICurvesChanger):
-    """
-    Discretize the x axis in a finite number of values
 
-    Assume you have 3 curves over time in seconds, e.g.:
-
-     - A <0.10,3> <1.10,3> <2.30, 3>
-     - B <0.05,4> <1.11,4> <2.62, 4>
-     - C <0.35,5> <1.23,5> <2.43, 5>
-
-    These 3 plots are over 3 different X axis. To be able to plot them, you need to have the same axis.
-    This curve changer quantize the x axis in slots and then group the slots together. For example we can choose to
-    quantize the time in seconds, hence:
-
-     - first point of A,B and C goes into the first time slot (form 0.0s to 0.99s);
-     - second point of A,B and C goes into the second time slot (form 1.0s to 1.99s);
-     - third point of A,B and C goes into the third time slot (form 2.0s to 2.99s);
-
-    If several points of the same curve goes into the same slot, they cwill be merged with an aggregator
-    """
-
-    def __init__(self, quantization_step: Union[List[float], Callable[[float], Tuple[float, float]]], aggregator: aggregators.IAggregator, slot_value: Callable[[float, float, float], float] = None):
-        """
-        Initialize the quantization
-
-        :param quantization_step: represents the quantization step we need to apply. You can set it in 2 ways.
-            First by listing the quantization level via a list (e.g., [1, 100, 500, 700]): so, if x=50, the quantization
-            level will be (1,100). An error is thrown if no quantization level is found (e.g., x=1000). A more robust
-            approach involve using a passing a lambda which has the following sigbnature:
-             - input x: the x axis value to quantize;
-             - output 1: the start value of the quantization level containing x;
-             - output 2: the end value of the quantization level containing x;
-        :param aggregator: aggregator used to aggregate values which end up having the same x value
-        :param slot_value: a function used to convert hte quantization level in a number. The function signature is
-            the following one:
-             - input 1: the x axis value that belongs to a certain quantization level
-             - input 2: the lower bound x value of the quantization level
-             - input 3: the upper bound x value of the quantization level
-             - output: the number which is the new x value of the function instead of input 1.
-            If not specified, the function will always return input 3.
-        """
-        ICurvesChanger.__init__(self)
-
-        if isinstance(quantization_step, list):
-            self.quantization_step = list(sorted(quantization_step))
-        elif isinstance(quantization_step, Callable):
-            self.quantization_step = quantization_step
-        else:
-            raise TypeError(f"quantization can either be a list or a callable. Invalid {type(quantization_step)}!")
-
-        self.aggregator = aggregator
-        self.slot_value = slot_value or self._default_slot_value
-
-    def _default_slot_value(self, x: float, start_quant: float, end_quant: float) -> float:
-        return end_quant
-
-    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
-        result: "IFunctionsDict" = DataFrameFunctionsDict.from_other(curves)
-
-        functions_aggregators: Dict[str, Dict[float, "aggregators.IAggregator"]] = {}
-
-        for name in curves.function_names():
-            if name not in result:
-                result[name] = SeriesFunction()
-                functions_aggregators[name] = {}
-            for x, y in curves.get_ordered_xy(name):
-
-                if isinstance(self.quantization_step, list):
-                    # the quantization is a list. Hence we fetch the 2 numbers representing the quantization step
-                    for i, quantization_slot in enumerate(self.quantization_step):
-                        if i == 0:
-                            previous = 0
-                        else:
-                            previous = self.quantization_step[i-1]
-                        if previous <= x < quantization_slot:
-                            break
-                    else:
-                        raise ValueError(f" x value {x} does not vbelong to any quantization!")
-                elif isinstance(self.quantization_step, Callable):
-                    # quantization_step is a function. Calling it
-                    previous, quantization_slot = self.quantization_step(x)
-                else:
-                    raise TypeError(f"quantization step can either be list or callable. Got {type(self.quantization_step)}!")
-
-                xslot = self.slot_value(x, previous, quantization_slot)
-                if xslot not in functions_aggregators[name]:
-                    functions_aggregators[name][xslot] = self.aggregator.clone()
-
-                result.update_function_point(name, xslot, functions_aggregators[name][xslot].aggregate(y))
-
-        return result
 
 
 
@@ -930,22 +1037,7 @@ class CurvesRelativeTo(ICurvesChanger):
         return DataFrameFunctionsDict.from_dataframe(df)
 
 
-class SortAll(ICurvesChanger):
-    """
-    The changer picks all the curves and just sort each cof them monotonically independently
 
-    This will of course destroy all the relation between them. This can be used to generate a cactus plot
-    """
-
-    def __init__(self, decrescent: bool = False):
-        ICurvesChanger.__init__(self)
-        self.decrescent = decrescent
-
-    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
-
-        df = curves.to_dataframe()
-        df = df.apply(lambda x: x.sort_values().values)
-        return DataFrameFunctionsDict.from_dataframe(df)
 
 
 class SortRelativeTo(ICurvesChanger):

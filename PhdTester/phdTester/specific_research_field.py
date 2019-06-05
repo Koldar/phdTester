@@ -218,6 +218,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return DefaultTestContext(ut=ut, te=te)
 
+    def generate_test_context(self) -> "ITestContext":
+        return self.__generate_test_context(None, None)
+
     def generate_stuff_under_test_mask(self) -> "IStuffUnderTestMask":
         return DefaultStuffUnderTestMask(self.under_test_dict_values.keys())
 
@@ -229,8 +232,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         te = te if te is not None else self.generate_test_environment_mask()
         return self._generate_test_context_mask(ut, te)
 
-    def generate_test_context_mask(self):
-        return self.__generate_test_context(None, None)
+    def generate_test_context_mask(self) -> "ITestContextMask":
+        return self.__generate_test_context_mask(None, None)
 
     def _generate_test_context_mask(self, ut: "IStuffUnderTestMask", te: "ITestEnvironmentMask") -> "ITestContextMask":
         """

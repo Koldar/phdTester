@@ -1,5 +1,6 @@
 import logging
-from typing import Dict, List, Any
+import math
+from typing import Dict, List, Any, Tuple
 
 import subprocess
 import pandas as pd
@@ -136,41 +137,99 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
                       rowid: int, row: "phd.ICsvRow") -> float:
                 return test_context.te.sequenceSize
 
-        user_tcm = self.generate_test_context_mask()
-        user_tcm.ut.algorithm = phd.masks.CannotBeNull()
+        class CountTime(phd.IDataRowExtrapolator):
 
-        self.generate_batch_of_plots(
-            xaxis_name="run id",
-            yaxis_name="time (us)",
-            title="time over run id",
-            subtitle_function=phd.DefaultSubtitleGenerator(),
-            get_x_value=RunId(),
-            get_y_value=Time(),
-            y_aggregator=phd.aggregators.SingleAggregator(),
-            image_suffix=phd.KS001.single_labelled("image", type="time-over-runid"),
-            user_tcm=user_tcm,
-            path_function=phd.path_generators.CsvDataContainerPathGenerator(),
-            curve_changer=[
-                phd.curves_changers.Print(log_function=logging.critical),
-            ]
-        )
+            def __init__(self, threshold: float):
+                self.__threshold = threshold
+
+            def fetch(self, test_context: "phd.ITestContext", path: PathStr, data_type: DataTypeStr,
+                      content: pd.DataFrame,
+                      rowid: int, row: "phd.ICsvRow") -> float:
+                return row.time < self.__threshold
+
+        # user_tcm = self.generate_test_context_mask()
+        # user_tcm.ut.algorithm = phd.masks.CannotBeNull()
+        #
+        # self.generate_batch_of_plots(
+        #     xaxis_name="run id",
+        #     yaxis_name="time (us)",
+        #     title="time over run id",
+        #     subtitle_function=phd.DefaultSubtitleGenerator(),
+        #     get_x_value=RunId(),
+        #     get_y_value=Time(),
+        #     y_aggregator=phd.aggregators.SingleAggregator(),
+        #     image_suffix=phd.KS001.single_labelled("image", type="time-over-runid"),
+        #     user_tcm=user_tcm,
+        #     path_function=phd.path_generators.CsvDataContainerPathGenerator(),
+        #     curve_changer=[
+        #         phd.curves_changers.Print(log_function=logging.critical),
+        #     ],
+        # )
+        #
+        # user_tcm = self.generate_test_context_mask()
+        # user_tcm.te.sequenceSize = phd.masks.CannotBeNull()
+        #
+        # self.generate_batch_of_plots(
+        #     xaxis_name="sequence size",
+        #     yaxis_name="avg time (us)",
+        #     title="time over sequence size",
+        #     get_x_value=SequenceSize(),
+        #     get_y_value=Time(),
+        #     y_aggregator=phd.aggregators.MeanAggregator(),
+        #     image_suffix=phd.KS001.single_labelled("image", type="time-over-sequencesize"),
+        #     user_tcm=user_tcm,
+        #     curve_changer=[
+        #         phd.curves_changers.RemoveSmallFunction(threshold=10),
+        #
+        #     ],
+        # )
 
         user_tcm = self.generate_test_context_mask()
         user_tcm.te.sequenceSize = phd.masks.CannotBeNull()
+        user_tcm.te.run = phd.masks.CannotBeNull()
 
-        self.generate_batch_of_plots(
-            xaxis_name="sequence size",
-            yaxis_name="avg time (us)",
-            title="time over sequence size",
-            get_x_value=SequenceSize(),
+        self.generate_curves_csvs(
+            get_x_value=RunId(),
             get_y_value=Time(),
             y_aggregator=phd.aggregators.MeanAggregator(),
-            image_suffix=phd.KS001.single_labelled("image", type="time-over-sequencesize"),
             user_tcm=user_tcm,
+            ks001_to_add=phd.KS001.single_labelled("csvGenerated", type="time-over-runid"),
+            use_format='wide',
+            csv_dest_data_source=self.filesystem_datasource,
+            csv_dest_path='generatedCsvs',
             curve_changer=[
-                phd.curves_changers.RemoveSmallFunction(threshold=10)
-            ]
+                phd.curves_changers.QuantizeXAxis(
+                    quantization_levels=list(range(0, 300, 25)),
+                    merge_method='max',
+                ),
+                phd.curves_changers.RemapInvalidValues(value=float('+inf')),
+                phd.curves_changers.StatisticsOfFunctionsPerX(
+                    test_context_template=self.generate_test_context(),
+                    include_infinities=True,
+                )
+
+            ],
+            function_splitter=phd.function_splitters.BasedOnCsv()
         )
+
+        # self.generate_batch_of_plots(
+        #     xaxis_name="run id",
+        #     yaxis_name="avg time (us)",
+        #     title="time over run id on several sequence size",
+        #     get_x_value=RunId(),
+        #     get_y_value=Time(),
+        #     y_aggregator=phd.aggregators.MeanAggregator(),
+        #     image_suffix=phd.KS001.single_labelled("image", type="time-over-runid-several-sequence-size"),
+        #     user_tcm=user_tcm,
+        #     curve_changer=[
+        #         phd.curves_changers.QuantizeXAxis(
+        #             quantization_levels=list(range(0, 300, 25)),
+        #             merge_method='max',
+        #         ),
+        #         phd.curves_changers.RemapInvalidValues(value=float('+inf')),
+        #     ],
+        #     function_splitter=phd.function_splitters.BasedOnCsv()
+        # )
 
     def generate_csvs(self, settings: "phd.IGlobalSettings",
                       under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):

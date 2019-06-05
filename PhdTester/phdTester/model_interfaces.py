@@ -504,6 +504,35 @@ class IOptionDictWithKS(IOptionDict, abc.ABC):
         self.set_options(ks[label])
         return self
 
+    def populate_from_ks001_string_on_index(self, index: int, string: str, colon: str = ':', pipe: str = '|',
+                                  underscore: str = '_', equal: str = '=') -> "IOptionDictWithKS":
+        ks = KS001.parse_str(
+            string=string,
+            key_alias=Aliases(self.key_alias),
+            value_alias=Aliases(self.value_alias),
+            colon=colon,
+            pipe=pipe,
+            underscore=underscore,
+            equal=equal,
+        )
+
+        self.set_options(ks[index])
+        return self
+
+    def populate_from_ks001_string_on_label(self, label: str, string: KS001Str, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> "IOptionDictWithKS":
+        ks = KS001.parse_str(
+            string=string,
+            key_alias=Aliases(self.key_alias),
+            value_alias=Aliases(self.value_alias),
+            colon=colon,
+            pipe=pipe,
+            underscore=underscore,
+            equal=equal,
+        )
+
+        self.set_options(ks[label])
+        return self
+
     def clone(self, copy_function: Callable[[Any], Any] = None) -> "IOptionDictWithKS":
         return super(IOptionDictWithKS, self).clone(copy_function)
 
@@ -1488,7 +1517,11 @@ class IFunctionSplitter(abc.ABC):
     """
 
     @abc.abstractmethod
-    def fetch_function(self, x: float, y: float, under_test_function_key: str, csv_tc: "ITestContext", csv_name: str, i: int, csv_outcome: "ICsvRow") -> Tuple[float, float, str]:
+    def fetch_function(self,
+                       x: float, y: float, under_test_function_key: str, csv_tc: "ITestContext",
+                       csv_name: KS001Str, csv_ks001: KS001,
+                       i: int, csv_outcome: "ICsvRow",
+                       colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Tuple[float, float, str]:
         """
         alters the fetched point from the csvs
 
@@ -1496,11 +1529,16 @@ class IFunctionSplitter(abc.ABC):
         :param y: the y point fetched from the csv
         :param under_test_function_key: the name of the function label to generate
         :param csv_tc: the test context used to fetch the csv
-        :param csv_name: the absolute path of the csv name
+        :param csv_name: the name of csv involved. It is the name in the related data source
+        :param csv_ks001: KS001 instance representing the `csv_name`
         :param i: the index fo the row just read
         :param csv_outcome: a structure representing the single row of the csv just read
-        :return: a tuple of 4 elements:
-            - the new x vlaue,
+        :param colon: the character used to parse `template`. Ignored if `template` is a KS001 instance
+        :param pipe: the character used to parse `template`. Ignored if `template` is a KS001 instance
+        :param underscore: the character used to parse `template`. Ignored if `template` is a KS001 instance
+        :param equal: the character used to parse `template`. Ignored if `template` is a KS001 instance
+        :return: a tuple of 3 elements:
+            - the new x value,
             - the new y value
             - the new name of the function
         """
