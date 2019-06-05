@@ -373,7 +373,16 @@ class StatisticsOfFunctionsPerX(ICurvesChanger):
         return XAxisStatus.UNALTERED, result
 
 
+class Identity(ICurvesChanger):
+    """
+    A changer that does nothing
+    """
 
+    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
+        return curves
+
+    def require_same_xaxis(self) -> bool:
+        return False
 
 
 
@@ -504,13 +513,7 @@ class SyntheticPercentage(SyntheticCount):
 
 
 
-class Identity(ICurvesChanger):
-    """
-    A changer that does nothing
-    """
 
-    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
-        return curves
 
 
 class UseValueToFillCurve(ICurvesChanger):
