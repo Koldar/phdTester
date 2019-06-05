@@ -397,7 +397,7 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
         self._dataframe.sort_index(inplace=True)
 
     def remove_function(self, name: str):
-        self._dataframe.drop([name], axis=1)
+        self._dataframe.drop([name], axis=1, inplace=True)
 
     def _number_of_rows(self) -> int:
         return self._dataframe.shape[0]
