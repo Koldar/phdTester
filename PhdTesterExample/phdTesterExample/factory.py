@@ -151,7 +151,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             user_tcm=user_tcm,
             path_function=phd.path_generators.CsvDataContainerPathGenerator(),
             curve_changer=[
-                phdTester.curve_changers.curves_changers.Print(log_function=logging.info)
+                phd.curves_changers.Print(log_function=logging.critical)
             ]
         )
 

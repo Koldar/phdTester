@@ -469,9 +469,14 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
             count=result['count'],
             min=result['min'],
             max=result['max'],
-            lower_percentile=result[f'{lower_percentile*100}%'],
+            lower_percentile=result[f'{lower_percentile * 100}%'],
             upper_percentile=result[f'{upper_percentile * 100}%'],
             median=result['50%'],
             mean=result['mean'],
             std=result['std'],
         )
+
+    def replace_invalid_values(self, to_value: float):
+        self._dataframe.replace([np.inf, -np.inf], np.nan, inplace=True)
+        self._dataframe.fillna(value=to_value, inplace=True)
+

@@ -12,6 +12,7 @@ import pandas as pd
 from phdTester import commons, masks
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr
 from phdTester.commons import StringCsvWriter
+from phdTester.curve_changers.curves_changers import CheckSameXAxis
 from phdTester.datasources import filesystem_sources
 from phdTester.datasources.filesystem_sources import CsvFileSystemResourceManager
 from phdTester.default_models import SimpleTestContextRepo, \
@@ -25,7 +26,7 @@ from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestC
     ICsvRow, OptionBelonging, AbstractOptionNode, ITestContextMask, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
     ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict, \
-    IDataRowExtrapolator, IDataContainerPathGenerator, ISubtitleGenerator, Priority
+    IDataRowExtrapolator, IDataContainerPathGenerator, ISubtitleGenerator, Priority, XAxisStatus
 from phdTester.options_builder import OptionGraph
 from phdTester.path_generators import CsvDataContainerPathGenerator
 from phdTester.plotting import matplotlib_plotting
@@ -1264,19 +1265,70 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             x_aggregator=x_aggregator,
         )
 
+        ############################
+        # CURVE CHANGERS
+        ############################
+
+        xstatus, functions_to_print = self.__handle_curve_changers(
+            functions_to_print=functions_to_print,
+            curve_changer=curve_changer
+        )
+
+        ###############################
+        # CHECK XAXIS STATUS
+        ###############################
+
+        # it is required that every function shares the same x axis after this. If this status is unknown, we forcibluy
+        # check it
+        if xstatus == XAxisStatus.UNKNOWN:
+            checker = CheckSameXAxis()
+            xstatus, functions_to_print = checker.alter_curves(functions_to_print)
+        elif xstatus == XAxisStatus.DIFFERENT_X:
+            raise ValueError(f"the xaxis generated do not match for sure! Reformat such that all the functions share the same x axis!")
+        elif xstatus == XAxisStatus.SAME_X:
+            # ok, this should be the standard
+            pass
+        else:
+            raise ValueError(f"invalid x axis status {xstatus}!")
+
+        # we can only have SAME_X
+        return functions_to_print
+
+    def __handle_curve_changers(self, functions_to_print: "IFunctionsDict", curve_changer: Optional[Union[ICurvesChanger, List[ICurvesChanger]]] = None) -> Tuple[XAxisStatus, IFunctionsDict]:
         # ok, we have generated the relevant data. Now we apply a shuffler (if given)
+        xstatus = XAxisStatus.UNKNOWN
         if curve_changer is not None:
             # the user wants to apply a curves changer. Make her happy
             if isinstance(curve_changer, ICurvesChanger):
-                functions_to_print = curve_changer.alter_curves(functions_to_print)
-            elif isinstance(curve_changer, list):
+                # we wrap it into a list
+                curve_changer = [curve_changer]
+
+            if isinstance(curve_changer, list):
                 for i, cc in enumerate(curve_changer):
-                    logging.critical(f"trying to apply curve changer #{i} of class {cc.__class__}")
-                    functions_to_print = cc.alter_curves(functions_to_print)
+                    logging.info(f"trying to apply curve changer #{i} of class {cc.__class__}")
+                    if cc.require_same_xaxis():
+                        if xstatus == XAxisStatus.UNKNOWN:
+                            checker = CheckSameXAxis()
+                            xstatus, functions_to_print = checker.alter_curves(functions_to_print)
+                            # here it can only be SAME_X
+                        elif xstatus == XAxisStatus.DIFFERENT_X:
+                            raise ValueError(f"""
+                                the curve changer #{i} of class {cc.__class__} requires that every function share the same x
+                                but this is not ensured at all! 
+                            """)
+                        elif xstatus == XAxisStatus.SAME_X:
+                            # ok this is should be expected
+                            pass
+                        else:
+                            raise ValueError(f"invalid xstatus {xstatus}!")
+
+                    # if cc.require_same_axis() is True, then here can only have SAME_X, nothing else
+                    xstatus_new, functions_to_print = cc.alter_curves(functions_to_print)
+                    xstatus = xstatus.update_with(xstatus_new)
+                    logging.debug(f"after applygin curve changer the x axis status is {xstatus}")
             else:
                 raise TypeError(f"invalid curve changer type!")
-
-        return functions_to_print
+        return xstatus, functions_to_print
 
     def _compute_measurement_over_column(self,
                                          csv_contexts: Iterable[GetSuchInfo],

@@ -1,18 +1,19 @@
 import abc
 import logging
 import math
-from typing import Dict, Callable, Union, Tuple, Any, Optional, Set, List
+from typing import Dict, Callable, Union, Tuple, Any, Optional, Set, List, Iterable
 
 import numpy as np
 import pandas as pd
 
 from phdTester import commons
+from phdTester.curve_changers.shared_curves_changers import AbstractTransformX, AbstractTransformY
 from phdTester.functions import DataFrameFunctionsDict, SeriesFunction
 from phdTester.image_computer import aggregators
 from phdTester.model_interfaces import ICurvesChanger, IFunction2D, ITestContext, IFunctionsDict, XAxisStatus
 
 
-class TransformX(ICurvesChanger):
+class StandardTransformX(AbstractTransformX):
     """
     Transform each xaxis of each curve passed to this changes
 
@@ -29,6 +30,8 @@ class TransformX(ICurvesChanger):
     ```
     (3,3) (4,4) (5,5)
     ```
+
+    :note: this curve changer is likely to be very slow for big IFunctionDict
     """
 
     def __init__(self, mapping: Callable[[str, float, float], float]):
@@ -40,72 +43,19 @@ class TransformX(ICurvesChanger):
          - the y value the function `name` has at value `x`
          - the return value is the new x value
         """
-        AbstractTransformY.__init__(self)
-        self.mapping = mapping
+        AbstractTransformX.__init__(self)
+        self.__mapping = mapping
 
-    def require_same_xaxis(self) -> bool:
-        return False
-
-    def alter_curves(self, curves: "IFunctionsDict") -> Tuple[XAxisStatus, "IFunctionsDict"]:
-        result = DataFrameFunctionsDict.empty(functions=curves.function_names(), size=curves.max_function_length())
-
-        for name in curves.function_names():
-            for x, y in curves.get_ordered_xy(name):
-                result.update_function_point(name, self.mapping(name, x, y), y)
-        return XAxisStatus.UNKNOWN, result
-
-
-class AbstractTransformY(ICurvesChanger, abc.ABC):
-
-    @abc.abstractmethod
-    def _mapping(self, name: str, x: float, y: float) -> float:
-        pass
-
-    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
-        for name in curves.function_names():
-            for x, y in curves.get_ordered_xy(name):
-                curves.update_function_point(name, x, self._mapping(name, x, curves.get_function_y(name, x)))
-        return curves
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-class RemapInvalidValues(AbstractTransformY):
-
-    def __init__(self, value):
-        AbstractTransformY.__init__(self)
-        self.value = value
-
-    def _mapping(self, name: str, x: float, y: float) -> float:
-        if y in [float('+inf'), float('-inf')]:
-            return self.value
-        elif math.isnan(y):
-            return self.value
-        else:
-            return y
+    def _mapping(self, function_name: str, x_value: float, y_value: float) -> float:
+        return self.__mapping(function_name, x_value, y_value)
 
 
 class StandardTransformY(AbstractTransformY):
+    """
+    Transform all y values into something else
+
+    this curve changer is slow, since it needs to scan all the values in the IFunctionDict
+    """
 
     def __init__(self, mapping: Callable[[str, float, float], float]):
         AbstractTransformY.__init__(self)
@@ -113,6 +63,115 @@ class StandardTransformY(AbstractTransformY):
 
     def _mapping(self, name: str, x: float, y: float) -> float:
         return self.mapping(name, x, y)
+
+
+class RemapInvalidValues(ICurvesChanger):
+    """
+    Iterate over all the functions values. If it finds an invalid y value, it replaces it with a fixed value
+
+    For example
+    ```
+    (0, 3) (1,inf) (2,4)
+    ```
+    is converted to (e.g. the fix value is 10):
+    ```
+    (0, 3) (1,10) (2,4)
+    ```
+    """
+
+    def __init__(self, value):
+        """
+
+        :param value: the fixed value you want to use to convert infrinities and nan values
+        """
+        ICurvesChanger.__init__(self)
+        self.__value = value
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        curves.replace_invalid_values(self.__value)
+        return XAxisStatus.UNALTERED, curves
+
+
+class Print(ICurvesChanger):
+    """
+    A change which simply log the curves via a function
+    """
+
+    def __init__(self, log_function: Callable[[str], Any]):
+        """
+
+        :param log_function: the function we will use to print the data. This function should accept a string
+            and should log such string somewhere
+        """
+        self.log_function = log_function
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple[XAxisStatus, "IFunctionsDict"]:
+        for name in curves.function_names():
+            f = curves.get_function(name)
+            self.log_function(f"name = {name}")
+            self.log_function(f"x [size={f.number_of_points()}] = {list(commons.sequential_numbers(curves.get_ordered_x_axis(name)))}")
+            self.log_function(f"f = {str(f)}")
+
+        return XAxisStatus.UNALTERED, curves
+
+
+class CheckSameXAxis(ICurvesChanger):
+    """
+    curve changer which checks if all the functions share the same x axis
+
+    If 2 functions in the IFunctionDict have 2 different x axis, then the function generates an error
+    """
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple[XAxisStatus, "IFunctionsDict"]:
+        if not curves.functions_share_same_xaxis():
+            xaxis = None
+            xaxis_function_name = None
+            for name, f in curves.items():
+                if xaxis is None:
+                    xaxis = set(f.x_unordered_values())
+                    xaxis_function_name = name
+                else:
+                    other = set(f.x_unordered_values())
+                    if xaxis != other:
+                        raise ValueError(f"""X axis mismatch!
+                            f name = {xaxis_function_name}
+                            |xaxis_f| = {len(xaxis)}
+                            g name = {name}
+                            |xaxis_g| = {len(other)}
+
+                            xaxis_f / xaxis_g (sorted) = {sorted(xaxis.difference(other))}
+                            xaxis_g / xaxis_f (sorted) = {sorted(other.difference(xaxis))}""")
+        return XAxisStatus.SAME_X, curves
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class AbstractSingleTransform(ICurvesChanger, abc.ABC):
@@ -311,23 +370,7 @@ class QuantizeXAxis(ICurvesChanger):
         return result
 
 
-class Print(ICurvesChanger):
-    """
-    A change which simply log the curves
-    """
 
-    def __init__(self, log_function: Callable[[str], Any]):
-        ICurvesChanger.__init__(self)
-        self.log_function = log_function
-
-    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
-        for name in curves.function_names():
-            f = curves.get_function(name)
-            self.log_function(f"name = {name}")
-            self.log_function(f"x [size={f.number_of_points()}] = {curves.get_ordered_x_axis(name)}")
-            self.log_function(f"f = {str(f)}")
-
-        return curves
 
 
 class Identity(ICurvesChanger):
@@ -668,30 +711,7 @@ class MergeCurves(ICurvesChanger):
         return result
 
 
-class CheckSameAxis(ICurvesChanger):
 
-    def __init__(self):
-        ICurvesChanger.__init__(self)
-
-    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
-        if not curves.functions_share_same_xaxis():
-            xaxis = None
-            xaxis_curve = None
-            for name, f in curves.items():
-                if xaxis is None:
-                    xaxis = set(f.x_unordered_values())
-                    xaxis_curve = name
-                else:
-                    other = set(f.x_unordered_values())
-                    if xaxis != other:
-                        raise ValueError(f"""X axis mismatch!
-                            XAXIS BASELINE NAME = {xaxis_curve}
-                            X AXIS CURVE MISMATCH NAME = {name}
-                            BASELINE X AXIS LENGTH = {len(xaxis)}
-                            CURVE X AXIS LENGTH = {len(other)}
-                            BASELINE - CURVE = {sorted(xaxis.difference(other))}
-                            CURVE - BASELINE = {sorted(other.difference(xaxis))}""")
-        return curves
 
 
 class AbstractFillCurve(ICurvesChanger, abc.ABC):

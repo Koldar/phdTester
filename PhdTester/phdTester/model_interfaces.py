@@ -1328,6 +1328,8 @@ class IFunctionsDict(abc.ABC):
         for name in self.function_names():
             yield name, self.get_function(name)
 
+
+
     def __iter__(self) -> Iterable[str]:
         yield from self.function_names()
 
@@ -1522,6 +1524,22 @@ class XAxisStatus(enum.Enum):
     """
     When you cannot possibly know if after applying the curve changer, all the functions shares the same x axis
     """
+
+    def update_with(self, new: "XAxisStatus") -> "XAxisStatus":
+        """
+        Update the status
+
+        The reasoning behind is as follows:
+         - if `new` xaxis status of the new IFunctionDict is UNALTERED, then the x axis status is the old one (namely self)
+         - otherwise we have a new status of the IFunctionDict x axis and needs to overwrite the old one
+        :param new: the new status of the xaxis of the IFunctionDict
+        :return: the actual new status of the xaxis of the IFunctionDict
+        """
+        if new == XAxisStatus.UNALTERED:
+            return self
+        else:
+            # otherwise we simply overwrite self with other
+            return new
 
 
 class ICurvesChanger(abc.ABC):
