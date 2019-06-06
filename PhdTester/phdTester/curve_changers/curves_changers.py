@@ -66,6 +66,29 @@ class StandardTransformY(AbstractTransformY):
         return self.mapping(name, x, y)
 
 
+class ReplaceFirstNaNValues(ICurvesChanger):
+    """
+    Iterate over all the functions values. If it finds an invalid y value, it replaces it with a fixed value
+    """
+
+    def __init__(self, value: float):
+        self.__value = value
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        df = curves.to_dataframe()
+        for name in curves.function_names():
+            first_non_nan_index = df[name].first_valid_index()
+            if first_non_nan_index is None:
+                # there are no NaN numbers in the series
+                continue
+
+            df.loc[df.index < first_non_nan_index, [name]] = self.__value
+        return XAxisStatus.UNKNOWN, curves
+
+
 class RemapInvalidValues(ICurvesChanger):
     """
     Iterate over all the functions values. If it finds an invalid y value, it replaces it with a fixed value
@@ -272,6 +295,7 @@ class QuantizeXAxis(ICurvesChanger):
             x=df.index,
             bins=pd.IntervalIndex.from_tuples(list(self.__quantization_ranges())),
         ))
+        # groups index is composed by intervals
 
         if self.__merge_method == 'min':
             df = grouped.min()
@@ -282,9 +306,11 @@ class QuantizeXAxis(ICurvesChanger):
 
         # see https://stackoverflow.com/a/30590280/1887602
         # see https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Interval.html
+
+        # replace the index: instead of using intervals we use a derivation of them
         df.index = df.index.map(lambda interval: self.__slot_value.fetch(interval.left, interval.right, False, True))
 
-        # this may leave NaN inside the functions (if in the quantization level the function is not defined
+        # this may leave NaN inside the functions (if in the quantization level the function is not defined)
 
         # it's unknown because a function may be defined over every quantization level while another one maybe defined
         # only over a subset of it. So we cannot be sure
