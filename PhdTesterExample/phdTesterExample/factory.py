@@ -6,6 +6,7 @@ import subprocess
 import pandas as pd
 import phdTester as phd
 from phdTester.common_types import PathStr, DataTypeStr
+from phdTesterExample import supports
 from phdTesterExample.models import SortSettings, SortEnvironment, SortAlgorithm, SortTestContext, SortAlgorithmMask, \
     SortEnvironmentMask, SortTestContextMask, PerformanceCsvRow
 
@@ -122,31 +123,6 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
     def generate_plots(self, settings: "phd.IGlobalSettings",
                        under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):
 
-        class RunId(phd.IDataRowExtrapolator):
-            def fetch(self, test_context: "phd.ITestContext", path: PathStr, data_type: DataTypeStr, content: pd.DataFrame,
-                      rowid: int, row: "phd.ICsvRow") -> float:
-                return row.run
-
-        class Time(phd.IDataRowExtrapolator):
-            def fetch(self, test_context: "phd.ITestContext", path: PathStr, data_type: DataTypeStr, content: pd.DataFrame,
-                      rowid: int, row: "phd.ICsvRow") -> float:
-                return row.time
-
-        class SequenceSize(phd.IDataRowExtrapolator):
-            def fetch(self, test_context: "phd.ITestContext", path: PathStr, data_type: DataTypeStr, content: pd.DataFrame,
-                      rowid: int, row: "phd.ICsvRow") -> float:
-                return test_context.te.sequenceSize
-
-        class CountTime(phd.IDataRowExtrapolator):
-
-            def __init__(self, threshold: float):
-                self.__threshold = threshold
-
-            def fetch(self, test_context: "phd.ITestContext", path: PathStr, data_type: DataTypeStr,
-                      content: pd.DataFrame,
-                      rowid: int, row: "phd.ICsvRow") -> float:
-                return row.time < self.__threshold
-
         # user_tcm = self.generate_test_context_mask()
         # user_tcm.ut.algorithm = phd.masks.CannotBeNull()
         #
@@ -189,8 +165,8 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         user_tcm.te.run = phd.masks.CannotBeNull()
 
         self.generate_curves_csvs(
-            get_x_value=RunId(),
-            get_y_value=Time(),
+            get_x_value=supports.RunId(),
+            get_y_value=supports.Time(),
             y_aggregator=phd.aggregators.MeanAggregator(),
             user_tcm=user_tcm,
             ks001_to_add=phd.KS001.single_labelled("csvGenerated", type="time-over-runid"),
@@ -202,7 +178,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
                     quantization_levels=list(range(0, 300, 25)),
                     merge_method='max',
                 ),
-                phd.curves_changers.RemapInvalidValues(value=float('+inf')),
+                phd.curves_changers.ReplaceFirstNaNValues(value=float('+inf')),
                 phd.curves_changers.StatisticsOfFunctionsPerX(
                     test_context_template=self.generate_test_context(),
                     include_infinities=True,

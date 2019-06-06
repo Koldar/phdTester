@@ -1,12 +1,15 @@
 import abc
 import argparse
+import functools
 import io
 import itertools
 import logging
+import multiprocessing
 import os
 import sys
 from typing import Dict, Any, Iterable, List, Tuple, Callable, Union, Optional
 
+import dask.dataframe as dd
 import pandas as pd
 
 from phdTester import commons, masks
@@ -1339,6 +1342,20 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 raise TypeError(f"invalid curve changer type!")
         return xstatus, functions_to_print
 
+    class FunctionData(commons.SlottedClass):
+
+        __slots__ = ('name', 'function', 'x_aggregator', 'y_aggregator', 'label_aggregator', 'y_aggregator_per_x')
+
+        def __init__(self, name: str, x_aggregator: IAggregator = None, y_aggregator: IAggregator = None):
+            self.name = name
+            self.x_aggregator = x_aggregator
+            self.y_aggregator = y_aggregator
+            self.y_aggregator_per_x = {}
+            """
+            Dictionary whose keys are the values of f and the values are different instances of the y_aggregator.
+            Used to maintain state of aggregators
+            """
+
     def _compute_measurement_over_column(self,
                                          csv_contexts: Iterable[GetSuchInfo],
                                          get_y_value: "IDataRowExtrapolator",
@@ -1378,12 +1395,175 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             (e.g., summing them) then you can use this field tov aggregate. Note: this field is actually a template; we
             will use `clone` method to generate the actual aggregator
         :param data_source: the data source we will poll for the csv data in csvs_contexts. If None we will use the default datasource
+        :param parallelize_csv: if you want to create different tasks each processing a whole csv
         :return: a dictionary where the keys are the label of the stuff under test while the values are dictionary where the key
             are the x values of a function and the values are the y values of a function
         """
         # we need to compute some kind of "measurement" over some "column" of the csv. This
         # needs to be done for every algorithm under test. Also, each algorithm has
         # the same entries of "column" value, so that's that
+
+        data_source = data_source if data_source is not None else self.datasource
+        x_aggregator = x_aggregator if x_aggregator is not None else aggregators.IdentityAggregator()
+
+        functions_to_draw: Dict[str, AbstractSpecificResearchFieldFactory.FunctionData] = {}
+        result = DataFrameFunctionsDict()
+
+        key_alias = self.__generate_test_context().key_alias
+        value_alias = self.__generate_test_context().value_alias
+
+        # just to be sure, we order them by stuff under test
+        csv_numbers = len(csv_contexts)
+
+        # for csv_number, csv_info in enumerate(sorted(csv_contexts, key=lambda x: x.tc.ut.get_label())):
+        #     self._process_csv(
+        #         csv_number=csv_number,
+        #         csv_info=csv_info,
+        #         csv_numbers=csv_numbers,
+        #         data_source=data_source,
+        #         get_x_value=get_x_value,
+        #         get_y_value=get_y_value,
+        #         function_splitter=function_splitter,
+        #         x_aggregator=x_aggregator,
+        #         y_aggregator=y_aggregator,
+        #         functions_dict=result,                                                                                                                          functions_to_draw = functions_to_draw,
+        #     )
+
+        # use as many processes as there are CPUs
+        with multiprocessing.Pool(processes=os.cpu_count()) as pool:
+            # set all the attributes which do not change as "fixed"
+            process_csv = functools.partial(self._generate_functions_dict_from_csv,
+                                            csv_numbers=csv_numbers,
+                                            data_source=data_source,
+                                            get_x_value=get_x_value,
+                                            get_y_value=get_y_value,
+                                            function_splitter=function_splitter,
+                                            x_aggregator=x_aggregator,
+                                            y_aggregator=y_aggregator,
+            )
+            csv_functions: List["IFunctionsDict"] = pool.starmap(
+                process_csv,
+                enumerate(sorted(csv_contexts, key=lambda x: x.tc.ut.get_label()))
+            )
+
+        # ok, now we have a function dict for every csv we analyzed. We need to obtain a single one
+        # by aggregating the partial results. see https://stackoverflow.com/a/19490199/1887602
+        return y_aggregator.with_pandas(csv_functions)
+
+
+
+        # for csv_number, csv_info in enumerate(sorted(csv_contexts, key=lambda x: x.tc.ut.get_label())):
+        #     assert isinstance(csv_info.tc, ITestContext)
+        #     logging.info(f"reading csv #{csv_number} out of {csv_numbers} ({float(100* csv_number/csv_numbers):2.1f}) {csv_info.name}")
+        #
+        #     # what are we testing?
+        #     # we can have multiple for loops where the under_test_key do not change
+        #     current_function_label = csv_info.tc.ut.get_label()
+        #     logging.debug(f"generating values for stuff under test {current_function_label}")
+        #
+        #     # fetch data from CSV
+        #     csv_content: str = data_source.get(csv_info.path, csv_info.name, 'csv')
+        #     # read csv with pandas
+        #     csv_dataframe = pd.read_csv(io.StringIO(csv_content))
+        #     for i, (_, d) in enumerate(csv_dataframe.iterrows()):
+        #         # force the creation of a dictionary from the pandas data structures
+        #         d = {k: d[k] for k in d.keys()}
+        #         csv_outcome = self.get_csv_row(d, csv_info.ks001)
+        #         csv_outcome.set_options(d)
+        #         try:
+        #             x_value = float(get_x_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome))
+        #             y_value = float(get_y_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome))
+        #             check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
+        #         except IgnoreCSVRowError:
+        #             # this data needs to be ignored
+        #             continue
+        #
+        #         if function_splitter is not None:
+        #             # a function splitter may redirect the just computed value into another function or, even better
+        #             # a new one
+        #             x_value, y_value, function_label = function_splitter.fetch_function(
+        #                 x=x_value,
+        #                 y=y_value,
+        #                 under_test_function_key=current_function_label,
+        #                 csv_tc=csv_info.tc,
+        #                 csv_name=csv_info.name,
+        #                 csv_ks001=csv_info.ks001,
+        #                 i=i,
+        #                 csv_outcome=csv_outcome,
+        #             )
+        #             check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
+        #         else:
+        #             function_label = current_function_label
+        #
+        #         # the function may have changed. Check it and create it if necessary
+        #         # creating a new function, if needed
+        #         if function_label not in functions_to_draw:
+        #             functions_to_draw[function_label] = FunctionData(
+        #                 name=function_label,
+        #                 x_aggregator=x_aggregator.clone(),
+        #                 y_aggregator=y_aggregator.clone(),
+        #             )
+        #
+        #         # handle x
+        #         x_value = functions_to_draw[function_label].x_aggregator.aggregate(x_value)
+        #         check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
+        #         # handle y
+        #         if x_value not in functions_to_draw[function_label].y_aggregator_per_x:
+        #             functions_to_draw[function_label].y_aggregator_per_x[x_value] = functions_to_draw[function_label].y_aggregator.clone()
+        #         y_value = functions_to_draw[function_label].y_aggregator_per_x[x_value].aggregate(y_value)
+        #         if y_value is None:
+        #             raise ValueError(f"value associated to {x_value} cannot be null for function {functions_to_draw}")
+        #
+        #         result.update_function_point(function_label, x_value, y_value)
+        #
+        #     functions_to_draw[function_label].x_aggregator.reset()
+
+        return result
+
+    def _generate_functions_dict_from_csv(self, csv_number: int, csv_info: GetSuchInfo, csv_numbers: int, data_source: "IDataSource", get_x_value: "IDataRowExtrapolator", get_y_value: "IDataRowExtrapolator", function_splitter: "IFunctionSplitter", x_aggregator: "aggregators.IAggregator", y_aggregator: "aggregators.IAggregator") -> "IFunctionsDict":
+
+        assert isinstance(csv_info.tc, ITestContext)
+        logging.info(f"reading csv #{csv_number} out of {csv_numbers} ({float(100 * csv_number / csv_numbers):2.1f}) {csv_info.name}")
+
+        result = DataFrameFunctionsDict()
+        functions_to_draw: Dict[str, "AbstractSpecificResearchFieldFactory.FunctionData"] = {}
+
+        # what are we testing?
+        # we can have multiple for loops where the under_test_key do not change
+        current_function_label = csv_info.tc.ut.get_label()
+        logging.debug(f"generating values for stuff under test {current_function_label}")
+
+        # fetch data from CSV
+        csv_content: str = data_source.get(csv_info.path, csv_info.name, 'csv')
+        # read csv with pandas
+        csv_dataframe = pd.read_csv(io.StringIO(csv_content))
+
+        for i, (_, d) in enumerate(csv_dataframe.iterrows()):
+            try:
+                function_label, x_value, y_value = self.__handle_csv_row(
+                    csv_row_index=i,
+                    csv_row_data=d,
+                    csv_info=csv_info,
+                    csv_dataframe=csv_dataframe,
+                    get_x_value=get_x_value,
+                    get_y_value=get_y_value,
+                    function_splitter=function_splitter,
+                    current_function_label=current_function_label,
+                    functions_to_draw=functions_to_draw,
+                    x_aggregator=x_aggregator,
+                    y_aggregator=y_aggregator,
+                )
+            except IgnoreCSVRowError:
+                # this data needs to be ignored
+                continue
+            else:
+                result.update_function_point(function_label, x_value, y_value)
+
+
+        # TODO remove since x aggregator is trashed wawy functions_to_draw[function_label].x_aggregator.reset()
+        return result
+
+    def __handle_csv_row(self, csv_row_index: int, csv_row_data: Dict[str, Any], csv_info: "GetSuchInfo", csv_dataframe: pd.DataFrame, get_x_value: "IDataRowExtrapolator", get_y_value: "IDataRowExtrapolator", function_splitter: "IFunctionSplitter", current_function_label: str, functions_to_draw: Dict[str, FunctionData], x_aggregator: "aggregators.IAggregator", y_aggregator: "aggregators.IAggregator") -> Tuple[str, float, float]:
 
         def check_x_y(x: float, y: float, csv_name: KS001Str, i: int, csv_outcome: "ICsvRow"):
             if x is None:
@@ -1393,98 +1573,53 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 raise ValueError(
                     f"y_valuex cannot be null! x_value={x} csv_name={csv_name}, i={i}, csv_outcome={csv_outcome}")
 
-        class FunctionData(commons.SlottedClass):
+        # force the creation of a dictionary from the pandas data structures
+        csv_row_data = {k: csv_row_data[k] for k in csv_row_data.keys()}
+        csv_outcome = self.get_csv_row(csv_row_data, csv_info.ks001)
+        csv_outcome.set_options(csv_row_data)
 
-            __slots__ = ('name', 'function', 'x_aggregator', 'y_aggregator', 'label_aggregator', 'y_aggregator_per_x')
+        x_value = get_x_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, csv_row_index, csv_outcome)
+        y_value = get_y_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, csv_row_index, csv_outcome)
+        check_x_y(x_value, y_value, csv_info.name, csv_row_index, csv_outcome)
 
-            def __init__(self, name: str, x_aggregator: IAggregator = None, y_aggregator: IAggregator = None):
-                self.name = name
-                self.x_aggregator = x_aggregator
-                self.y_aggregator = y_aggregator
-                self.y_aggregator_per_x = {}
-                """
-                Dictionary whose keys are the values of f and the values are different instances of the y_aggregator.
-                Used to maintain state of aggregators
-                """
+        if function_splitter is not None:
+            # a function splitter may redirect the just computed value into another function or, even better
+            # a new one
+            x_value, y_value, function_label = function_splitter.fetch_function(
+                x=x_value,
+                y=y_value,
+                under_test_function_key=current_function_label,
+                csv_tc=csv_info.tc,
+                csv_name=csv_info.name,
+                csv_ks001=csv_info.ks001,
+                i=csv_row_index,
+                csv_outcome=csv_outcome,
+            )
+            check_x_y(x_value, y_value, csv_info.name, csv_row_index, csv_outcome)
+        else:
+            function_label = current_function_label
 
-        data_source = data_source if data_source is not None else self.datasource
-        x_aggregator = x_aggregator if x_aggregator is not None else aggregators.IdentityAggregator()
+        # the function may have changed. Check it and create it if necessary
+        # creating a new function, if needed
+        if function_label not in functions_to_draw:
+            functions_to_draw[function_label] = AbstractSpecificResearchFieldFactory.FunctionData(
+                name=function_label,
+                x_aggregator=x_aggregator.clone(),
+                y_aggregator=y_aggregator.clone(),
+            )
 
-        functions_to_draw: Dict[str, FunctionData] = {}
-        result = DataFrameFunctionsDict()
+        # handle x
+        x_value = functions_to_draw[function_label].x_aggregator.aggregate(x_value)
+        check_x_y(x_value, y_value, csv_info.name, csv_row_index, csv_outcome)
+        # handle y
+        if x_value not in functions_to_draw[function_label].y_aggregator_per_x:
+            functions_to_draw[function_label].y_aggregator_per_x[x_value] = functions_to_draw[
+                function_label].y_aggregator.clone()
+        y_value = functions_to_draw[function_label].y_aggregator_per_x[x_value].aggregate(y_value)
+        if y_value is None:
+            raise ValueError(f"value associated to {x_value} cannot be null for function {functions_to_draw}")
 
-        key_alias = self.__generate_test_context().key_alias
-        value_alias = self.__generate_test_context().value_alias
-
-        # just to be sure, we order them by stuff under test
-        csv_numbers = len(csv_contexts)
-        for csv_number, csv_info in enumerate(sorted(csv_contexts, key=lambda x: x.tc.ut.get_label())):
-            assert isinstance(csv_info.tc, ITestContext)
-            logging.info(f"reading csv #{csv_number} out of {csv_numbers} ({float(100* csv_number/csv_numbers):2.1f}) {csv_info.name}")
-
-            # what are we testing?
-            # we can have multiple for loops where the under_test_key do not change
-            current_function_label = csv_info.tc.ut.get_label()
-            logging.debug(f"generating values for stuff under test {current_function_label}")
-
-            # fetch data from CSV
-            csv_content: str = data_source.get(csv_info.path, csv_info.name, 'csv')
-            # read csv with pandas
-            csv_dataframe = pd.read_csv(io.StringIO(csv_content))
-            for i, (_, d) in enumerate(csv_dataframe.iterrows()):
-                # force the creation of a dictionary from the pandas data structures
-                d = {k: d[k] for k in d.keys()}
-                csv_outcome = self.get_csv_row(d, csv_info.ks001)
-                csv_outcome.set_options(d)
-                try:
-                    x_value = float(get_x_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome))
-                    y_value = float(get_y_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome))
-                    check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
-                except IgnoreCSVRowError:
-                    # this data needs to be ignored
-                    continue
-
-                if function_splitter is not None:
-                    # a function splitter may redirect the just computed value into another function or, even better
-                    # a new one
-                    x_value, y_value, function_label = function_splitter.fetch_function(
-                        x=x_value,
-                        y=y_value,
-                        under_test_function_key=current_function_label,
-                        csv_tc=csv_info.tc,
-                        csv_name=csv_info.name,
-                        csv_ks001=csv_info.ks001,
-                        i=i,
-                        csv_outcome=csv_outcome,
-                    )
-                    check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
-                else:
-                    function_label = current_function_label
-
-                # the function may have changed. Check it and create it if necessary
-                # creating a new function, if needed
-                if function_label not in functions_to_draw:
-                    functions_to_draw[function_label] = FunctionData(
-                        name=function_label,
-                        x_aggregator=x_aggregator.clone(),
-                        y_aggregator=y_aggregator.clone(),
-                    )
-
-                # handle x
-                x_value = functions_to_draw[function_label].x_aggregator.aggregate(x_value)
-                check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
-                # handle y
-                if x_value not in functions_to_draw[function_label].y_aggregator_per_x:
-                    functions_to_draw[function_label].y_aggregator_per_x[x_value] = functions_to_draw[function_label].y_aggregator.clone()
-                y_value = functions_to_draw[function_label].y_aggregator_per_x[x_value].aggregate(y_value)
-                if y_value is None:
-                    raise ValueError(f"value associated to {x_value} cannot be null for function {functions_to_draw}")
-
-                result.update_function_point(function_label, x_value, y_value)
-
-            functions_to_draw[function_label].x_aggregator.reset()
-
-        return result
+        return function_label, x_value, y_value
 
     def _should_we_generate_the_image(self, functions_to_print: "IFunctionsDict"):
         """
