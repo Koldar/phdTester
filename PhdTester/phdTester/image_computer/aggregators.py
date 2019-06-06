@@ -1,10 +1,12 @@
 import math
-from typing import Any
+from typing import Any, Iterable, List
 
 import numpy as np
+import pandas as pd
 
 from phdTester import commons
-from phdTester.model_interfaces import IAggregator
+from phdTester.functions import DataFrameFunctionsDict
+from phdTester.model_interfaces import IAggregator, IFunctionsDict
 
 
 class Count(commons.SlottedClass, IAggregator):
@@ -35,6 +37,12 @@ class Count(commons.SlottedClass, IAggregator):
         self.value += 1
         return self.value
 
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # see https://stackoverflow.com/a/19490199/1887602
+        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        tmp = tmp.groupby(tmp.index).count()
+        return DataFrameFunctionsDict.from_dataframe(tmp)
+
 
 class IdentityAggregator(commons.SlottedClass, IAggregator):
     """
@@ -60,6 +68,9 @@ class IdentityAggregator(commons.SlottedClass, IAggregator):
     def aggregate(self, new: float) -> float:
         self.__value = new
         return new
+
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        raise NotImplementedError()
 
 
 class SingleAggregator(commons.SlottedClass, IAggregator):
@@ -89,6 +100,9 @@ class SingleAggregator(commons.SlottedClass, IAggregator):
         self.__value = new
         return self.__value
 
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        raise ValueError(f"{self.__class__} cannot aggregate anything!")
+
 
 class SumAggregator(commons.SlottedClass, IAggregator):
     """
@@ -114,6 +128,12 @@ class SumAggregator(commons.SlottedClass, IAggregator):
     def aggregate(self, new: float) -> float:
         self.__value = self.__value + new
         return self.__value
+
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # see https://stackoverflow.com/a/19490199/1887602
+        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        tmp = tmp.groupby(tmp.index).sum()
+        return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
 class MeanAggregator(commons.SlottedClass, IAggregator):
@@ -142,6 +162,12 @@ class MeanAggregator(commons.SlottedClass, IAggregator):
         self.n += 1
         self.mean = self.mean + (new - self.mean)/self.n
         return self.mean
+
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # see https://stackoverflow.com/a/19490199/1887602
+        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        tmp = tmp.groupby(tmp.index).mean()
+        return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
 class SampleVarianceAggregator(commons.SlottedClass, IAggregator):
@@ -188,6 +214,12 @@ class SampleVarianceAggregator(commons.SlottedClass, IAggregator):
 
         return self.variance
 
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # see https://stackoverflow.com/a/19490199/1887602
+        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        tmp = tmp.groupby(tmp.index).var()
+        return DataFrameFunctionsDict.from_dataframe(tmp)
+
 
 class SampleStandardDeviationAggregator(commons.SlottedClass, IAggregator):
     __slots__ = ('variance_aggregator', 'variance', )
@@ -215,6 +247,12 @@ class SampleStandardDeviationAggregator(commons.SlottedClass, IAggregator):
         self.variance = self.variance_aggregator.aggregate(new)
 
         return math.sqrt(self.variance)
+
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # see https://stackoverflow.com/a/19490199/1887602
+        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        tmp = tmp.groupby(tmp.index).std()
+        return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
 class PopulationVarianceAggregator(commons.SlottedClass, IAggregator):
@@ -255,6 +293,12 @@ class PopulationVarianceAggregator(commons.SlottedClass, IAggregator):
 
         return self.variance
 
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # see https://stackoverflow.com/a/19490199/1887602
+        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        tmp = tmp.groupby(tmp.index).var()
+        return DataFrameFunctionsDict.from_dataframe(tmp)
+
 
 class PopulationStandardDeviationAggregator(commons.SlottedClass, IAggregator):
     __slots__ = ('variance_aggregator', 'variance')
@@ -282,6 +326,12 @@ class PopulationStandardDeviationAggregator(commons.SlottedClass, IAggregator):
         self.variance = self.variance_aggregator.aggregate(new)
 
         return math.sqrt(self.variance)
+
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # see https://stackoverflow.com/a/19490199/1887602
+        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        tmp = tmp.groupby(tmp.index).std()
+        return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
 class PercentileAggregator(commons.SlottedClass, IAggregator):
@@ -312,6 +362,12 @@ class PercentileAggregator(commons.SlottedClass, IAggregator):
         self.__value = np.percentile(self.__sequence, self.__percentile)
         return self.__value
 
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # see https://stackoverflow.com/a/19490199/1887602
+        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        tmp = tmp.groupby(tmp.index).quantile(self.__percentile/100)
+        return DataFrameFunctionsDict.from_dataframe(tmp)
+
 
 class MaxAggregator(commons.SlottedClass, IAggregator):
     __slots__ = ('__value',)
@@ -334,6 +390,12 @@ class MaxAggregator(commons.SlottedClass, IAggregator):
         self.__value = self.__value if self.__value > new else new
         return self.__value
 
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # see https://stackoverflow.com/a/19490199/1887602
+        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        tmp = tmp.groupby(tmp.index).max()
+        return DataFrameFunctionsDict.from_dataframe(tmp)
+
 
 class MinAggregator(commons.SlottedClass, IAggregator):
     __slots__ = ('__value',)
@@ -355,3 +417,9 @@ class MinAggregator(commons.SlottedClass, IAggregator):
     def aggregate(self, new: float) -> float:
         self.__value = self.__value if self.__value < new else new
         return self.__value
+
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # see https://stackoverflow.com/a/19490199/1887602
+        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        tmp = tmp.groupby(tmp.index).min()
+        return DataFrameFunctionsDict.from_dataframe(tmp)
