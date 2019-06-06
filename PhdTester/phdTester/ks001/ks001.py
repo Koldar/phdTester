@@ -655,7 +655,7 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         key_aliases = {k: template.key_aliases.get_alias(k) for k in template.key_aliases.names()}
         value_aliases = {k: template.value_aliases.get_alias(k) for k in template.value_aliases.names()}
 
-        logging.info(f"kswarg is {kwargs}")
+        logging.debug(f"kswarg is {kwargs}")
         return KS001.get_from(
             d=kwargs,
             identifier=identifier,
