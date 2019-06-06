@@ -389,7 +389,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         :return:
         """
 
-        format = r"%(asctime)s %(process)02d %(filename)-27s@%(lineno)4d %(message)s"
+        format = r"%(asctime)s %(processName)10s %(filename)-27s@%(lineno)4d %(message)s"
         if settings.contains_option("logLevel"):
             logging.basicConfig(
                 level=getattr(logging, settings.logLevel),
@@ -1429,8 +1429,11 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         #         functions_dict=result,                                                                                                                          functions_to_draw = functions_to_draw,
         #     )
 
+        def init_process():
+            multiprocessing.current_process().name = f"csvPool{multiprocessing.current_process()._identity[0]:02d}"
+
         # use as many processes as there are CPUs
-        with multiprocessing.Pool(processes=os.cpu_count()) as pool:
+        with multiprocessing.Pool(processes=os.cpu_count(), initializer=init_process) as pool:
             # set all the attributes which do not change as "fixed"
             process_csv = functools.partial(self._generate_functions_dict_from_csv,
                                             csv_numbers=csv_numbers,
