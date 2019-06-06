@@ -386,9 +386,13 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         :return:
         """
 
-        format = r"%(asctime)s %(filename)-27s@%(lineno)4d %(message)s"
+        format = r"%(asctime)s %(process)02d %(filename)-27s@%(lineno)4d %(message)s"
         if settings.contains_option("logLevel"):
-            logging.basicConfig(level=getattr(logging, settings.logLevel), format=format, datefmt="%j-%H:%M:%S")
+            logging.basicConfig(
+                level=getattr(logging, settings.logLevel),
+                format=format,
+                datefmt="%j-%H:%M:%S",
+            )
 
     def run(self, *args, cli_commands: List[str] = None, **kwargs):
         """
