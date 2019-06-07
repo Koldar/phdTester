@@ -96,6 +96,30 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return self.__run_kwargs
 
+    @property
+    def colon(self) -> str:
+        if self.__colon is None:
+            raise ValueError(f"colon character has not been set yet!")
+        return self.__colon
+
+    @property
+    def pipe(self) -> str:
+        if self.__pipe is None:
+            raise ValueError(f"pipe character has not been set yet!")
+        return self.__pipe
+
+    @property
+    def underscore(self) -> str:
+        if self.__underscore is None:
+            raise ValueError(f"underscore character has not been set yet!")
+        return self.__underscore
+
+    @property
+    def equal(self) -> str:
+        if self.__equal is None:
+            raise ValueError(f"equal character has not been set yet!")
+        return self.__equal
+
     def _get_ks001_colon(self, settings: "IGlobalSettings") -> str:
         """
 
