@@ -417,6 +417,97 @@ class OptionBuilder(abc.ABC):
 
         return self
 
+    def constraint_needs_to_happen(self, options_involved: List[str], condition: Callable[[List[Tuple[str, Any]]], bool]) -> OptionBuilder:
+        """
+        Represents a contraint between several options which needs to be verified in order for the ITestContext
+        to be compliant. The constraints won't be used to discover relevant options in the OptionGraph
+
+        :param options_involved: list of options involved
+        :param condition: condition that needs to happen if you want that a text context to be compliant
+        :return: self
+        """
+
+        self.option_graph.add_edge(options_involved[0], options_involved[1:], conditions.NeedsToHappen(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.NORMAL,
+            condition=condition,
+        ))
+
+        return self
+
+    def constraint_cant_happen(self, options_involved: List[str], condition: Callable[[List[Tuple[str, Any]]], bool]):
+        """
+        Represents a contraint between several options which can't happen if you want the ITestContext
+        to be compliant. The constraints won't be used to discover relevant options in the OptionGraph
+
+        :param options_involved: list of options involved
+        :param condition: condition that can't happen if you want that a text context to be compliant
+        :return: self
+        """
+
+        self.option_graph.add_edge(options_involved[0], options_involved[1:], conditions.CantHappen(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.NORMAL,
+            condition=condition,
+        ))
+
+        return self
+
+    def prohibit_combination(self, options_involved: List[Tuple[str, Any]]) -> "OptionBuilder":
+        """
+        Remove a certain combination of values. If a test context has such combination of option vlaues,
+        it's not compliant
+
+        :param options_involved: a list where each cell is a pair: the first element is the option name while the
+        second element is the option value associated. If a ITestContext has such combination of values, it won't be
+        compliant
+        :return: self
+        """
+
+        def condition(name_values: List[Tuple[str, Any]]) -> bool:
+            for i, (name, value) in enumerate(name_values):
+                if value != options_involved[i][1]:
+                    return False
+            return True
+
+        self.option_graph.add_edge(options_involved[0][0], map(lambda x: x[0], options_involved[1:]), conditions.CantHappen(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.NORMAL,
+            condition=condition,
+        ))
+
+        return self
+
+    def ensure_combination(self, options_involved: List[Tuple[str, Any]]) -> "OptionBuilder":
+        """
+        Assert that a certain combination of values needs to **always** happen.
+        If a test context do not have such combination of option values,
+        it's not compliant
+
+        :param options_involved: a list where each cell is a pair: the first element is the option name while the
+        second element is the option value associated. If a ITestContext does not have such combination of values, it won't be
+        compliant
+        :return: self
+        """
+
+        def condition(name_values: List[Tuple[str, Any]]) -> bool:
+            for i, (name, value) in enumerate(name_values):
+                if value != options_involved[i][1]:
+                    return False
+            return True
+
+        self.option_graph.add_edge(options_involved[0][0], map(lambda x: x[0], options_involved[1:]), conditions.NeedsToHappen(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.NORMAL,
+            condition=condition,
+        ))
+
+        return self
+
     def option_value_prohibits_other_option(self, option1: str, values: List[Any], options_prohibited: str) -> "OptionBuilder":
         """
         Some option values entirely excludes another option
