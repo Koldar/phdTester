@@ -322,7 +322,7 @@ class BinaryArangoDB(AbstractArangoDBResource):
             yield c
 
 
-class CsvArangoDB(AbstractArangoDBResource, AbstractCsvResourceManager):
+class CsvArangoDBResourceManager(AbstractArangoDBResource, AbstractCsvResourceManager):
 
     def _on_attached(self, datasource: "IDataSource"):
         pass
