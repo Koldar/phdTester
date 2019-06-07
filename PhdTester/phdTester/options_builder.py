@@ -455,7 +455,7 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    def prohibit_combination(self, options_involved: List[Tuple[str, Any]]) -> "OptionBuilder":
+    def prohibit_combination(self, options_involved: Dict[str, Any]) -> "OptionBuilder":
         """
         Remove a certain combination of values. If a test context has such combination of option vlaues,
         it's not compliant
@@ -466,22 +466,25 @@ class OptionBuilder(abc.ABC):
         :return: self
         """
 
+        option_involved_list = list(options_involved.items())
+
         def condition(name_values: List[Tuple[str, Any]]) -> bool:
             for i, (name, value) in enumerate(name_values):
-                if value != options_involved[i][1]:
+                if value != option_involved_list[i][1]:
                     return False
             return True
 
-        self.option_graph.add_edge(options_involved[0][0], map(lambda x: x[0], options_involved[1:]), conditions.CantHappen(
-            is_required=True,
-            enable_sink_visit=False,
-            priority=Priority.NORMAL,
-            condition=condition,
-        ))
+        self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]),
+                                   conditions.CantHappen(
+                                       is_required=True,
+                                       enable_sink_visit=False,
+                                       priority=Priority.NORMAL,
+                                       condition=condition,
+                                   ))
 
         return self
 
-    def ensure_combination(self, options_involved: List[Tuple[str, Any]]) -> "OptionBuilder":
+    def ensure_combination(self, options_involved: Dict[str, Any]) -> "OptionBuilder":
         """
         Assert that a certain combination of values needs to **always** happen.
         If a test context do not have such combination of option values,
@@ -493,18 +496,21 @@ class OptionBuilder(abc.ABC):
         :return: self
         """
 
+        option_involved_list = list(options_involved.items())
+
         def condition(name_values: List[Tuple[str, Any]]) -> bool:
             for i, (name, value) in enumerate(name_values):
-                if value != options_involved[i][1]:
+                if value != option_involved_list[i][1]:
                     return False
             return True
 
-        self.option_graph.add_edge(options_involved[0][0], map(lambda x: x[0], options_involved[1:]), conditions.NeedsToHappen(
-            is_required=True,
-            enable_sink_visit=False,
-            priority=Priority.NORMAL,
-            condition=condition,
-        ))
+        self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]),
+                                   conditions.NeedsToHappen(
+                                       is_required=True,
+                                       enable_sink_visit=False,
+                                       priority=Priority.NORMAL,
+                                       condition=condition,
+                                   ))
 
         return self
 
