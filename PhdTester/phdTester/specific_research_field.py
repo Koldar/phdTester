@@ -48,6 +48,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         A collection used to save all the test context we need to execute. You can also query the
         collection
         """
+        self.__global_settings: "IGlobalSettings" = None
+        """
+        Thew global settings we have generated for this test run
+        """
 
         self.__datasource: "IDataSource" = None
         self.__filesystem_datasource: "filesystem_sources.FileSystem" = None
@@ -167,6 +171,15 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         if self.__tests_repository is None:
             raise ValueError(f"We still haven't set the test context repository!")
         return self.__tests_repository
+
+    @property
+    def global_settings(self) -> "IGlobalSettings":
+        """
+        :return: the global settings associated to0 this run
+        """
+        if self.__global_settings is None:
+            raise ValueError(f"We still haven't set the global settings!")
+        return self.__global_settings
 
     @abc.abstractmethod
     def setup_filesystem_datasource(self, filesystem: "filesystem_sources.FileSystem", settings: "IGlobalSettings"):
@@ -414,31 +427,31 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         ###################################################
         # fetch global structure
         ###################################################
-        global_settings = self._generate_global_test_settings(self.__option_graph, parse_output)
+        self.__global_settings = self._generate_global_test_settings(self.__option_graph, parse_output)
 
         ###################################################
         # Configure log, if present
         ###################################################
-        self._configure_logging(global_settings)
+        self._configure_logging(self.__global_settings)
 
-        self.__colon = self._get_ks001_colon(global_settings)
-        self.__pipe = self._get_ks001_pipe(global_settings)
-        self.__underscore = self._get_ks001_underscore(global_settings)
-        self.__equal = self._get_ks001_equal(global_settings)
+        self.__colon = self._get_ks001_colon(self.__global_settings)
+        self.__pipe = self._get_ks001_pipe(self.__global_settings)
+        self.__underscore = self._get_ks001_underscore(self.__global_settings)
+        self.__equal = self._get_ks001_equal(self.__global_settings)
 
-        with self._generate_filesystem_datasource(global_settings) as self.__filesystem_datasource:
+        with self._generate_filesystem_datasource(self.__global_settings) as self.__filesystem_datasource:
             # register csv in the filesystem
             self.__filesystem_datasource.register_resource_manager(
                 resource_type=r"csv",
                 manager=CsvFileSystemResourceManager()
             )
-            with self._generate_datasource(global_settings) as self.__datasource:
+            with self._generate_datasource(self.__global_settings) as self.__datasource:
 
                 # ###################################################
                 # # initialize output directory
                 # ###################################################
                 logging.info("setupping filesystem output directory structure...")
-                self.setup_filesystem_datasource(self.filesystem_datasource, global_settings)
+                self.setup_filesystem_datasource(self.filesystem_datasource, self.__global_settings)
 
                 ###################################################
                 # generate all the possible values each option can have
@@ -463,7 +476,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 # generate tests to perform
                 ###################################################
                 logging.info("generating all the tests which are worthwhile...")
-                self.__tests_repository = self.generate_test_context_repo(global_settings)
+                self.__tests_repository = self.generate_test_context_repo(self.__global_settings)
                 # this tests need to be sorted by test environment. In this way for every test enviroment we test in pack
                 # all the algorithms under test
                 for r in commons.distinct(self._generate_test_contexts_from_option_graph(self.__option_graph, self.__under_test_dict_values, self.__test_environment_dict_values)):
@@ -476,27 +489,27 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 ###################################################
                 logging.info("performing tests...")
 
-                self.begin_perform_test(self.under_test_dict_values, self.test_environment_dict_values, global_settings)
+                self.begin_perform_test(self.under_test_dict_values, self.test_environment_dict_values, self.__global_settings)
                 for i, tc in enumerate(sorted(self.tests_repository, key=lambda t: t.te.get_order_key())):
                     percentage = (i*100.)/len(self.tests_repository)
                     logging.critical("performing {} over {} ({}%)".format(i, len(self.tests_repository), percentage))
                     logging.critical(f"test environment is {tc.te}")
-                    self.perform_test(tc, global_settings)
-                self.end_perform_test(self.under_test_dict_values, self.test_environment_dict_values, global_settings)
+                    self.perform_test(tc, self.__global_settings)
+                self.end_perform_test(self.under_test_dict_values, self.test_environment_dict_values, self.__global_settings)
 
                 ###################################################
                 # generate computed csvs
                 ###################################################
 
                 logging.info("generating csvs...")
-                self.generate_csvs(global_settings, self.__under_test_dict_values, self.__test_environment_dict_values)
+                self.generate_csvs(self.__global_settings, self.__under_test_dict_values, self.__test_environment_dict_values)
 
 
                 ###################################################
                 # generate the plots
                 ###################################################
                 logging.info("generating plots...")
-                self.generate_plots(global_settings, self.__under_test_dict_values, self.__test_environment_dict_values)
+                self.generate_plots(self.__global_settings, self.__under_test_dict_values, self.__test_environment_dict_values)
 
                 ###################################################
                 # generate an automatic report
