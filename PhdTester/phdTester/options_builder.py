@@ -394,6 +394,29 @@ class OptionBuilder(abc.ABC):
         ))
         return self
 
+    def option_can_be_used_only_when_other_satisfy(self, option1_name: str, option2_name: str,
+                                                          condition: Callable[[Any, Any], bool]) -> "OptionBuilder":
+        """
+        Express the fact that there is a mandatory relationship between the 2 option values.
+
+        In order for a test context to be compliant, the relationship must be ensured.
+        The relationship is given by `condition`. This relationship is always relevant.
+
+        :param option1_name: the first option
+        :param option2_name: the second option
+        :param condition: the relationship to be ensure
+        :return:
+        """
+
+        self.option_graph.add_edge(option1_name, [option2_name], conditions.SimplePairCondition(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.NORMAL,
+            condition=condition,
+        ))
+
+        return self
+
     def option_value_prohibits_other_option(self, option1: str, values: List[Any], options_prohibited: str) -> "OptionBuilder":
         """
         Some option values entirely excludes another option
@@ -483,36 +506,6 @@ class OptionBuilder(abc.ABC):
         # ))
         # return self
 
-    def option_can_be_used_only_when_other_string_satisfy(self, option_to_use: str, option_to_have_values: str,
-                                                     condition: Callable[[str, str], bool]) -> "OptionBuilder":
-
-        # def inner_condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
-        #     assert isinstance(option1_value, str)
-        #     assert isinstance(option2_value, str)
-        #     return condition(option1_value, option2_value)
-        #
-        # def should_visit_condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
-        #     return True
-        #
-        # self.option_graph.add_edge(option_to_use, option_to_have_values,
-        #                            NeedsToHaveValuesCondition(
-        #                                condition=inner_condition,
-        #                                shoud_visit_condition=should_visit_condition
-        #                            ))
-        # return self
-
-        def other_condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
-            assert isinstance(source_value, str)
-            assert isinstance(sink_value, str)
-            return condition(source_value, sink_value)
-
-        self.option_graph.add_edge(option_to_use, option_to_have_values, conditions.Satisfy(
-            is_required=True,
-            allows_sink_visit=True,
-            condition=other_condition,
-        ))
-
-        return self
 
     def option_can_be_used_only_when_other_has_value(self, option_to_use: str, option_to_have_values: str,
                                                      values_to_have: List[Any]) -> "OptionBuilder":

@@ -73,6 +73,24 @@ class AbstractDependencyCondition(IDependencyCondition, abc.ABC):
         return self.__priority
 
 
+class SimplePairCondition(AbstractDependencyCondition):
+    """
+    A condition between 2 options. The condition is either SUCCESS or REJECT, hence it is always relevant.
+    """
+
+    def __init__(self, enable_sink_visit: bool, is_required: bool, priority: Priority, condition: Callable[[Any, Any], bool]):
+        AbstractDependencyCondition.__init__(self, enable_sink_visit, is_required, priority)
+        self.__condition = condition
+
+    def accept(self, graph: "IMultiDirectedHyperGraph", tc: "ITestContext", source_name: str,
+               source_option: "AbstractOptionNode", source_value: Any,
+               sinks: List[Tuple[str, "AbstractOptionNode", Any]]) -> ConditionOutcome:
+        if len(sinks) != 1:
+            raise ValueError(f"for this condition we require that the hyperedge is infact a simple edge!")
+        valid = self.__condition(source_value, sinks[0][2])
+        return ConditionOutcome.SUCCESS if valid else ConditionOutcome.REJECT
+
+
 class RequiresMapping(AbstractDependencyCondition):
     """
     The dependency is compliant when all endpoints of the hyperedge are not null and when the sink values are equal to
