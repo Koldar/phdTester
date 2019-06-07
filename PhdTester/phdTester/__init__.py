@@ -13,6 +13,10 @@ from phdTester.default_models import \
     AbstractCSVRow, \
     DefaultSubtitleGenerator
 
+from phdTester.common_types import PathStr
+from phdTester.common_types import DataTypeStr
+from phdTester.common_types import KS001Str
+
 from phdTester.options_builder import OptionGraph, OptionBuilder
 
 from phdTester.model_interfaces import \
