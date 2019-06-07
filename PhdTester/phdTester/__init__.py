@@ -25,7 +25,8 @@ from phdTester.options_builder import \
 
 from phdTester.model_interfaces import \
     IStuffUnderTest, ITestEnvironment, ITestContext, \
-    IStuffUnderTestMask, ITestEnvironmentMask, ITestContextMaskOption, \
+    IStuffUnderTestMask, ITestEnvironmentMask, ITestContextMask, \
+    ITestContextMaskOption, \
     IGlobalSettings, \
     IDataSource, \
     IDataContainerPathGenerator, \
