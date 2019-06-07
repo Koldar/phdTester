@@ -417,7 +417,7 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    def constraint_needs_to_happen(self, options_involved: List[str], condition: Callable[[List[Tuple[str, Any]]], bool]) -> OptionBuilder:
+    def constraint_needs_to_happen(self, options_involved: List[str], condition: Callable[[List[Tuple[str, Any]]], bool]) -> "OptionBuilder":
         """
         Represents a contraint between several options which needs to be verified in order for the ITestContext
         to be compliant. The constraints won't be used to discover relevant options in the OptionGraph
