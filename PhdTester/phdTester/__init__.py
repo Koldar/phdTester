@@ -46,9 +46,12 @@ from phdTester.exceptions import \
     IgnoreCSVRowError
 
 # submodules
-from phdTester import option_types
-from phdTester.datasources import filesystem_sources as datasources
-from phdTester.datasources import arangodb_sources as datasources
+from phdTester import option_types as option_types
+
+from phdTester.datasources import \
+    arangodb_sources as arangodb, \
+    filesystem_sources as filesystem
+
 from phdTester import masks
 from phdTester.image_computer import aggregators
 from phdTester import path_generators
