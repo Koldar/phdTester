@@ -21,7 +21,7 @@ from phdTester.datasources.filesystem_sources import CsvFileSystemResourceManage
 from phdTester.default_models import SimpleTestContextRepo, \
     DefaultGlobalSettings, DefaultTestEnvironment, DefaultStuffUnderTest, DefaultTestContext, DefaultStuffUnderTestMask, \
     DefaultTestEnvironmentMask, DefaultTestContextMask, DefaultSubtitleGenerator
-from phdTester.exceptions import ValueToIgnoreError
+from phdTester.exceptions import ValueToIgnoreError, IgnoreCSVRowError
 from phdTester.functions import DataFrameFunctionsDict
 from phdTester.image_computer import aggregators
 from phdTester.ks001.ks001 import KS001
@@ -1571,8 +1571,24 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         csv_outcome = self.get_csv_row(csv_row_data, csv_info.ks001)
         csv_outcome.set_options(csv_row_data)
 
-        x_value = get_x_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, csv_row_index, csv_outcome)
-        y_value = get_y_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, csv_row_index, csv_outcome)
+        x_value = get_x_value.fetch(
+            factory=self,
+            test_context=csv_info.tc,
+            path=csv_info.path,
+            name=csv_info.name,
+            content=csv_dataframe,
+            rowid=csv_row_index,
+            row=csv_outcome
+        )
+        y_value = get_y_value.fetch(
+            factory=self,
+            test_context=csv_info.tc,
+            path=csv_info.path,
+            name=csv_info.name,
+            content=csv_dataframe,
+            rowid=csv_row_index,
+            row=csv_outcome
+        )
         check_x_y(x_value, y_value, csv_info.name, csv_row_index, csv_outcome)
 
         if function_splitter is not None:

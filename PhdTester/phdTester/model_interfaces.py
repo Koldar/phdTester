@@ -2657,14 +2657,14 @@ class IDataRowExtrapolator(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def fetch(self, test_context: "ITestContext", path: PathStr, data_type: DataTypeStr, content: pd.DataFrame, rowid: int,
-                   row: "ICsvRow") -> float:
+    def fetch(self, factory: "AbstractSpecificResearchFieldFactory", test_context: "ITestContext", path: PathStr, name: "KS001Str", content: pd.DataFrame, rowid: int, row: "ICsvRow") -> float:
         """
         Fetch a single data from a row inside a data container (e.g., csv)
 
+        :param factory: the factory which has called the method
         :param test_context: the test context representing the test we're currently analyzing
-        :param path: the path of the data container (e.g., csv) inside the data source
-        :param data_type: the type of the data container (e.g., csv) inside the data source
+        :param path: the path of the data container (e.g., csvs/) inside the data source
+        :param name: the name of the data container inside the data source
         :param content: the content of the dta container, in its fullness
         :param rowid: number identifying the row inside `content` we're currnetly analyzing. These numbers starts from 0
         :param row: the actual row we're analyzing

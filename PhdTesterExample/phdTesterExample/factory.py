@@ -51,12 +51,12 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         ).add_default_settings(
         ).get_option_graph()
 
-    def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.datasources.FileSystem":
-        result = phd.datasources.FileSystem(root=settings.buildDirectory)
+    def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.filesystem.FileSystem":
+        result = phd.filesystem.FileSystem(root=settings.buildDirectory)
 
         return result
 
-    def setup_filesystem_datasource(self, filesystem: "phd.datasources.FileSystem", settings: "SortSettings"):
+    def setup_filesystem_datasource(self, filesystem: "phd.filesystem.FileSystem", settings: "SortSettings"):
         filesystem.make_folders("images")
         filesystem.make_folders("csvs")
         filesystem.make_folders("cwd")

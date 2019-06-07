@@ -1,5 +1,6 @@
 
 
+# main namespace
 from phdTester.default_models import \
     AbstractCSVRow, \
     AbstractTestContextMask, \
@@ -13,11 +14,14 @@ from phdTester.default_models import \
     AbstractCSVRow, \
     DefaultSubtitleGenerator
 
-from phdTester.common_types import PathStr
-from phdTester.common_types import DataTypeStr
-from phdTester.common_types import KS001Str
+from phdTester.common_types import \
+    PathStr, \
+    DataTypeStr, \
+    KS001Str
 
-from phdTester.options_builder import OptionGraph, OptionBuilder
+from phdTester.options_builder import \
+    OptionGraph, \
+    OptionBuilder
 
 from phdTester.model_interfaces import \
     IStuffUnderTest, ITestEnvironment, ITestContext, \
@@ -30,7 +34,8 @@ from phdTester.specific_research_field import AbstractSpecificResearchFieldFacto
 
 from phdTester.ks001.ks001 import KS001
 
-from phdTester.commons import ProgramExecutor
+from phdTester.commons import \
+    ProgramExecutor
 
 from phdTester.exceptions import \
     UncompliantTestContextError, \
