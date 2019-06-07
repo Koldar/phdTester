@@ -28,6 +28,8 @@ from phdTester.model_interfaces import \
     IStuffUnderTestMask, ITestEnvironmentMask, ITestContextMaskOption, \
     IGlobalSettings, \
     IDataSource, \
+    IDataContainerPathGenerator, \
+    ISubtitleGenerator, \
     IDataRowExtrapolator, ICsvRow
 
 from phdTester.specific_research_field import AbstractSpecificResearchFieldFactory
