@@ -318,6 +318,35 @@ class QuantizeXAxis(ICurvesChanger):
 
 
 class StatisticsOfFunctionsPerX(ICurvesChanger):
+    """
+    Generates statistics of several plots which can be grouped
+
+    Assume you have 9 plots which can be grouped 3 by 3. For example:
+
+    A1 (0,3), (1,4), (2,5)
+    A2 (0,13), (1,14), (2,15)
+    A3 (0,23), (1,24), (2,25)
+
+    B1 (0,31), (1,41), (2,51)
+    B2 (0,32), (1,42), (2,52)
+    B3 (0,33), (1,43), (2,53)
+
+    C1 (0,43), (1,51), (2,51)
+    C2 (0,46), (1,56), (2,50)
+    C3 (0,45), (1,58), (2,59)
+
+    All the plots shares the same x axis.
+    What you want is to group the 9 plots in 3 groups:
+     - A1,A2,A3
+     - B1,B2,B3
+     - C1,C2,C3
+
+    Then For each group you want to obtain statistical metrics for each x axis value.
+    For example, in group A you want to have mean and median for x=0, x=1, x=2.
+
+    Note that for each group for each x value you obtain a list of numbers (hence you can
+    compute statistical indices)
+    """
 
     class IFunctionGrouper(abc.ABC):
 
