@@ -36,13 +36,6 @@ from phdTester.plotting import matplotlib_plotting
 from phdTester.plotting.common import DefaultAxis, DefaultText, DefaultSinglePlot, StringPlotTextFormatter
 
 
-class IgnoreCSVRowError(Exception):
-    """
-    Exception to raise if a line of the csv needs to be skipped
-    """
-    pass
-
-
 class AbstractSpecificResearchFieldFactory(abc.ABC):
 
     def __init__(self):

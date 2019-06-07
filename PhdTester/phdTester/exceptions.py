@@ -25,3 +25,10 @@ class UncompliantTestContextError(Exception):
     Thrown when a ITestContext is not compliant with the option graph
     """
     pass
+
+
+class IgnoreCSVRowError(Exception):
+    """
+    Exception to raise if a line of the csv needs to be skipped
+    """
+    pass

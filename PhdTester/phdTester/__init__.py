@@ -32,6 +32,14 @@ from phdTester.ks001.ks001 import KS001
 
 from phdTester.commons import ProgramExecutor
 
+from phdTester.exceptions import \
+    UncompliantTestContextError, \
+    ResourceNotFoundError, \
+    OptionConversionError, \
+    ResourceTypeUnhandledError, \
+    ValueToIgnoreError, \
+    IgnoreCSVRowError
+
 # submodules
 from phdTester import option_types
 from phdTester.datasources import filesystem_sources as datasources
