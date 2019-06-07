@@ -210,19 +210,29 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         return DefaultStuffUnderTest(self.under_test_dict_values.keys())
 
-    def _generate_test_context(self, ut: IStuffUnderTest, te: ITestEnvironment) -> "ITestContext":
+    def _generate_test_context(self, ut: "IStuffUnderTest" = None, te: "ITestEnvironment" = None) -> "ITestContext":
         """
         Generate a test context, namely a structure representing a single test case.
         A test context contains the specifications of the stuff we need to test and the
         specification of the environment where we need to test it
+
         :param ut: the stuff we need to test specification. None if you want to generate a test with defaults
-        :param te: the environment we need to test in. Non if you want to generate a test with defaults
+        :param te: the environment we need to test in. None if you want to generate a test with defaults
         :return:
         """
         return DefaultTestContext(ut=ut, te=te)
 
     def generate_test_context(self) -> "ITestContext":
-        return self.__generate_test_context(None, None)
+        """
+        Generate a test context, namely a structure representing a single test case.
+        A test context contains the specifications of the stuff we need to test and the
+        specification of the environment where we need to test it. Both these structure are absolutely empty
+        and are initialized with the return value of generate_environment and generate_under_testing
+
+
+        :return: an instance of test context
+        """
+        return self._generate_test_context(self.generate_under_testing(), self.generate_environment())
 
     def generate_stuff_under_test_mask(self) -> "IStuffUnderTestMask":
         return DefaultStuffUnderTestMask(self.under_test_dict_values.keys())
@@ -283,19 +293,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         if self.__test_environment_dict_values is None:
             raise ValueError(f"we haven't set the test environment dict values yet!")
         return self.__test_environment_dict_values
-
-    def __generate_test_context(self, ut: Optional[IStuffUnderTest] = None, te: Optional[ITestEnvironment] = None) -> "ITestContext":
-        """
-        Like `_generate_test_context` but `ut` and `te` might be None
-
-        In case a parameter is None, the function automatically called `generate_under_testing` or `generate_environment`
-        :param ut:
-        :param te:
-        :return:
-        """
-        ut = ut if ut is not None else self.generate_under_testing()
-        te = te if te is not None else self.generate_environment()
-        return self._generate_test_context(ut, te)
 
     def generate_test_context_repo(self, settings: "IGlobalSettings") -> "ITestContextRepo":
         """
@@ -604,7 +601,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         result = []
 
-        tc_class = self.__generate_test_context().__class__
+        tc_class = self.generate_test_context().__class__
         if afilter is None:
             afilter = identity
         for abs_image_file in map(os.path.abspath, filter(afilter, os.listdir(directory))):
@@ -618,7 +615,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             )
             new_ut.set_from_ks001(i=0, ks=tc_dict)
             new_te.set_from_ks001(i=0, ks=tc_dict)
-            tc = self.__generate_test_context(new_ut, new_te)
+            tc = self._generate_test_context(new_ut, new_te)
 
             if not tc.are_option_values_all_in(stuff_under_test_dict_values, test_environment_dict_values):
                 continue
@@ -709,7 +706,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             logging.info(f"test context template is {tcm_to_use}")
 
             # generate the csv filename
-            tc = self.__generate_test_context()
+            tc = self.generate_test_context()
             csv_generated = tcm_to_use.to_well_specified_ks001(key_alias=tc.key_alias, value_alias=tc.value_alias)
             csv_generated = csv_generated + ks001_to_add
             csv_output_filename = csv_generated.dump_str(
@@ -1063,7 +1060,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             for i, label in enumerate(test_environment_labels):
                 te.set_option(label, values[len(under_testing_labels) + i])
 
-            test_context_to_add = self.__generate_test_context(ut, te)
+            test_context_to_add = self._generate_test_context(ut, te)
             logging.debug(f"checking if {test_context_to_add} is a valid test...")
             # fetch the options which are relevant for the ITestContext
             success, followed_vertices = g.fetches_options_to_consider(test_context_to_add, Priority.IMPORTANT)  # the relevant options have values set to 100
@@ -1244,7 +1241,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         relevant_csvs: List[GetSuchInfo] = []
         # filter the csvs only with stuff under test / test environment which are involved in this test
         for csv_info in data_source.get_suchthat(
-            test_context_template=self.__generate_test_context(),
+            test_context_template=self.generate_test_context(),
             path=path_function.fetch(test_context_template),
             filters=csv_filter,
             data_type='csv',
@@ -1409,8 +1406,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         functions_to_draw: Dict[str, AbstractSpecificResearchFieldFactory.FunctionData] = {}
         result = DataFrameFunctionsDict()
 
-        key_alias = self.__generate_test_context().key_alias
-        value_alias = self.__generate_test_context().value_alias
+        key_alias = self.generate_test_context().key_alias
+        value_alias = self.generate_test_context().value_alias
 
         # just to be sure, we order them by stuff under test
         csv_numbers = len(csv_contexts)
@@ -1706,8 +1703,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         # generate a KS001 containing only the values which we're considering
         d = test_context_template.to_well_specified_ks001(
-            key_alias=self.__generate_test_context().key_alias,
-            value_alias=self.__generate_test_context().value_alias,
+            key_alias=self.generate_test_context().key_alias,
+            value_alias=self.generate_test_context().value_alias,
         )
         d = d.append(image_suffix)
 
