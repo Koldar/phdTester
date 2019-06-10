@@ -1,6 +1,7 @@
 import abc
 import argparse
 import functools
+import importlib
 import io
 import itertools
 import logging
@@ -9,7 +10,6 @@ import os
 import sys
 from typing import Dict, Any, Iterable, List, Tuple, Callable, Union, Optional
 
-import dask.dataframe as dd
 import pandas as pd
 
 from phdTester import commons, masks
@@ -416,13 +416,14 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         :return:
         """
 
-        format = r"%(asctime)s %(processName)10s %(filename)-27s@%(lineno)4d %(message)s"
         if settings.contains_option("logLevel"):
+            importlib.reload(logging)  # issue  65
             logging.basicConfig(
                 level=getattr(logging, settings.logLevel),
-                format=format,
+                format=r"%(asctime)s %(processName)10s %(filename)-27s@%(lineno)4d %(message)s",
                 datefmt="%j-%H:%M:%S",
             )
+            logging.critical("logging configured correctly!")
 
     def run(self, *args, cli_commands: List[str] = None, **kwargs):
         """
