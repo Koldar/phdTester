@@ -1,6 +1,8 @@
 import abc
+import logging
 import os
 from typing import Any, Iterable, Tuple, List, Dict, Callable
+
 
 
 class ISingleDirectedGraph(abc.ABC):
@@ -546,6 +548,9 @@ class IMultiDirectedHyperGraph(abc.ABC):
             """
             return self.source in vertices and all(map(lambda sink: sink in vertices, self.sinks))
 
+        def __str__(self) -> str:
+            return f"{self.source} -> {self.sinks}"
+
     @abc.abstractmethod
     def add_vertex(self, payload, aid: Any = None) -> Any:
         """
@@ -797,6 +802,7 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
     def in_edges(self, source: Any) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
         for edge in self.__edges:
             if source in edge.sinks:
+                logging.critical(f"edge {edge} has {source} as sink!")
                 yield edge
 
     def generate_image(self, output_file: str):

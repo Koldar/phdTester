@@ -446,6 +446,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         # generate option graph and parse output
         ###################################################
         self.__option_graph = self._generate_option_graph()
+        logging.info(f"generating image \"optionGraph.svg\" representing the option graph itself")
+        self.__option_graph.generate_image("optionGraph")
         cli_commands = cli_commands if cli_commands is not None else sys.argv[1:]
         parse_output = self._generate_parser_from_option_graph(self.__option_graph, cli_commands)
 
@@ -1094,7 +1096,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             test_context_to_add = self._generate_test_context(ut, te)
             logging.debug(f"checking if {test_context_to_add} is a valid test...")
             # fetch the options which are relevant for the ITestContext
-            success, followed_vertices = g.fetches_options_to_consider(test_context_to_add, Priority.IMPORTANT)  # the relevant options have values set to 100
+            success, followed_vertices = g.fetches_options_to_consider(test_context_to_add, Priority.IMPORTANT)
             if not success:
                 # the test context is not compliant with even the most basic options
                 continue
@@ -1102,6 +1104,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # check if the other constraints are satisfied
             if not g.is_compliant_with_test_context(test_context_to_add, followed_vertices, priority_to_ignore=Priority.IMPORTANT):
                 continue
+            logging.debug(f"relevant options are: {followed_vertices}")
 
             # we remove from tc all the options which are semantically useless
             for useless in set(test_context_to_add.options()) - followed_vertices:

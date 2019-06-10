@@ -1,4 +1,5 @@
 import abc
+import logging
 import os
 from typing import List, Any, Callable, Tuple, Iterable, Set, Dict
 
@@ -79,18 +80,19 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
 
         def is_not_sink_of_important_edge(v: Any) -> bool:
             for in_edge in self.in_edges(v):
-                if in_edge.payload.priority == Priority.IMPORTANT:
+                if in_edge.payload.priority() == Priority.IMPORTANT:
                     return False
-                elif in_edge.payload.priority == Priority.NORMAL:
+                elif in_edge.payload.priority() == Priority.NORMAL:
                     pass
                 else:
-                    raise ValueError(f"invalid priority {priority}!")
+                    raise ValueError(f"invalid priority {in_edge.payload.priority()}!")
             return True
 
-        for vertex_name, vertex_value in filter(is_not_sink_of_important_edge, self.vertices()):
+        for vertex_name in filter(is_not_sink_of_important_edge, map(lambda x: x[0], self.vertices())):
             # this is not a complete DFS. We start only from the roots of the option graph and we analyze only
             # nodes reached from there.
             # roots should always be marked as "followed"
+            logging.debug(f"{vertex_name} is a vertex with no ingoing important edges, hence we add it in the result")
             result.add(vertex_name)
             try:
                 self.__follow_hyperedges(
@@ -256,7 +258,7 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
             dotfile.write("}\n")
 
         os.system(f"dot -Tsvg -o \"{output_file}.svg\" \"{output_file}.dot\"")
-        #os.remove(f"{output_file}.dot")
+        os.remove(f"{output_file}.dot")
 
 
 class OptionBuilder(abc.ABC):
