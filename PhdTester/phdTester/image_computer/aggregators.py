@@ -1,5 +1,7 @@
 import math
-from typing import Any, Iterable, List
+import multiprocessing
+import os
+from typing import Any, Iterable, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -7,6 +9,9 @@ import pandas as pd
 from phdTester import commons
 from phdTester.functions import DataFrameFunctionsDict
 from phdTester.model_interfaces import IAggregator, IFunctionsDict
+
+import dask.array as da
+import dask.dataframe as dd
 
 
 class Count(commons.SlottedClass, IAggregator):
@@ -420,6 +425,21 @@ class MinAggregator(commons.SlottedClass, IAggregator):
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
         # see https://stackoverflow.com/a/19490199/1887602
-        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        tmp = tmp.groupby(tmp.index).min()
-        return DataFrameFunctionsDict.from_dataframe(tmp)
+        result = DataFrameFunctionsDict()
+
+        #fetch all function names
+        function_names = set()
+        # TODO create a function for this
+        for d in functions_dict:
+            function_names.add(d.function_names())
+
+        for function_name in function_names:
+            tmp = list(map(lambda x: dd.from_pandas(x.to_dataframe()[function_name], npartitions=os.cpu_count()), functions_dict))
+            concat = dd.concat(tmp)
+            data_frame = concat.groupby(concat.index).min().compute()
+            result.to_dataframe()[function_name] = data_frame
+
+        return result
+        # tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
+        # tmp = tmp.groupby(tmp.index).min()
+        # return DataFrameFunctionsDict.from_dataframe(tmp)
