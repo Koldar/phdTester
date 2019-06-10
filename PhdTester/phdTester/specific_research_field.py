@@ -82,6 +82,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         the character to use instead of "=" for KS001 parsing in **all** KS001 structures
         """
 
+    #################################################################
+    # PROPERTIES
+    #################################################################
+
     @property
     def run_args(self) -> Iterable[Any]:
         """
@@ -119,6 +123,55 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         if self.__equal is None:
             raise ValueError(f"equal character has not been set yet!")
         return self.__equal
+
+    @property
+    def option_graph(self) -> OptionGraph:
+        if self.__option_graph is None:
+            raise ValueError(f"we still haven't set the option graph yet!")
+        return self.__option_graph
+
+    @property
+    def tests_repository(self) -> ITestContextRepo:
+        if self.__tests_repository is None:
+            raise ValueError(f"We still haven't set the test context repository!")
+        return self.__tests_repository
+
+    @property
+    def global_settings(self) -> "IGlobalSettings":
+        """
+        :return: the global settings associated to0 this run
+        """
+        if self.__global_settings is None:
+            raise ValueError(f"We still haven't set the global settings!")
+        return self.__global_settings
+
+    @property
+    def datasource(self) -> "IDataSource":
+        """
+        The datasource you can use to store data persistently
+        :return: the datasource of the project
+        """
+        if self.__datasource is None:
+            raise ValueError(f"datasource is None!")
+        return self.__datasource
+
+    @property
+    def filesystem_datasource(self) -> "filesystem_sources.FileSystem":
+        if self.__filesystem_datasource is None:
+            raise ValueError(f"file system datasource is None!")
+        return self.__filesystem_datasource
+
+    @property
+    def under_test_dict_values(self) -> Dict[str, Any]:
+        if self.__under_test_dict_values is None:
+            raise ValueError(f"we haven't set the under test dict values yet!")
+        return self.__under_test_dict_values
+
+    @property
+    def test_environment_dict_values(self) -> Dict[str, Any]:
+        if self.__test_environment_dict_values is None:
+            raise ValueError(f"we haven't set the test environment dict values yet!")
+        return self.__test_environment_dict_values
 
     def _get_ks001_colon(self, settings: "IGlobalSettings") -> str:
         """
@@ -183,27 +236,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         :return: the option graph
         """
         pass
-
-    @property
-    def option_graph(self) -> OptionGraph:
-        if self.__option_graph is None:
-            raise ValueError(f"we still haven't set the option graph yet!")
-        return self.__option_graph
-
-    @property
-    def tests_repository(self) -> ITestContextRepo:
-        if self.__tests_repository is None:
-            raise ValueError(f"We still haven't set the test context repository!")
-        return self.__tests_repository
-
-    @property
-    def global_settings(self) -> "IGlobalSettings":
-        """
-        :return: the global settings associated to0 this run
-        """
-        if self.__global_settings is None:
-            raise ValueError(f"We still haven't set the global settings!")
-        return self.__global_settings
 
     @abc.abstractmethod
     def setup_filesystem_datasource(self, filesystem: "filesystem_sources.FileSystem", settings: "IGlobalSettings"):
@@ -286,34 +318,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         :return:
         """
         return DefaultGlobalSettings()
-
-    @property
-    def datasource(self) -> "IDataSource":
-        """
-        The datasource you can use to store data persistently
-        :return: the datasource of the project
-        """
-        if self.__datasource is None:
-            raise ValueError(f"datasource is None!")
-        return self.__datasource
-
-    @property
-    def filesystem_datasource(self) -> "filesystem_sources.FileSystem":
-        if self.__filesystem_datasource is None:
-            raise ValueError(f"file system datasource is None!")
-        return self.__filesystem_datasource
-
-    @property
-    def under_test_dict_values(self) -> Dict[str, Any]:
-        if self.__under_test_dict_values is None:
-            raise ValueError(f"we haven't set the under test dict values yet!")
-        return self.__under_test_dict_values
-
-    @property
-    def test_environment_dict_values(self) -> Dict[str, Any]:
-        if self.__test_environment_dict_values is None:
-            raise ValueError(f"we haven't set the test environment dict values yet!")
-        return self.__test_environment_dict_values
 
     def generate_test_context_repo(self, settings: "IGlobalSettings") -> "ITestContextRepo":
         """
