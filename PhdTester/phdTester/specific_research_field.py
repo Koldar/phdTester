@@ -1459,11 +1459,15 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         #         functions_dict=result,                                                                                                                          functions_to_draw = functions_to_draw,
         #     )
 
-        def init_process():
+        def init_process(counter: multiprocessing.Value, lock: multiprocessing.Lock):
+            global global_counter
+            global global_lock
+            global_counter = counter
+            global_lock = lock
             multiprocessing.current_process().name = f"csvPool{multiprocessing.current_process()._identity[0]:02d}"
 
         # use as many processes as there are CPUs
-        with multiprocessing.Pool(processes=os.cpu_count(), initializer=init_process) as pool:
+        with multiprocessing.Pool(processes=os.cpu_count(), initializer=init_process, initargs=(multiprocessing.Value('i', 0), multiprocessing.Lock())) as pool:
             # set all the attributes which do not change as "fixed"
             process_csv = functools.partial(self._generate_functions_dict_from_csv,
                                             csv_numbers=csv_numbers,
@@ -1479,6 +1483,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 enumerate(sorted(csv_contexts, key=lambda x: x.tc.ut.get_label()))
             )
 
+        logging.critical("terminated processing all csvs... compressing data into a single dataframe...")
         # ok, now we have a function dict for every csv we analyzed. We need to obtain a single one
         # by aggregating the partial results. see https://stackoverflow.com/a/19490199/1887602
         return y_aggregator.with_pandas(csv_functions)
@@ -1556,7 +1561,11 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
     def _generate_functions_dict_from_csv(self, csv_number: int, csv_info: GetSuchInfo, csv_numbers: int, data_source: "IDataSource", get_x_value: "IDataRowExtrapolator", get_y_value: "IDataRowExtrapolator", function_splitter: "IFunctionSplitter", x_aggregator: "aggregators.IAggregator", y_aggregator: "aggregators.IAggregator") -> "IFunctionsDict":
 
         assert isinstance(csv_info.tc, ITestContext)
-        logging.info(f"reading csv #{csv_number} out of {csv_numbers} ({float(100 * csv_number / csv_numbers):2.1f}) {csv_info.name}")
+        with global_lock:
+            val = global_counter.value
+            global_counter.value += 1
+        percentage = float(100 * val / csv_numbers)
+        logging.info(f"reading csv #{csv_number} out of {csv_numbers} ({percentage:2.1f}) {csv_info.name}")
 
         result = DataFrameFunctionsDict()
         functions_to_draw: Dict[str, "AbstractSpecificResearchFieldFactory.FunctionData"] = {}
