@@ -249,6 +249,14 @@ class DefaultTestContextMask(ITestContextMask):
     def __init__(self, ut: "IStuffUnderTestMask", te: "ITestEnvironmentMask"):
         ITestContextMask.__init__(self, ut=ut, te=te)
 
+    @property
+    def ut(self) -> "IStuffUnderTestMask":
+        return self._ut
+
+    @property
+    def te(self) -> "ITestEnvironmentMask":
+        return self._te
+
 
 def _query_by_mask(m: "ITestContextMask", iterable: Iterable["ITestContext"]) -> Iterable["ITestContext"]:
     for tc in iterable:

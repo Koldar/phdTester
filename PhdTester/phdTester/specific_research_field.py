@@ -270,20 +270,11 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
     def generate_test_environment_mask(self) -> "ITestEnvironmentMask":
         return DefaultTestEnvironmentMask(self.test_environment_dict_values.keys())
 
-    def __generate_test_context_mask(self, ut: Optional["IStuffUnderTestMask"]=None, te: Optional["ITestEnvironmentMask"] = None) -> "ITestContextMask":
-        ut = ut if ut is not None else self.generate_stuff_under_test_mask()
-        te = te if te is not None else self.generate_test_environment_mask()
-        return self._generate_test_context_mask(ut, te)
+    def _generate_test_context_mask(self, ut: Optional["IStuffUnderTestMask"] = None, te: Optional["ITestEnvironmentMask"] = None) -> "ITestContextMask":
+        return DefaultTestContextMask(ut=ut, te=te)
 
     def generate_test_context_mask(self) -> "ITestContextMask":
-        return self.__generate_test_context_mask(None, None)
-
-    def _generate_test_context_mask(self, ut: "IStuffUnderTestMask", te: "ITestEnvironmentMask") -> "ITestContextMask":
-        """
-        the context mask is used when you need to generate patterns between test contextes
-        :return:
-        """
-        return DefaultTestContextMask(ut, te)
+        return DefaultTestContextMask(ut=self.generate_stuff_under_test_mask(), te=self.generate_test_environment_mask())
 
     def generate_test_global_settings(self) -> "IGlobalSettings":
         """
@@ -687,7 +678,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # (which are displayed in the actual plots). For each of the possibility, we generate a plot
 
             # we generate a clear mask (everything with None)
-            tcm_to_use = self.__generate_test_context_mask()
+            tcm_to_use = self.generate_test_context_mask()
             tcm_to_use.clear()
 
             # we set all the options in the mask to be ignored.
@@ -927,7 +918,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # (which are displayed in the actual plots). For each of the possibility, we generate a plot
 
             # we generate a clear mask (everything with None)
-            tcm_to_use = self.__generate_test_context_mask()
+            tcm_to_use = self.generate_test_context_mask()
             tcm_to_use.clear()
 
             # we set all the options in the mask to be ignored.
@@ -1281,6 +1272,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             data_type='csv',
             force_generate_ks001=True,
             force_generate_textcontext=True,
+            colon=self.colon,
+            pipe=self.pipe,
+            underscore=self.underscore,
+            equal=self.equal
         ):
             # the csv contains values which we're interested in?
             if csv_info.tc.are_option_values_all_in(self.under_test_dict_values, self.test_environment_dict_values):
