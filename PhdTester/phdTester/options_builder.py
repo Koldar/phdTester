@@ -1,4 +1,5 @@
 import abc
+import functools
 import logging
 import os
 from typing import List, Any, Callable, Tuple, Iterable, Set, Dict
@@ -8,8 +9,23 @@ from phdTester.conditions import IDependencyCondition
 from phdTester.exceptions import UncompliantTestContextError
 from phdTester.graph import SimpleMultiDirectedGraph, DefaultMultiDirectedHyperGraph, IMultiDirectedHyperGraph
 from phdTester.model_interfaces import ITestContext, AbstractOptionNode, OptionBelonging, IOptionType, Priority, \
-    ConditionOutcome
+    ConditionOutcome, ISimpleTestContextMaskOption
 from phdTester.options import MultiValueNode, SingleFlagNode, MultiChoiceNode, SingleChoiceNode, SingleValueNode
+
+
+def _options_has_values(name_values: List[Tuple[str, Any]], option_involved_list: List[Tuple[str, Any]]) -> bool:
+    for i, (name, value) in enumerate(name_values):
+        if value != option_involved_list[i][1]:
+            return False
+    return True
+
+
+def _options_all_compliant_with_masks(name_values: List[Tuple[str, Any]],
+                                      option_involved_list: List[Tuple[str, "ISimpleTestContextMaskOption"]]) -> bool:
+    for i, (name, value) in enumerate(name_values):
+        if not option_involved_list[i][1].is_compliant(value):
+            return False
+    return True
 
 
 class OptionGraph(DefaultMultiDirectedHyperGraph):
@@ -78,17 +94,7 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
         # we don't need to pick the roots of the option graph, but only the vertices which are not sinks
         # of important hyperedges. In this way we solve issue #62.
 
-        def is_not_sink_of_important_edge(v: Any) -> bool:
-            for in_edge in self.in_edges(v):
-                if in_edge.payload.priority() == Priority.IMPORTANT:
-                    return False
-                elif in_edge.payload.priority() == Priority.NORMAL:
-                    pass
-                else:
-                    raise ValueError(f"invalid priority {in_edge.payload.priority()}!")
-            return True
-
-        for vertex_name in filter(is_not_sink_of_important_edge, map(lambda x: x[0], self.vertices())):
+        for vertex_name in filter(self.__is_not_sink_of_important_edge, map(lambda x: x[0], self.vertices())):
             # this is not a complete DFS. We start only from the roots of the option graph and we analyze only
             # nodes reached from there.
             # roots should always be marked as "followed"
@@ -105,6 +111,16 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
             except UncompliantTestContextError:
                 return False, set()
         return True, result
+
+    def __is_not_sink_of_important_edge(self, v: Any) -> bool:
+        for in_edge in self.in_edges(v):
+            if in_edge.payload.priority() == Priority.IMPORTANT:
+                return False
+            elif in_edge.payload.priority() == Priority.NORMAL:
+                pass
+            else:
+                raise ValueError(f"invalid priority {in_edge.payload.priority()}!")
+        return True
 
     def __follow_hyperedges(self, node_name: str, hyperedge_filter: Callable[[IMultiDirectedHyperGraph.HyperEdge], bool], visited: Set[str], tc: "ITestContext", followed: Set[str]):
         if node_name in visited:
@@ -520,17 +536,11 @@ class OptionBuilder(abc.ABC):
 
         option_involved_list = list(options_involved.items())
 
-        def condition(name_values: List[Tuple[str, Any]]) -> bool:
-            for i, (name, value) in enumerate(name_values):
-                if value != option_involved_list[i][1]:
-                    return False
-            return True
-
         self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]), conditions.CantHappen(
             is_required=True,
             enable_sink_visit=False,
             priority=Priority.NORMAL,
-            condition=condition,
+            condition=functools.partial(_options_has_values, option_involved_list=option_involved_list),
         ))
 
         return self
@@ -549,22 +559,16 @@ class OptionBuilder(abc.ABC):
 
         option_involved_list = list(options_involved.items())
 
-        def condition(name_values: List[Tuple[str, Any]]) -> bool:
-            for i, (name, value) in enumerate(name_values):
-                if value != option_involved_list[i][1]:
-                    return False
-            return True
-
         self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]), conditions.NeedsToHappen(
             is_required=True,
             enable_sink_visit=False,
             priority=Priority.NORMAL,
-            condition=condition,
+            condition=functools.partial(_options_has_values, option_involved_list=option_involved_list),
         ))
 
         return self
 
-    def prohibits_independent_constraints(self, options_involved: Dict[str, Callable[[Any], bool]]) -> "OptionBuilder":
+    def prohibits_independent_constraints(self, options_involved: Dict[str, "ITestContextMaskOption"]) -> "OptionBuilder":
         """
         Declare that the ITestContext under analysis is uncompliant when all the conditions are satisfied
 
@@ -582,25 +586,19 @@ class OptionBuilder(abc.ABC):
         :return: self
         """
 
-        option_involved_list: List[Tuple[str, Callable[[Any], bool]]] = list(options_involved.items())
-
-        def condition(name_values: List[Tuple[str, Any]]) -> bool:
-            for i, (name, value) in enumerate(name_values):
-                if not option_involved_list[i][1](value):
-                    return False
-            return True
+        option_involved_list: List[Tuple[str, "ISimpleTestContextMaskOption"]] = list(options_involved.items())
 
         self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]),
                                    conditions.CantHappen(
                                        is_required=True,
                                        enable_sink_visit=False,
                                        priority=Priority.NORMAL,
-                                       condition=condition,
+                                       condition=functools.partial(_options_all_compliant_with_masks, option_involved_list=option_involved_list),
                                    ))
 
         return self
 
-    def ensure_independent_constraints(self, options_involved: Dict[str, Callable[[Any], bool]]) -> "OptionBuilder":
+    def ensure_independent_constraints(self, options_involved: Dict[str, "ISimpleTestContextMaskOption"]) -> "OptionBuilder":
         """
         Declare that the ITestContext under analysis is uncompliant when even one of the conditions is not satisfied
 
@@ -618,152 +616,147 @@ class OptionBuilder(abc.ABC):
         :return: self
         """
 
-        option_involved_list: List[Tuple[str, Callable[[Any], bool]]] = list(options_involved.items())
-
-        def condition(name_values: List[Tuple[str, Any]]) -> bool:
-            for i, (name, value) in enumerate(name_values):
-                if not option_involved_list[i][1](value):
-                    return False
-            return True
+        option_involved_list: List[Tuple[str, "ISimpleTestContextMaskOption"]] = list(options_involved.items())
 
         self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]),
                                    conditions.NeedsToHappen(
                                        is_required=True,
                                        enable_sink_visit=False,
                                        priority=Priority.NORMAL,
-                                       condition=condition,
+                                       condition=functools.partial(_options_all_compliant_with_masks, option_involved_list=option_involved_list),
                                    ))
 
         return self
 
-    def option_value_prohibits_other_option(self, option1: str, values: List[Any], options_prohibited: str) -> "OptionBuilder":
-        """
-        Some option values entirely excludes another option
-
-        :param option1: the option which can have values `values`
-        :param values: some possible values `option1` may have
-        :param options_prohibited: the option which can't be set if `option1` has one value within `values`
-        :return: option builder
-        """
-
-        def condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
-            return source_value not in values
-
-        self.option_graph.add_edge(option1, options_prohibited, conditions.Satisfy(
-            is_required=True,
-            allows_sink_visit=False,
-            condition=condition,
-        ))
-
-        return self
-
-    def option_values_mutually_exclusive_when(self, option1: str, values1: List[Any], option2: str, values2: List[Any], side_options_dict: Dict[str, Iterable[Any]]):
-        """
-        N options are mutually exclusive. When the N options have certain values, we fail the constraint
-
-        If the option values are all within their respective sets, the constraint won't be satisfied
-
-        :param option1: the first option
-        :param values1: the possible values of the first option
-        :param option2: the second option
-        :param values2: the possible values of the second option
-        :param side_options_dict: dictionary representing side options. Each key is an option name while each value is the set of values mutually exclusive
-        :return: the graph builder
-        """
-
-        def cond(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any, side_options: List[Tuple[AbstractOptionNode, Any]]) -> bool:
-            if source_value not in values1:
-                return True
-            if sink_value not in values2:
-                return True
-            for o, v in side_options:
-                if v not in side_options_dict[o.long_name]:
-                    return True
-            else:
-                return False
-
-        self.option_graph.add_edge(option1, option2, conditions.SatisfyMultiEdge(
-            condition=cond,
-            third_party_nodes=list(side_options_dict.keys()),
-            allows_sink_visit=False,
-            is_required=True,
-        ))
-
-        return self
-
-    def option_values_mutually_exclusive(self, option1: str, values1: List[Any], option2: str, values2: List[Any]) -> "OptionBuilder":
-
-        def condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
-            return option1_value not in values1 and option2_value not in values2
-
-        def condition2(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
-            return source_value not in values2 and sink_value not in values1
-
-        self.option_graph.add_edge(option1, option2, conditions.Satisfy(
-            is_required=True,
-            allows_sink_visit=False,
-            condition=condition
-        ))
-        self.option_graph.add_edge(option2, option1, conditions.Satisfy(
-            is_required=True,
-            allows_sink_visit=False,
-            condition=condition2
-        ))
-        return self
-
-        # def condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
-        #     return option1_value not in option2
-        #
-        # def should_visit_condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
-        #     return True
-        #
-        # self.option_graph.add_edge(option1, options_prohibited, conditions.Satisfy(
-        #
-        # )(
-        #     condition=condition,
-        #     shoud_visit_condition=should_visit_condition
-        # ))
-        # return self
-
-    def option_can_be_used_only_when_other_has_value(self, option_to_use: str, option_to_have_values: str,
-                                                     values_to_have: List[Any]) -> "OptionBuilder":
-
-        # def condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
-        #     return True
-        #
-        # def should_condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
-        #     return option2_value in values_to_have
-        #
-        # self.option_graph.add_edge(option_to_use, option_to_have_values,
-        #                            NeedsToHaveValuesCondition(condition=condition, shoud_visit_condition=should_condition))
-        # return self
-
-        def condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
-            return sink_value in values_to_have
-
-        self.option_graph.add_edge(option_to_use, option_to_have_values, conditions.Satisfy(
-            is_required=False,
-            allows_sink_visit=True,
-            condition=condition,
-        ))
-
-        return self
-
-    def option_can_be_used_only_when_other_is_present(self, option_to_use: str,
-                                                      option_to_be_present: str) -> "OptionBuilder":
-        # self.option_graph.add_edge(option_to_use, option_to_be_present, True)
-        # return self
-
-        def condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
-            return source_value is not None
-
-        self.option_graph.add_edge(option_to_be_present, option_to_use, conditions.Satisfy(
-            is_required=False,
-            allows_sink_visit=True,
-            condition=condition,
-        ))
-
-        return self
+    # TODO remove
+    # def option_value_prohibits_other_option(self, option1: str, values: List[Any], options_prohibited: str) -> "OptionBuilder":
+    #     """
+    #     Some option values entirely excludes another option
+    #
+    #     :param option1: the option which can have values `values`
+    #     :param values: some possible values `option1` may have
+    #     :param options_prohibited: the option which can't be set if `option1` has one value within `values`
+    #     :return: option builder
+    #     """
+    #
+    #     def condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
+    #         return source_value not in values
+    #
+    #     self.option_graph.add_edge(option1, options_prohibited, conditions.Satisfy(
+    #         is_required=True,
+    #         allows_sink_visit=False,
+    #         condition=condition,
+    #     ))
+    #
+    #     return self
+    #
+    # def option_values_mutually_exclusive_when(self, option1: str, values1: List[Any], option2: str, values2: List[Any], side_options_dict: Dict[str, Iterable[Any]]):
+    #     """
+    #     N options are mutually exclusive. When the N options have certain values, we fail the constraint
+    #
+    #     If the option values are all within their respective sets, the constraint won't be satisfied
+    #
+    #     :param option1: the first option
+    #     :param values1: the possible values of the first option
+    #     :param option2: the second option
+    #     :param values2: the possible values of the second option
+    #     :param side_options_dict: dictionary representing side options. Each key is an option name while each value is the set of values mutually exclusive
+    #     :return: the graph builder
+    #     """
+    #
+    #     def cond(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any, side_options: List[Tuple[AbstractOptionNode, Any]]) -> bool:
+    #         if source_value not in values1:
+    #             return True
+    #         if sink_value not in values2:
+    #             return True
+    #         for o, v in side_options:
+    #             if v not in side_options_dict[o.long_name]:
+    #                 return True
+    #         else:
+    #             return False
+    #
+    #     self.option_graph.add_edge(option1, option2, conditions.SatisfyMultiEdge(
+    #         condition=cond,
+    #         third_party_nodes=list(side_options_dict.keys()),
+    #         allows_sink_visit=False,
+    #         is_required=True,
+    #     ))
+    #
+    #     return self
+    #
+    # def option_values_mutually_exclusive(self, option1: str, values1: List[Any], option2: str, values2: List[Any]) -> "OptionBuilder":
+    #
+    #     def condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
+    #         return option1_value not in values1 and option2_value not in values2
+    #
+    #     def condition2(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
+    #         return source_value not in values2 and sink_value not in values1
+    #
+    #     self.option_graph.add_edge(option1, option2, conditions.Satisfy(
+    #         is_required=True,
+    #         allows_sink_visit=False,
+    #         condition=condition
+    #     ))
+    #     self.option_graph.add_edge(option2, option1, conditions.Satisfy(
+    #         is_required=True,
+    #         allows_sink_visit=False,
+    #         condition=condition2
+    #     ))
+    #     return self
+    #
+    #     # def condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
+    #     #     return option1_value not in option2
+    #     #
+    #     # def should_visit_condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
+    #     #     return True
+    #     #
+    #     # self.option_graph.add_edge(option1, options_prohibited, conditions.Satisfy(
+    #     #
+    #     # )(
+    #     #     condition=condition,
+    #     #     shoud_visit_condition=should_visit_condition
+    #     # ))
+    #     # return self
+    #
+    # def option_can_be_used_only_when_other_has_value(self, option_to_use: str, option_to_have_values: str,
+    #                                                  values_to_have: List[Any]) -> "OptionBuilder":
+    #
+    #     # def condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
+    #     #     return True
+    #     #
+    #     # def should_condition(option1: AbstractOptionNode, option1_value: Any, option2: AbstractOptionNode, option2_value: Any):
+    #     #     return option2_value in values_to_have
+    #     #
+    #     # self.option_graph.add_edge(option_to_use, option_to_have_values,
+    #     #                            NeedsToHaveValuesCondition(condition=condition, shoud_visit_condition=should_condition))
+    #     # return self
+    #
+    #     def condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
+    #         return sink_value in values_to_have
+    #
+    #     self.option_graph.add_edge(option_to_use, option_to_have_values, conditions.Satisfy(
+    #         is_required=False,
+    #         allows_sink_visit=True,
+    #         condition=condition,
+    #     ))
+    #
+    #     return self
+    #
+    # def option_can_be_used_only_when_other_is_present(self, option_to_use: str,
+    #                                                   option_to_be_present: str) -> "OptionBuilder":
+    #     # self.option_graph.add_edge(option_to_use, option_to_be_present, True)
+    #     # return self
+    #
+    #     def condition(source: AbstractOptionNode, source_value: Any, sink: AbstractOptionNode, sink_value: Any):
+    #         return source_value is not None
+    #
+    #     self.option_graph.add_edge(option_to_be_present, option_to_use, conditions.Satisfy(
+    #         is_required=False,
+    #         allows_sink_visit=True,
+    #         condition=condition,
+    #     ))
+    #
+    #     return self
 
     def get_option_graph(self) -> OptionGraph:
         """
