@@ -74,7 +74,20 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
         """
         result = set()
 
-        for vertex_name, vertex_value in self.roots:
+        # we don't need to pick the roots of the option graph, but only the vertices which are not sinks
+        # of important hyperedges. In this way we solve issue #62.
+
+        def is_not_sink_of_important_edge(v: Any) -> bool:
+            for in_edge in self.in_edges(v):
+                if in_edge.payload.priority == Priority.IMPORTANT:
+                    return False
+                elif in_edge.payload.priority == Priority.NORMAL:
+                    pass
+                else:
+                    raise ValueError(f"invalid priority {priority}!")
+            return True
+
+        for vertex_name, vertex_value in filter(is_not_sink_of_important_edge, self.vertices()):
             # this is not a complete DFS. We start only from the roots of the option graph and we analyze only
             # nodes reached from there.
             # roots should always be marked as "followed"
@@ -409,7 +422,9 @@ class OptionBuilder(abc.ABC):
         """
         if `option1` value is within the given set, then `option2` can't left set to None but it is required to
         be set as well. `None` cannot be inside `enabling_values`.
-        If `option1` value is not in the given set, then everything is fine
+        If `option1` value is not in the given set, then everything is fine.
+
+        This constraint **will** be used to discover relevant options in the OptionGraph.
 
         :param enabling_option: the option which can activate the option `enabled_option`
         :param enabling_values: the values which `enabling_option` needs to have in order to activate `enabled_option`
@@ -430,7 +445,7 @@ class OptionBuilder(abc.ABC):
         return self
 
     def option_can_be_used_only_when_other_satisfy(self, option1_name: str, option2_name: str,
-                                                          condition: Callable[[Any, Any], bool]) -> "OptionBuilder":
+                                                   condition: Callable[[Any, Any], bool]) -> "OptionBuilder":
         """
         Express the fact that there is a mandatory relationship between the 2 option values.
 
@@ -509,13 +524,12 @@ class OptionBuilder(abc.ABC):
                     return False
             return True
 
-        self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]),
-                                   conditions.CantHappen(
-                                       is_required=True,
-                                       enable_sink_visit=False,
-                                       priority=Priority.NORMAL,
-                                       condition=condition,
-                                   ))
+        self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]), conditions.CantHappen(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.NORMAL,
+            condition=condition,
+        ))
 
         return self
 
@@ -539,13 +553,12 @@ class OptionBuilder(abc.ABC):
                     return False
             return True
 
-        self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]),
-                                   conditions.NeedsToHappen(
-                                       is_required=True,
-                                       enable_sink_visit=False,
-                                       priority=Priority.NORMAL,
-                                       condition=condition,
-                                   ))
+        self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]), conditions.NeedsToHappen(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.NORMAL,
+            condition=condition,
+        ))
 
         return self
 
@@ -637,7 +650,6 @@ class OptionBuilder(abc.ABC):
         #     shoud_visit_condition=should_visit_condition
         # ))
         # return self
-
 
     def option_can_be_used_only_when_other_has_value(self, option_to_use: str, option_to_have_values: str,
                                                      values_to_have: List[Any]) -> "OptionBuilder":
