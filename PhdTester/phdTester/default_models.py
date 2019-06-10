@@ -10,7 +10,7 @@ from phdTester import commons
 from phdTester.common_types import PathStr
 from phdTester.model_interfaces import ITestContextRepo, ITestContext, ITestContextMask, ITestContextRepoView, \
     IOptionDict, IStuffUnderTest, ITestEnvironment, IStuffUnderTestMask, ITestEnvironmentMask, \
-    IGlobalSettings, ICsvRow, IFunction2D, IDataWriter, IFunctionsDict, IDataContainerPathGenerator, ISubtitleGenerator
+    IGlobalSettings, ICsvRow, IDataWriter, IFunctionsDict, IDataContainerPathGenerator, ISubtitleGenerator
 from phdTester.option_dicts import StandardOptionDict, DynamicOptionDict, DefaultAnonymuousOptionObject
 
 
@@ -248,14 +248,6 @@ class DefaultTestContextMask(ITestContextMask):
 
     def __init__(self, ut: "IStuffUnderTestMask", te: "ITestEnvironmentMask"):
         ITestContextMask.__init__(self, ut=ut, te=te)
-
-    @property
-    def ut(self) -> "IStuffUnderTestMask":
-        return self._ut
-
-    @property
-    def te(self) -> "ITestEnvironmentMask":
-        return self._te
 
 
 def _query_by_mask(m: "ITestContextMask", iterable: Iterable["ITestContext"]) -> Iterable["ITestContext"]:

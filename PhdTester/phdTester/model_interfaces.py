@@ -927,185 +927,185 @@ class IDataWriter(abc.ABC):
         pass
 
 
-class IFunction2D(abc.ABC):
-
-    @abc.abstractmethod
-    def __init__(self):
-        pass
-
-    @abc.abstractmethod
-    def update_point(self, x: float, y: float):
-        pass
-
-    @abc.abstractmethod
-    def remove_point(self, x: float):
-        pass
-
-    @abc.abstractmethod
-    def get_y(self, x: float) -> float:
-        pass
-
-    @abc.abstractmethod
-    def number_of_points(self) -> int:
-        pass
-
-    @abc.abstractmethod
-    def x_unordered_values(self) -> Iterable[float]:
-        pass
-
-    @abc.abstractmethod
-    def y_unordered_value(self) -> Iterable[float]:
-        pass
-
-    @abc.abstractmethod
-    def to_series(self) -> pd.Series:
-        pass
-
-    @abc.abstractmethod
-    def to_dataframe(self) -> pd.DataFrame:
-        pass
-
-    @classmethod
-    def from_xy(cls, x: Iterable[float], y: Iterable[float]) -> "IFunction2D":
-        """
-        Create a new function from 2 lists of the same length
-        :param x: the x values
-        :param y: the y values
-        :return: a new function
-        """
-        result = cls()
-        for x, y in zip(x, y):
-            result.update_point(x, y)
-        return result
-
-    def has_ith_xvalue(self, i: int) -> bool:
-        """
-        Check if this function has a certain amount of values
-        :param i:
-        :return:
-        """
-        return self.number_of_points() > i
-
-    def has_x_value(self, x: float) -> bool:
-        return x in self.x_unordered_values()
-
-    def get_ith_xvalue(self, i: int) -> float:
-        """
-        fetch the i-th x value of the function.
-
-        If the function is: `<1,3> <5,3> <10,12>`
-        callinf the function with `i=1` will return `5`
-
-        :param i: the index fo the x_value to generate
-        :return: an x value
-        """
-
-        return self.x_ordered_values()[i]
-
-    def keys(self) -> Iterable[float]:
-        """
-
-        :return: alias of x_unordered_values
-        """
-        return self.x_unordered_values()
-
-    def x_ordered_values(self) -> Iterable[float]:
-        return sorted(self.x_unordered_values())
-
-    def y_ordered_value(self) -> Iterable[float]:
-        """
-
-        :return: iterable of y values. Order is garantueed
-        """
-        return sorted(self.y_unordered_value())
-
-    def xy_unordered_values(self) -> Iterable[Tuple[float, float]]:
-        """
-
-        :return: iterable of pair os x,y. Order is **not** garantueed
-        """
-        return map(lambda x: (x, self.get_y(x)), self.x_unordered_values())
-
-    def xy_ordered_values(self) -> Iterable[Tuple[float, float]]:
-        """
-
-        :return: iterable of pairs of x,y. Order of x **is** garantueed. Order of y is ignored
-        """
-        return map(lambda x: (x, self.get_y(x)), self.x_ordered_values())
-
-    def change_ith_x(self, x_index: int, new_value: float):
-        x = self.get_ith_xvalue(x_index)
-        y = self.get_y(x)
-        self.remove_point(x)
-        self.update_point(new_value, y)
-
-    def change_x(self, old_x: float, new_x: float, overwrite: bool = False):
-        if self.has_x_value(new_x) and overwrite is False:
-            raise ValueError(f"cannot replace an already existing value!")
-        if new_x == old_x:
-            return
-        old_y = self.get_y(old_x)
-        self.update_point(new_x, old_y)
-        self.remove_point(old_x)
-
-    def __contains__(self, item: float) -> bool:
-        """
-
-        :param item: the x vcalue to check
-        :return: true if a x value is present in the function, false otherwise
-        """
-        return self.has_x_value(item)
-
-    def __setitem__(self, x: float, y: float):
-        """
-        adds apoint in the function
-        :param x: the x value
-        :param y: the y value
-        :return:
-        """
-        self.update_point(x, y)
-
-    def __getitem__(self, x: float) -> float:
-        """
-
-        :param x: the x value involved
-        :return: the y whose x value is x
-        """
-        return self.get_y(x)
-
-    def __add__(self, other: "IFunction2D") -> "IFunction2D":
-        result = self.__class__()
-        for x, y in self.xy_unordered_values():
-            if x not in other:
-                raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
-            result[x] = y + other[x]
-        return result
-
-    def __iadd__(self, other: "IFunction2D"):
-        for x, y in self.xy_unordered_values():
-            if x not in other:
-                raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
-            self[x] = self[x] + other[x]
-
-    def __sub__(self, other: "IFunction2D") -> "IFunction2D":
-        result = self.__class__()
-        for x, y in self.xy_unordered_values():
-            if x not in other:
-                raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
-            result[x] = y - other[x]
-        return result
-
-    def __isub__(self, other: "IFunction2D"):
-        for x, y in self.xy_unordered_values():
-            if x not in other:
-                raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
-            self[x] = self[x] - other[x]
-
-    def __str__(self) -> str:
-        result = "{"
-        result += ', '.join(map(lambda x: f"{x:.1f}={self[x]:.1f}", self.x_ordered_values()))
-        result += "}"
-        return result
+# class IFunction2D(abc.ABC):
+#
+#     @abc.abstractmethod
+#     def __init__(self):
+#         pass
+#
+#     @abc.abstractmethod
+#     def update_point(self, x: float, y: float):
+#         pass
+#
+#     @abc.abstractmethod
+#     def remove_point(self, x: float):
+#         pass
+#
+#     @abc.abstractmethod
+#     def get_y(self, x: float) -> float:
+#         pass
+#
+#     @abc.abstractmethod
+#     def number_of_points(self) -> int:
+#         pass
+#
+#     @abc.abstractmethod
+#     def x_unordered_values(self) -> Iterable[float]:
+#         pass
+#
+#     @abc.abstractmethod
+#     def y_unordered_value(self) -> Iterable[float]:
+#         pass
+#
+#     @abc.abstractmethod
+#     def to_series(self) -> pd.Series:
+#         pass
+#
+#     @abc.abstractmethod
+#     def to_dataframe(self) -> pd.DataFrame:
+#         pass
+#
+#     @classmethod
+#     def from_xy(cls, x: Iterable[float], y: Iterable[float]) -> "IFunction2D":
+#         """
+#         Create a new function from 2 lists of the same length
+#         :param x: the x values
+#         :param y: the y values
+#         :return: a new function
+#         """
+#         result = cls()
+#         for x, y in zip(x, y):
+#             result.update_point(x, y)
+#         return result
+#
+#     def has_ith_xvalue(self, i: int) -> bool:
+#         """
+#         Check if this function has a certain amount of values
+#         :param i:
+#         :return:
+#         """
+#         return self.number_of_points() > i
+#
+#     def has_x_value(self, x: float) -> bool:
+#         return x in self.x_unordered_values()
+#
+#     def get_ith_xvalue(self, i: int) -> float:
+#         """
+#         fetch the i-th x value of the function.
+#
+#         If the function is: `<1,3> <5,3> <10,12>`
+#         callinf the function with `i=1` will return `5`
+#
+#         :param i: the index fo the x_value to generate
+#         :return: an x value
+#         """
+#
+#         return self.x_ordered_values()[i]
+#
+#     def keys(self) -> Iterable[float]:
+#         """
+#
+#         :return: alias of x_unordered_values
+#         """
+#         return self.x_unordered_values()
+#
+#     def x_ordered_values(self) -> Iterable[float]:
+#         return sorted(self.x_unordered_values())
+#
+#     def y_ordered_value(self) -> Iterable[float]:
+#         """
+#
+#         :return: iterable of y values. Order is garantueed
+#         """
+#         return sorted(self.y_unordered_value())
+#
+#     def xy_unordered_values(self) -> Iterable[Tuple[float, float]]:
+#         """
+#
+#         :return: iterable of pair os x,y. Order is **not** garantueed
+#         """
+#         return map(lambda x: (x, self.get_y(x)), self.x_unordered_values())
+#
+#     def xy_ordered_values(self) -> Iterable[Tuple[float, float]]:
+#         """
+#
+#         :return: iterable of pairs of x,y. Order of x **is** garantueed. Order of y is ignored
+#         """
+#         return map(lambda x: (x, self.get_y(x)), self.x_ordered_values())
+#
+#     def change_ith_x(self, x_index: int, new_value: float):
+#         x = self.get_ith_xvalue(x_index)
+#         y = self.get_y(x)
+#         self.remove_point(x)
+#         self.update_point(new_value, y)
+#
+#     def change_x(self, old_x: float, new_x: float, overwrite: bool = False):
+#         if self.has_x_value(new_x) and overwrite is False:
+#             raise ValueError(f"cannot replace an already existing value!")
+#         if new_x == old_x:
+#             return
+#         old_y = self.get_y(old_x)
+#         self.update_point(new_x, old_y)
+#         self.remove_point(old_x)
+#
+#     def __contains__(self, item: float) -> bool:
+#         """
+#
+#         :param item: the x vcalue to check
+#         :return: true if a x value is present in the function, false otherwise
+#         """
+#         return self.has_x_value(item)
+#
+#     def __setitem__(self, x: float, y: float):
+#         """
+#         adds apoint in the function
+#         :param x: the x value
+#         :param y: the y value
+#         :return:
+#         """
+#         self.update_point(x, y)
+#
+#     def __getitem__(self, x: float) -> float:
+#         """
+#
+#         :param x: the x value involved
+#         :return: the y whose x value is x
+#         """
+#         return self.get_y(x)
+#
+#     def __add__(self, other: "IFunction2D") -> "IFunction2D":
+#         result = self.__class__()
+#         for x, y in self.xy_unordered_values():
+#             if x not in other:
+#                 raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
+#             result[x] = y + other[x]
+#         return result
+#
+#     def __iadd__(self, other: "IFunction2D"):
+#         for x, y in self.xy_unordered_values():
+#             if x not in other:
+#                 raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
+#             self[x] = self[x] + other[x]
+#
+#     def __sub__(self, other: "IFunction2D") -> "IFunction2D":
+#         result = self.__class__()
+#         for x, y in self.xy_unordered_values():
+#             if x not in other:
+#                 raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
+#             result[x] = y - other[x]
+#         return result
+#
+#     def __isub__(self, other: "IFunction2D"):
+#         for x, y in self.xy_unordered_values():
+#             if x not in other:
+#                 raise ValueError(f"the 2 functions has different x. Self has {x} while other don't!")
+#             self[x] = self[x] - other[x]
+#
+#     def __str__(self) -> str:
+#         result = "{"
+#         result += ', '.join(map(lambda x: f"{x:.1f}={self[x]:.1f}", self.x_ordered_values()))
+#         result += "}"
+#         return result
 
 
 class IFunctionsDict(abc.ABC):
@@ -1126,14 +1126,6 @@ class IFunctionsDict(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def functions(self) -> Iterable["IFunction2D"]:
-        """
-        iterable of functions
-        :return:
-        """
-        pass
-
-    @abc.abstractmethod
     def size(self) -> int:
         """
         number of functions inside this structure
@@ -1147,24 +1139,6 @@ class IFunctionsDict(abc.ABC):
 
         :return: the maximum number of points the function inside the dict has
         """
-        pass
-
-    @abc.abstractmethod
-    def get_function(self, name: str) -> "IFunction2D":
-        """
-
-        :note: it is not garantueed that changes of the return value will be propagated to the content
-        of this dictionary. In other words, it is not garantueed that the return value is generated by
-        reference nor by value. It is recommended to use the return value only for constant operations.
-
-        :param name: function name to retrieve
-        :return: the fgunction whose namke is `name`
-        :raise KeyError: if no function with the given name is found
-        """
-        pass
-
-    @abc.abstractmethod
-    def set_function(self, name: str, f: "IFunction2D"):
         pass
 
     @abc.abstractmethod
