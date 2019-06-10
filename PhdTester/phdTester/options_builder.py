@@ -564,6 +564,80 @@ class OptionBuilder(abc.ABC):
 
         return self
 
+    def prohibits_independent_constraints(self, options_involved: Dict[str, Callable[[str, Any], bool]]) -> "OptionBuilder":
+        """
+        Declare that the ITestContext under analysis is uncompliant when all the conditions are satisfied
+
+        You can declare one condition per option. The input parameters of the conditions are:
+         - the option name;
+         - the option value;
+
+        This method is perfect when you need to declare simple condition depending on single option value.
+        If you need to say: "test context is valid when option X is alpha and option Y is not beta" this is your
+        function (notice how the 2 conditions are **independent** one from another.
+        If you need to say "test context is valid when option X plus option Y is less than option Z" this
+        function won't cut for you. Use :constraint_cant_happen: instead.
+
+        :param options_involved: a dictionary of options. Keys of the dicitonary are the option names. Each
+        option is associated to a condition, returning true if the condition is satisfied, false otherwise
+        :return: self
+        """
+
+        option_involved_list: List[Tuple[str, Callable[[str, Any], bool]]] = list(options_involved.items())
+
+        def condition(name_values: List[Tuple[str, Any]]) -> bool:
+            for i, (name, value) in enumerate(name_values):
+                if not option_involved_list[i][1](name, value):
+                    return False
+            return True
+
+        self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]),
+                                   conditions.CantHappen(
+                                       is_required=True,
+                                       enable_sink_visit=False,
+                                       priority=Priority.NORMAL,
+                                       condition=condition,
+                                   ))
+
+        return self
+
+    def ensure_independent_constraints(self, options_involved: Dict[str, Callable[[str, Any], bool]]) -> "OptionBuilder":
+        """
+        Declare that the ITestContext under analysis is uncompliant when even one of the conditions is not satisfied
+
+        You can declare one condition per option. The input parameters of the conditions are:
+         - the option name;
+         - the option value;
+
+        This method is perfect when you need to declare simple condition depending on single option value.
+        If you need to say: "test context is valid when option X is alpha and option Y is not beta" this is your
+        function (notice how the 2 conditions are **independent** one from another.
+        If you need to say "test context is valid when option X plus option Y is less than option Z" this
+        function won't cut for you. Use :constraint_cant_happen: instead.
+
+        :param options_involved: a dictionary of options. Keys of the dicitonary are the option names. Each
+        option is associated to a condition, returning true if the condition is satisfied, false otherwise
+        :return: self
+        """
+
+        option_involved_list: List[Tuple[str, Callable[[str, Any], bool]]] = list(options_involved.items())
+
+        def condition(name_values: List[Tuple[str, Any]]) -> bool:
+            for i, (name, value) in enumerate(name_values):
+                if not option_involved_list[i][1](name, value):
+                    return False
+            return True
+
+        self.option_graph.add_edge(option_involved_list[0][0], map(lambda x: x[0], option_involved_list[1:]),
+                                   conditions.NeedsToHappen(
+                                       is_required=True,
+                                       enable_sink_visit=False,
+                                       priority=Priority.NORMAL,
+                                       condition=condition,
+                                   ))
+
+        return self
+
     def option_value_prohibits_other_option(self, option1: str, values: List[Any], options_prohibited: str) -> "OptionBuilder":
         """
         Some option values entirely excludes another option
