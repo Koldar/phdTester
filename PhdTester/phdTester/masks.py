@@ -1,3 +1,4 @@
+import math
 import re
 from typing import Any, Iterable, List
 
@@ -177,7 +178,12 @@ class MustHaveValue(ISimpleTestContextMaskOption, commons.SlottedClass):
         return True
 
     def is_compliant(self, actual: "Any") -> bool:
-        return actual == self.__value
+        # if the comparison is against floating point number, the comparison may become fuzzy.
+        # We handle such special case
+        if isinstance(actual, float):
+            return math.isclose(actual, self.__value)
+        else:
+            return actual == self.__value
 
     def __str__(self):
         return f"has to be {self.__value}"
@@ -214,7 +220,12 @@ class CannotHaveValue(ISimpleTestContextMaskOption):
         return True
 
     def is_compliant(self, actual: "Any") -> bool:
-        return actual != self.value
+        # if the comparison is against floating point number, the comparison may become fuzzy.
+        # We handle such special case
+        if isinstance(actual, float):
+            return not math.isclose(actual, self.value)
+        else:
+            return actual != self.value
 
     def __str__(self) -> str:
         return f"can't have value {self.value}"
