@@ -564,12 +564,11 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    def prohibits_independent_constraints(self, options_involved: Dict[str, Callable[[str, Any], bool]]) -> "OptionBuilder":
+    def prohibits_independent_constraints(self, options_involved: Dict[str, Callable[[Any], bool]]) -> "OptionBuilder":
         """
         Declare that the ITestContext under analysis is uncompliant when all the conditions are satisfied
 
         You can declare one condition per option. The input parameters of the conditions are:
-         - the option name;
          - the option value;
 
         This method is perfect when you need to declare simple condition depending on single option value.
@@ -583,11 +582,11 @@ class OptionBuilder(abc.ABC):
         :return: self
         """
 
-        option_involved_list: List[Tuple[str, Callable[[str, Any], bool]]] = list(options_involved.items())
+        option_involved_list: List[Tuple[str, Callable[[Any], bool]]] = list(options_involved.items())
 
         def condition(name_values: List[Tuple[str, Any]]) -> bool:
             for i, (name, value) in enumerate(name_values):
-                if not option_involved_list[i][1](name, value):
+                if not option_involved_list[i][1](value):
                     return False
             return True
 
@@ -601,12 +600,11 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    def ensure_independent_constraints(self, options_involved: Dict[str, Callable[[str, Any], bool]]) -> "OptionBuilder":
+    def ensure_independent_constraints(self, options_involved: Dict[str, Callable[[Any], bool]]) -> "OptionBuilder":
         """
         Declare that the ITestContext under analysis is uncompliant when even one of the conditions is not satisfied
 
         You can declare one condition per option. The input parameters of the conditions are:
-         - the option name;
          - the option value;
 
         This method is perfect when you need to declare simple condition depending on single option value.
@@ -620,11 +618,11 @@ class OptionBuilder(abc.ABC):
         :return: self
         """
 
-        option_involved_list: List[Tuple[str, Callable[[str, Any], bool]]] = list(options_involved.items())
+        option_involved_list: List[Tuple[str, Callable[[Any], bool]]] = list(options_involved.items())
 
         def condition(name_values: List[Tuple[str, Any]]) -> bool:
             for i, (name, value) in enumerate(name_values):
-                if not option_involved_list[i][1](name, value):
+                if not option_involved_list[i][1](value):
                     return False
             return True
 
