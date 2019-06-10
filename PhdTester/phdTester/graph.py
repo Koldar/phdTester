@@ -802,7 +802,6 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
     def in_edges(self, source: Any) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
         for edge in self.__edges:
             if source in edge.sinks:
-                logging.critical(f"edge {edge} has {source} as sink!")
                 yield edge
 
     def generate_image(self, output_file: str):
