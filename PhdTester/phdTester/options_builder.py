@@ -210,6 +210,40 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
                 raise TypeError(f"overtex is not AbstractOptionNode!")
             yield (name, v)
 
+    def generate_image(self, output_file: str):
+        with open(f"{output_file}.dot", "w") as dotfile:
+
+            dotfile.write("digraph {\n")
+            dotfile.write("\trankdir=\"TB\";\n")
+
+            # add all edges
+            for index, hyperedge in enumerate(self.edges()):
+                if hyperedge.payload.priority() == Priority.IMPORTANT:
+                    color = "red"
+                    width = 2
+                elif hyperedge.payload.priority() == Priority.NORMAL:
+                    color = "black"
+                    width = 1
+                else:
+                    raise ValueError(f"invalid priority {hyperedge.payload.priority()}!")
+
+                dotfile.write(f"\tN{hyperedge.source} -> HE{index:04d} [arrowhead=\"none\", width={width}, color=\"{color}\"];\n")
+                for sink in hyperedge.sinks:
+                    dotfile.write(f"\tHE{index:04d} -> N{sink} [width={width}, color=\"{color}\"];\n")
+
+            # add all vertices  of graph
+            for index, vertex in self.vertices():
+                dotfile.write(f"\tN{index} [label=\"{index}\"];\n")
+
+            # add all vertices of hyper edges
+            for index, hyperedge in enumerate(self.edges()):
+                dotfile.write(f"\tHE{index:04d} [shape=\"point\", label=\"\"];\n")
+
+            dotfile.write("}\n")
+
+        os.system(f"dot -Tsvg -o \"{output_file}.svg\" \"{output_file}.dot\"")
+        #os.remove(f"{output_file}.dot")
+
 
 class OptionBuilder(abc.ABC):
 
