@@ -1,5 +1,6 @@
 import abc
-from typing import Any, Iterable, Tuple, List, Dict
+import os
+from typing import Any, Iterable, Tuple, List, Dict, Callable
 
 
 class ISingleDirectedGraph(abc.ABC):
@@ -716,7 +717,7 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
     next_id = 0
 
     def __init__(self):
-        self.__vertices: Dict[int, Any] = {}
+        self.__vertices: Dict[Any, Any] = {}
         self.__edges: List["IMultiDirectedHyperGraph.HyperEdge"] = []
         """
         List of hyper edges.
@@ -747,7 +748,7 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
         return aid in self.__vertices
 
     def vertices(self) -> Iterable[Tuple[Any, Any]]:
-        return self.__vertices.items()
+        yield from self.__vertices.items()
 
     def size(self) -> int:
         return len(self.__vertices)
@@ -797,3 +798,29 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
         for edge in self.__edges:
             if source in edge.sinks:
                 yield edge
+
+    def generate_image(self, output_file: str):
+        with open(f"{output_file}.dot", "w") as dotfile:
+
+            dotfile.write("digraph {\n")
+            dotfile.write("\trankdir=\"TB\";\n")
+
+            # add all edges
+            for index, hyperedge in enumerate(self.__edges):
+                dotfile.write(f"\tN{hyperedge.source} -> HE{index:04d} [arrowhead=\"none\"];\n")
+                for sink in hyperedge.sinks:
+                    dotfile.write(f"\tHE{index:04d} -> N{sink};\n")
+
+            # add all vertices  of graph
+            for index, vertex in self.__vertices.items():
+                dotfile.write(f"\tN{index} [label=\"{index}\"];\n")
+
+            # add all vertices of hyper edges
+            for index, hyperedge in enumerate(self.__edges):
+                dotfile.write(f"\tHE{index:04d} [shape=\"point\", label=\"\"];\n")
+
+            dotfile.write("}\n")
+
+        os.system(f"dot -Tsvg -o \"{output_file}.svg\" \"{output_file}.dot\"")
+        os.remove(f"{output_file}.dot")
+
