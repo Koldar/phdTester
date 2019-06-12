@@ -409,7 +409,7 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
         return self._dataframe.shape[0]
 
     def contains_function_point(self, name: str, x: float) -> bool:
-        return np.isnan(self._dataframe.loc[x, name])
+        return not np.isnan(self._dataframe.loc[x, name])
 
     def get_function_y(self, name: str, x: float) -> float:
         result = self._dataframe.loc[x, name]
