@@ -1,6 +1,7 @@
 from typing import Tuple, List
 
-from phdTester.common_types import KS001Str, PathStr, DataTypeStr
+from phdTester import commons
+from phdTester.common_types import KS001Str, PathStr, DataTypeStr, GetSuchInfo
 from phdTester.model_interfaces import IComplexCsvFilter
 
 
