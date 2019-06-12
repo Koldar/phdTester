@@ -824,9 +824,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 header = ["X"]
                 header.extend(sorted(functions_to_print.keys()))
                 with StringCsvWriter(separator=',', header=header) as f:
-                    for x in list(functions_to_print.values())[0].x_ordered_values():
+                    for x in functions_to_print.xaxis_ordered():
                         line = [x]
-                        line.extend(list(map(lambda name: functions_to_print[name][x] if x in functions_to_print[name] else 0, header[1:])))
+                        line.extend(list(map(lambda aname: functions_to_print.get_function_y(aname, x) if functions_to_print.contains_function_point(aname, x) else np.nan, header[1:])))
                         f.write(line)
 
                     csv_dest_data_source.save_at(
