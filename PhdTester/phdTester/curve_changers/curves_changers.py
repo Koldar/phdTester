@@ -1,10 +1,12 @@
 import abc
 import logging
 import math
+import os
 from typing import Dict, Callable, Union, Tuple, Any, Optional, Set, List, Iterable
 
 import numpy as np
 import pandas as pd
+import dask.dataframe as dd
 
 from phdTester import commons
 from phdTester.curve_changers.shared_curves_changers import AbstractTransformX, AbstractTransformY
@@ -68,7 +70,18 @@ class StandardTransformY(AbstractTransformY):
 
 class ReplaceFirstNaNValues(ICurvesChanger):
     """
-    Iterate over all the functions values. If it finds an invalid y value, it replaces it with a fixed value
+    For each function it replace NaN values up until it finds a non NaN value.
+
+
+    For example
+    ```
+    (0, Nan) (1, Nan) (2, 5) (3, Nan) (4, 10)
+    ```
+    Will be replaced with (assuming vlaue is 10):
+    ```
+    (0, 10) (1, 10) (2, 5) (3, Nan) (4, 10)
+    ```
+
     """
 
     def __init__(self, value: float):
@@ -86,6 +99,70 @@ class ReplaceFirstNaNValues(ICurvesChanger):
                 continue
 
             df.loc[df.index < first_non_nan_index, [name]] = self.__value
+        return XAxisStatus.UNKNOWN, curves
+
+
+class ReplaceTailNaNValues(ICurvesChanger):
+    """
+    For each function it replace NaN values from the last non NaN value till the end.
+
+
+    For example
+    ```
+    (0, Nan) (1, Nan) (2, 5) (3, Nan) (4, 10) (5, Nan)
+    ```
+    Will be replaced with (assuming vlaue is 10):
+    ```
+    (0, Nan) (1, Nan) (2, 5) (3, Nan) (4, 10) (5, 10)
+    ```
+
+    """
+
+    def __init__(self, value: float):
+        self.__value = value
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        df = curves.to_dataframe()
+        for name in curves.function_names():
+            last_non_nan_index = df[name].last_valid_index()
+            if last_non_nan_index is None:
+                # there are no NaN numbers in the series
+                continue
+
+            df.loc[df.index > last_non_nan_index, [name]] = self.__value
+        return XAxisStatus.UNKNOWN, curves
+
+
+class ReplaceNanWithPreviousValue(ICurvesChanger):
+    """
+    For each function it replace NaN values with the previous non NaN value.
+    An error is generated if there is no previous non NaN value
+
+
+    For example
+    ```
+    (0, 6) (1, Nan) (2, 5) (3, Nan) (4, 10) (5, Nan)
+    ```
+    Will be replaced with (assuming vlaue is 10):
+    ```
+    (0, 6) (1, 6) (2, 5) (3, 5) (4, 10) (5, 10)
+    ```
+
+    """
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        for name in curves.function_names():
+            if np.isnan(curves.get_first_y(name)):
+                raise ValueError(f"function {name} starts with a NaN!")
+
+        curves.to_dataframe().fillna(method='ffill', inplace=True)
+
         return XAxisStatus.UNKNOWN, curves
 
 
@@ -175,6 +252,24 @@ class CheckSameXAxis(ICurvesChanger):
                             xaxis_f / xaxis_g (sorted) = {sorted(xaxis.difference(other))}
                             xaxis_g / xaxis_f (sorted) = {sorted(other.difference(xaxis))}""")
         return XAxisStatus.SAME_X, curves
+
+
+
+
+class ReplaceAllWith(ICurvesChanger):
+
+    def __init__(self, old_value: float, new_value: float):
+        self.__old_value = old_value
+        self.__new_value = new_value
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        df = curves.to_dataframe()
+        ddf = dd.from_pandas(df, npartitions=os.cpu_count())
+        df = ddf.mask(ddf == self.__old_value, self.__new_value).compute()
+        return XAxisStatus.UNKNOWN, DataFrameFunctionsDict.from_dataframe(df)
 
 
 class RemoveSmallFunction(commons.SlottedClass, ICurvesChanger):
