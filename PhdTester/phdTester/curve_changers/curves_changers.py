@@ -196,6 +196,25 @@ class RemapInvalidValues(ICurvesChanger):
         return XAxisStatus.UNALTERED, curves
 
 
+class SaveOnCsv(ICurvesChanger):
+    """
+    A curve changer which leave unaltered the functions but save the functions inside a csv
+    """
+
+    def __init__(self, csv_name: str):
+        """
+
+        :param csv_name: the absolute filename of the csv we want to create
+        """
+        self.__csv_name = csv_name
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        curves.to_dataframe().to_csv(self.__csv_name)
+        return XAxisStatus.UNALTERED, curves
+
 
 class AddCurve(ICurvesChanger):
     """
