@@ -390,6 +390,9 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
     def max_function_length(self) -> int:
         return max(self._dataframe.count(axis=0, numeric_only=True))
 
+    def xaxis(self) -> Iterable[float]:
+        yield from sorted(self._dataframe.index)
+
     #TODO remove
     # def get_function(self, name: str) -> "IFunction2D":
     #     return SeriesFunction.from_dataframe(self._dataframe.loc[:, name])
@@ -413,6 +416,9 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
         if np.isnan(result):
             raise KeyError(f"function {name} does not have a value on axis {x}")
         return result
+
+    def get_first_y(self, name: str) -> float:
+        return self._dataframe.iloc[0][name]
 
     def update_function_point(self, name: str, x: float, y: float):
         # this will add NaN in the missing spot or add a new row
@@ -465,6 +471,10 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
 
     def max_of_function(self, name: str) -> float:
         return self._dataframe[name].max(skipna=True)
+
+    def items(self) -> Iterable[Tuple[str, "pd.Series"]]:
+        for column in self._dataframe:
+            yield column, self._dataframe[column].dropna(axis=0, inplace=False)
 
     def get_statistics(self, name: str, lower_percentile: float = 0.25, upper_percentile: float = 0.75) -> BoxData:
         result = self._dataframe[name].describe()

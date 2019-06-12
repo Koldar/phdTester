@@ -1142,6 +1142,27 @@ class IFunctionsDict(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def xaxis(self) -> Iterable[float]:
+        """
+        yields all the x value such that at least one function is defined in such x point.
+
+        Order is **not** garantueed
+
+        :return:
+        """
+        pass
+
+    def xaxis_ordered(self) -> Iterable[float]:
+        """
+        yields all the x value such that at least one function is defined in such x point.
+
+        Order is garantueed
+
+        :return:
+        """
+        yield from sorted(self.xaxis())
+
+    @abc.abstractmethod
     def remove_function(self, name: str):
         """
         Remove a function inside the dictionary
@@ -1296,22 +1317,34 @@ class IFunctionsDict(abc.ABC):
         :return: max of f(x)
         """
 
-    def merge_dictionaries(self, other: "IFunctionsDict") -> "IFunctionsDict":
+    @abc.abstractmethod
+    def items(self) -> Iterable[Tuple[str, "pd.Series"]]:
         """
-        Merge 2 dictionaries
 
-        if the 2 dictionaries share the same function name, an error is thrown.
-        Merging is performed on sorted function names
+        :note: It is not garantueed that the return value of this method is the the actual underlying data. It might be
+        a copy of it
 
-        :param other: the other dictionary to merge function on
-        :raises KeyError: if the 2 dictionaries share the same function name, regardless of its value
-        :return: self
+        :return: an iterable of pairs where the first is the function name while the second one is a pandas series
+            where the indices is the x axis while the single column is the y values.
         """
-        for name in sorted(other.function_names()):
-            if self.contains_function(name):
-                raise KeyError(f"this dictionary already contains function named {name}")
-            self.set_function(name, other.get_function(name))
-        return self
+        pass
+
+    # def merge_dictionaries(self, other: "IFunctionsDict") -> "IFunctionsDict":
+    #     """
+    #     Merge 2 dictionaries
+    #
+    #     if the 2 dictionaries share the same function name, an error is thrown.
+    #     Merging is performed on sorted function names
+    #
+    #     :param other: the other dictionary to merge function on
+    #     :raises KeyError: if the 2 dictionaries share the same function name, regardless of its value
+    #     :return: self
+    #     """
+    #     for name in sorted(other.function_names()):
+    #         if self.contains_function(name):
+    #             raise KeyError(f"this dictionary already contains function named {name}")
+    #         self.set_function(name, other.get_function(name))
+    #     return self
 
     def get_ordered_xy(self, name: str) -> Iterable[Tuple[float, float]]:
         for x in self.get_ordered_x_axis(name):
@@ -1324,23 +1357,24 @@ class IFunctionsDict(abc.ABC):
         """
         yield from self.function_names()
 
-    def values(self) -> Iterable["IFunction2D"]:
-        yield from self.functions()
+    def values(self) -> Iterable["pd.Series"]:
+        """
 
-    def items(self) -> Iterable[Tuple[str, "IFunction2D"]]:
-        for name in self.function_names():
-            yield name, self.get_function(name)
+        :note: It is not garantueed that the return value of this method is the the actual underlying data. It might be
+        a copy of it
 
-
+        :return: an iterable of pandas serieses where the indices is the x axis while the single column is the y values.
+        """
+        yield from map(lambda x: x[1], self.items())
 
     def __iter__(self) -> Iterable[str]:
         yield from self.function_names()
 
-    def __getitem__(self, item: str) -> "IFunction2D":
-        return self.get_function(item)
-
-    def __setitem__(self, key: str, value: "IFunction2D"):
-        self.set_function(key, value)
+    # def __getitem__(self, item: str) -> "IFunction2D":
+    #     return self.get_function(item)
+    #
+    # def __setitem__(self, key: str, value: "IFunction2D"):
+    #     self.set_function(key, value)
 
     def __len__(self) -> int:
         return self.size()
@@ -1351,22 +1385,22 @@ class IFunctionsDict(abc.ABC):
     def __delitem__(self, key: str):
         self.remove_function(key)
 
-    def __add__(self, other: "IFunctionsDict") -> "IFunctionsDict":
-        """
-        Alias of merge_dictionaries
-
-        :param other: the other dictionary to merge
-        :return: the merge of the 2 dictionaries
-        """
-        result = self.__class__()
-        result += self
-        result += other
-
-        return result
-
-    def __iadd__(self, other: "IFunctionsDict") -> "IFunctionsDict":
-        self.merge_dictionaries(other)
-        return self
+    # def __add__(self, other: "IFunctionsDict") -> "IFunctionsDict":
+    #     """
+    #     Alias of merge_dictionaries
+    #
+    #     :param other: the other dictionary to merge
+    #     :return: the merge of the 2 dictionaries
+    #     """
+    #     result = self.__class__()
+    #     result += self
+    #     result += other
+    #
+    #     return result
+    #
+    # def __iadd__(self, other: "IFunctionsDict") -> "IFunctionsDict":
+    #     self.merge_dictionaries(other)
+    #     return self
 
 
 
