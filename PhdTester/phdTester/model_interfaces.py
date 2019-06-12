@@ -2095,7 +2095,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_all(self, datasource: "IDataSource", path: str = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
+    def get_all(self, datasource: "IDataSource", path: PathStr = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
         """
         get all the resources which are in `path` and have type `data_type`
 
@@ -2291,7 +2291,15 @@ class IDataSource(abc.ABC):
         return self.get_manager_of(data_type).get(self, path, ks001, data_type)
 
     def get_all(self, path: str = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
-        return self.get_manager_of(data_type).get_all(self, path, data_type, colon, pipe, underscore, equal)
+        return self.get_manager_of(data_type).get_all(
+            datasource=self,
+            path=path,
+            data_type=data_type,
+            colon=colon,
+            pipe=pipe,
+            underscore=underscore,
+            equal=equal
+        )
 
     def contains(self, path: str, ks001: KS001Str, data_type: DataTypeStr) -> bool:
         """
@@ -2431,7 +2439,7 @@ class IDataSource(abc.ABC):
             return True, tc, csv_filename_ks001, data_type
 
         test_context_from_csv_filename_list: List[GetSuchInfo] = []
-        for i, (path, ks001str, data_type) in enumerate(self.get_all(path, data_type)):
+        for i, (path, ks001str, data_type) in enumerate(self.get_all(path, data_type, colon=colon, pipe=pipe, underscore=underscore, equal=equal)):
             outcome, tc, ks001, dt = handle_generic_data(i, path, ks001str, data_type)
             if outcome:
 
