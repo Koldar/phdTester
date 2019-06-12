@@ -1,6 +1,8 @@
+import logging
 import math
 import multiprocessing
 import os
+import sys
 from typing import Any, Iterable, List, Tuple
 
 import numpy as np
@@ -425,21 +427,30 @@ class MinAggregator(commons.SlottedClass, IAggregator):
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
         # see https://stackoverflow.com/a/19490199/1887602
-        result = DataFrameFunctionsDict()
 
-        #fetch all function names
+        # fetch all function names
         function_names = set()
+        xaxis = set()
         # TODO create a function for this
         for d in functions_dict:
-            function_names.add(d.function_names())
+            function_names = function_names.union(set(d.function_names()))
+            xaxis = xaxis.union(set(d.to_dataframe().index))
+        function_names = list(function_names)
+        logging.debug(f"function names are (len={len(function_names)}) {function_names}")
+        logging.info(f"xaxis is (len={len(xaxis)})")
+        space_estimate = (len(xaxis) * len(function_names)* sys.getsizeof(float(0)))/(1000*1000)
+        logging.info(f"generating min data frame. This operation will require ABOUT {space_estimate} MB")
 
-        for function_name in function_names:
-            tmp = list(map(lambda x: dd.from_pandas(x.to_dataframe()[function_name], npartitions=os.cpu_count()), functions_dict))
+        dataframe = pd.DataFrame(np.nan, columns=function_names, index=xaxis)
+        dataframe.index = xaxis
+
+        for i, function_name in enumerate(function_names):
+            tmp = list(map(lambda x: dd.from_pandas(x.to_dataframe()[function_name], npartitions=os.cpu_count()), filter(lambda x: function_name in x.function_names(), functions_dict)))
             concat = dd.concat(tmp)
-            data_frame = concat.groupby(concat.index).min().compute()
-            result.to_dataframe()[function_name] = data_frame
+            series = concat.groupby(concat.index).min().compute(scheduler='threads')
+            dataframe[function_name] = series
+            logging.debug(f"done processing {i}-th function...")
 
+        result = DataFrameFunctionsDict()
+        result._dataframe = dataframe
         return result
-        # tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        # tmp = tmp.groupby(tmp.index).min()
-        # return DataFrameFunctionsDict.from_dataframe(tmp)
