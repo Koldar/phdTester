@@ -11,6 +11,7 @@ import sys
 from typing import Dict, Any, Iterable, List, Tuple, Callable, Union, Optional
 
 import pandas as pd
+import numpy as np
 
 from phdTester import commons, masks
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr
@@ -806,7 +807,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
             # perfect! now we generate the new csv
 
-            if use_format == 'stacked':
+            if use_format == 'long':
 
                 with StringCsvWriter(separator=',', header=["LABEL", "X", "Y"]) as f:
                     for name, func in functions_to_print.items():
