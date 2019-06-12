@@ -432,6 +432,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             `factory.run_kwargs`. They are not explicitly used by the framework.
         :return:
         """
+
+        multiprocessing.current_process().name = "Main"
+
         ###################################################
         # generate option graph and parse output
         ###################################################
