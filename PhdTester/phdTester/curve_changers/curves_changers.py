@@ -262,10 +262,10 @@ class CheckSameXAxis(ICurvesChanger):
             xaxis_function_name = None
             for name, f in curves.items():
                 if xaxis is None:
-                    xaxis = set(f.x_unordered_values())
+                    xaxis = set(f.index)
                     xaxis_function_name = name
                 else:
-                    other = set(f.x_unordered_values())
+                    other = set(f.index)
                     if xaxis != other:
                         raise ValueError(f"""X axis mismatch!
                             f name = {xaxis_function_name}
