@@ -32,7 +32,8 @@ from phdTester.model_interfaces import \
     IDataContainerPathGenerator, \
     ISubtitleGenerator, \
     IDataRowExtrapolator, ICsvRow, \
-    IOptionType \
+    IOptionType, \
+    ITestContextRepo
 
 
 from phdTester.specific_research_field import AbstractSpecificResearchFieldFactory
