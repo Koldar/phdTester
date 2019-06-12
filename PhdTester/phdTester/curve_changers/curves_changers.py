@@ -278,6 +278,40 @@ class CheckSameXAxis(ICurvesChanger):
         return XAxisStatus.SAME_X, curves
 
 
+class CheckNoNaN(ICurvesChanger):
+    """
+    Check that no curve has NaN. Raise an error otherwise
+    """
+
+    def require_same_xaxis(self) -> bool:
+        return True
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        df = curves.to_dataframe()
+        if df.isnull().values.any():
+            raise ValueError(f"a cell in curves is NaN!")
+        return XAxisStatus.UNALTERED, curves
+
+
+class CheckNoInvalidNumbers(ICurvesChanger):
+    """
+    Check that no curve has invalid numbers. Raise an error otherwise
+
+    The invalid characters are the following:
+     - Nan;
+     - plus infinite;
+     - negative infinite;
+    """
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        df = curves.to_dataframe()
+        ddf: dd.DataFrame = dd.from_pandas(df, npartitions=os.cpu_count())
+        if ddf.mask(np.isnan(dff) or np.isinf(dff)).value().any().compute():
+            raise ValueError(f"a cell in curves is either NaN, +infinite or -infinite!")
+        return XAxisStatus.UNALTERED, curves
 
 
 class ReplaceAllWith(ICurvesChanger):
