@@ -462,6 +462,7 @@ class QuantizeXAxis(ICurvesChanger):
 
         # replace the index: instead of using intervals we use a derivation of them
         df.index = df.index.map(lambda interval: self.__slot_value.fetch(interval.left, interval.right, False, True))
+        df.index = pd.to_numeric(df.index)
 
         # this may leave NaN inside the functions (if in the quantization level the function is not defined)
 
