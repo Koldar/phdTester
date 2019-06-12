@@ -196,6 +196,30 @@ class RemapInvalidValues(ICurvesChanger):
         return XAxisStatus.UNALTERED, curves
 
 
+
+class AddCurve(ICurvesChanger):
+    """
+    Adds a curve based
+    """
+
+    def __init__(self, function_name: str, func: Callable[[int, float, "IFunctionsDict"], float]):
+        self.__function_name = function_name
+        self.__func = func
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        new_function = pd.Series(name=self.__function_name, index=curves.xaxis())
+        for i, x in enumerate(curves.xaxis_ordered()):
+            new_function[x] = self.__func(i, x, curves)
+
+        df = curves.to_dataframe()
+        df[self.__function_name] = new_function
+
+        return XAxisStatus.UNKNOWN, curves
+
+
 class Print(ICurvesChanger):
     """
     A change which simply log the curves via a function
