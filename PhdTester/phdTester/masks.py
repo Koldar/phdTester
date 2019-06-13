@@ -3,6 +3,7 @@ import re
 from typing import Any, Iterable, List
 
 from phdTester import commons
+from phdTester.common_types import SlottedClass
 from phdTester.model_interfaces import ITestContextMaskOption, ITestContext, ITestEnvironment, \
     ISimpleTestContextMaskOption, IComplexTestContextMaskOption, ITestContextMask
 
@@ -147,7 +148,7 @@ class CannotBeNull(ISimpleTestContextMaskOption):
         return "has not to be null"
 
 
-class MustHaveValue(ISimpleTestContextMaskOption, commons.SlottedClass):
+class MustHaveValue(ISimpleTestContextMaskOption, SlottedClass):
     """
     A concrete option value is compliant with this mask only if it has a very well specific value
     """

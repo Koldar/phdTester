@@ -1,13 +1,14 @@
 from typing import Iterable, Tuple, Dict
 
 from phdTester import commons
+from phdTester.common_types import SlottedClass
 from phdTester.model_interfaces import IFunctionsDict
 
 import pandas as pd
 import numpy as np
 
 
-# class Function2D(commons.SlottedClass, IFunction2D):
+# class Function2D(SlottedClass, IFunction2D):
 #     """
 #     Represents a function y=f(x). The function is merely a set of 2D points, so it's more like a mapping.
 #     Functions have no names
@@ -112,7 +113,7 @@ import numpy as np
 #         return pd.DataFrame(self.to_series())
 #
 #
-# class SeriesFunction(commons.SlottedClass, IFunction2D):
+# class SeriesFunction(SlottedClass, IFunction2D):
 #
 #     __slots__ = ('_series', '_max_x')
 #
@@ -169,7 +170,7 @@ import numpy as np
 #         return pd.DataFrame(self._series)
 
 
-class BoxData(commons.SlottedClass):
+class BoxData(SlottedClass):
     """
     Dumb object containing box plot data
     """
@@ -187,7 +188,7 @@ class BoxData(commons.SlottedClass):
         self.std = std
 
 
-# class PandasFunction(commons.SlottedClass, IFunction2D):
+# class PandasFunction(SlottedClass, IFunction2D):
 #
 #     __slots__ = ('df', )
 #
@@ -225,7 +226,7 @@ class BoxData(commons.SlottedClass):
 #         return self.df
 
 
-# class StandardFunctionsDict(commons.SlottedClass, IFunctionsDict):
+# class StandardFunctionsDict(SlottedClass, IFunctionsDict):
 #     """
 #     A class which saves the different functions inside a dict
 #     """
@@ -335,7 +336,7 @@ class BoxData(commons.SlottedClass):
 #         return current_max_name
 
 
-class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
+class DataFrameFunctionsDict(SlottedClass, IFunctionsDict):
     """
     A class which saves the functions inside a single dataframe
 
@@ -419,6 +420,21 @@ class DataFrameFunctionsDict(commons.SlottedClass, IFunctionsDict):
 
     def get_first_y(self, name: str) -> float:
         return self._dataframe.iloc[0][name]
+
+    def get_last_y(self, name: str) -> float:
+        return self._dataframe.iloc[-1][name]
+
+    def get_first_valid_y(self, name: str) -> float:
+        return self._dataframe.loc[self._dataframe.get_first_valid_x(), name]
+
+    def get_first_valid_x(self, name: str) -> float:
+        return self._dataframe[name].first_valid_index()
+
+    def get_last_valid_y(self, name: str) -> float:
+        return self._dataframe.loc[self._dataframe.get_last_valid_x(), name]
+
+    def get_last_valid_x(self, name: str) -> float:
+        return self._dataframe[name].last_valid_index()
 
     def update_function_point(self, name: str, x: float, y: float):
         # this will add NaN in the missing spot or add a new row

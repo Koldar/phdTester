@@ -18,10 +18,6 @@ import pandas
 import string_utils
 
 
-class SlottedClass(object):
-
-    __slots__ = ()
-
 
 def direct_call_or_method_call(obj, fallback_method_name: str, *args, **kwargs) -> Any:
     """

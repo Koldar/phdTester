@@ -7,6 +7,10 @@ RegexStr = str
 A string representing a python3.6 regular expression
 """
 
+class SlottedClass(object):
+
+    __slots__ = ()
+
 
 class GetSuchInfo(object):
     """

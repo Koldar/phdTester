@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 import dask.dataframe as dd
 
-from phdTester import commons
+from phdTester import commons, common_types
+from phdTester.common_types import SlottedClass
 from phdTester.curve_changers.shared_curves_changers import AbstractTransformX, AbstractTransformY
 from phdTester.functions import DataFrameFunctionsDict
 from phdTester.image_computer import aggregators
@@ -349,7 +350,7 @@ class ReplaceAllWith(ICurvesChanger):
         return XAxisStatus.UNKNOWN, DataFrameFunctionsDict.from_dataframe(df)
 
 
-class RemoveSmallFunction(commons.SlottedClass, ICurvesChanger):
+class RemoveSmallFunction(SlottedClass, ICurvesChanger):
     """
     A changer that removes curves which maximum never go up a certain value
     """
@@ -425,7 +426,7 @@ class QuantizeXAxis(ICurvesChanger):
         def fetch(self, lb: float, ub: float, lb_included: bool, ub_included: bool) -> float:
             return ub
 
-    def __init__(self, quantization_levels: List[float], merge_method: str, slot_value: ISlotValueFetcher = None):
+    def __init__(self, quantization_levels: Union[List[float]], merge_method: str, slot_value: ISlotValueFetcher = None):
         """
         Initialize the quantization
 

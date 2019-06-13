@@ -1,10 +1,11 @@
 from typing import Dict
 
 from phdTester import commons, KS001Str, DataTypeStr, ITestContext, KS001
+from phdTester.common_types import SlottedClass
 from phdTester.model_interfaces import ITestContextCsvFilter
 
 
-class NumberPerStuffUnderTestBound(commons.SlottedClass, ITestContextCsvFilter):
+class NumberPerStuffUnderTestBound(SlottedClass, ITestContextCsvFilter):
     """
     a filter that limits the csv which represents the same algorithm up until an upperbound
 

@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from phdTester import commons
+from phdTester.common_types import SlottedClass
 from phdTester.functions import DataFrameFunctionsDict
 from phdTester.model_interfaces import IAggregator, IFunctionsDict
 
@@ -16,7 +17,7 @@ import dask.array as da
 import dask.dataframe as dd
 
 
-class Count(commons.SlottedClass, IAggregator):
+class Count(SlottedClass, IAggregator):
     """
     An aggregator which keeps track of the number of values you have called this object onto
     """
@@ -51,7 +52,7 @@ class Count(commons.SlottedClass, IAggregator):
         return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
-class IdentityAggregator(commons.SlottedClass, IAggregator):
+class IdentityAggregator(SlottedClass, IAggregator):
     """
     A fake aggregator which actually does not aggregate anything. IOt just return the new value
     """
@@ -80,7 +81,7 @@ class IdentityAggregator(commons.SlottedClass, IAggregator):
         raise NotImplementedError()
 
 
-class SingleAggregator(commons.SlottedClass, IAggregator):
+class SingleAggregator(SlottedClass, IAggregator):
     """
     An aggregator that enforce the fule that you can set the y-value of an x-value once
     """
@@ -111,7 +112,7 @@ class SingleAggregator(commons.SlottedClass, IAggregator):
         raise ValueError(f"{self.__class__} cannot aggregate anything!")
 
 
-class SumAggregator(commons.SlottedClass, IAggregator):
+class SumAggregator(SlottedClass, IAggregator):
     """
     An aggregator which keeps track of the sum of all the values in a series
     """
@@ -143,7 +144,7 @@ class SumAggregator(commons.SlottedClass, IAggregator):
         return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
-class MeanAggregator(commons.SlottedClass, IAggregator):
+class MeanAggregator(SlottedClass, IAggregator):
     __slots__ = ('n', 'mean', )
 
     def __init__(self):
@@ -177,7 +178,7 @@ class MeanAggregator(commons.SlottedClass, IAggregator):
         return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
-class SampleVarianceAggregator(commons.SlottedClass, IAggregator):
+class SampleVarianceAggregator(SlottedClass, IAggregator):
     """
     An aggregator keeping track of the sample variance
 
@@ -228,7 +229,7 @@ class SampleVarianceAggregator(commons.SlottedClass, IAggregator):
         return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
-class SampleStandardDeviationAggregator(commons.SlottedClass, IAggregator):
+class SampleStandardDeviationAggregator(SlottedClass, IAggregator):
     __slots__ = ('variance_aggregator', 'variance', )
 
     def __init__(self):
@@ -262,7 +263,7 @@ class SampleStandardDeviationAggregator(commons.SlottedClass, IAggregator):
         return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
-class PopulationVarianceAggregator(commons.SlottedClass, IAggregator):
+class PopulationVarianceAggregator(SlottedClass, IAggregator):
 
     __slots__ = ('n', 'mean_aggregator', 'mean', 'variance')
 
@@ -307,7 +308,7 @@ class PopulationVarianceAggregator(commons.SlottedClass, IAggregator):
         return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
-class PopulationStandardDeviationAggregator(commons.SlottedClass, IAggregator):
+class PopulationStandardDeviationAggregator(SlottedClass, IAggregator):
     __slots__ = ('variance_aggregator', 'variance')
 
     def __init__(self):
@@ -341,7 +342,7 @@ class PopulationStandardDeviationAggregator(commons.SlottedClass, IAggregator):
         return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
-class PercentileAggregator(commons.SlottedClass, IAggregator):
+class PercentileAggregator(SlottedClass, IAggregator):
     __slots__ = ('__percentile', '__sequence', '__value')
 
     def __init__(self, percentile: int):
@@ -376,7 +377,7 @@ class PercentileAggregator(commons.SlottedClass, IAggregator):
         return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
-class MaxAggregator(commons.SlottedClass, IAggregator):
+class MaxAggregator(SlottedClass, IAggregator):
     __slots__ = ('__value',)
 
     def __init__(self):
@@ -404,7 +405,7 @@ class MaxAggregator(commons.SlottedClass, IAggregator):
         return DataFrameFunctionsDict.from_dataframe(tmp)
 
 
-class MinAggregator(commons.SlottedClass, IAggregator):
+class MinAggregator(SlottedClass, IAggregator):
     __slots__ = ('__value',)
 
     def __init__(self):

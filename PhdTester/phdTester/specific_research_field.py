@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 
 from phdTester import commons, masks
-from phdTester.common_types import KS001Str, GetSuchInfo, PathStr
+from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, SlottedClass
 from phdTester.commons import StringCsvWriter
 from phdTester.curve_changers.curves_changers import CheckSameXAxis
 from phdTester.datasources import filesystem_sources
@@ -1376,7 +1376,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 raise TypeError(f"invalid curve changer type!")
         return xstatus, functions_to_print
 
-    class FunctionData(commons.SlottedClass):
+    class FunctionData(SlottedClass):
 
         __slots__ = ('name', 'function', 'x_aggregator', 'y_aggregator', 'label_aggregator', 'y_aggregator_per_x')
 

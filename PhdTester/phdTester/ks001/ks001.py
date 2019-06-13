@@ -7,7 +7,7 @@ import re
 from typing import Any, Tuple, Iterable, Union, Dict, List, Optional
 
 from phdTester import commons
-from phdTester.common_types import KS001Str
+from phdTester.common_types import KS001Str, SlottedClass
 
 
 class LexicalError(Exception):
@@ -25,13 +25,13 @@ class Symbol(enum.Enum):
         return self.name
 
 
-class Aliases(commons.SlottedClass):
+class Aliases(SlottedClass):
     """
     Structure allowing you to map an official name with an "alias", which is just a synonym of the actual name.
     Names and aliases are unique in this structure
     """
 
-    __slots__ = ('_aliases', )
+    __slots__ = ('_aliases',)
 
     def __init__(self, d: Dict[str, str] = None):
         self._aliases = {}
@@ -201,7 +201,7 @@ class IKS001ValueParser(abc.ABC):
         pass
 
 
-class KS001(commons.SlottedClass, IKS001ValueParser):
+class KS001(SlottedClass, IKS001ValueParser):
     """
     KS001 defines how a filename of an experiment should be named.
 
@@ -290,7 +290,7 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
 
     """
 
-    __slots__ = ('key_aliases', 'value_aliases', 'identifier', 'dicts', )
+    __slots__ = ('key_aliases', 'value_aliases', 'identifier', 'dicts',)
 
     def __init__(self, identifier: str = None):
         """
@@ -303,11 +303,11 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         self.dicts: List[Dict[str, Union[str, Dict[str, Any]]]] = []
         """
         list of dictionaries. 
-        
+
         Each value is a dicitonary with 2 keys
         - name: the name of ther dictionary (None if it has no name)
         - dict: the dictionary to represent
-        
+
         dict values are dictionaries where each key is a key of the mapping while each value is a value of the mapping
         dict are **unordered**
         """
@@ -602,7 +602,8 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         return "\n".join(result)
 
     @classmethod
-    def single_labelled(cls, label: str, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None, **kwargs) -> "KS001":
+    def single_labelled(cls, label: str, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None,
+                        **kwargs) -> "KS001":
         """
         Creates a new KS001 instance with **only one** labelled dictionary
 
@@ -666,7 +667,9 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         )
 
     @classmethod
-    def from_merging(cls, template: Union["KS001", KS001Str], label: str = None, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=', **kwargs):
+    def from_merging(cls, template: Union["KS001", KS001Str], label: str = None, key_alias: Dict[str, str] = None,
+                     value_alias: Dict[str, str] = None, colon: str = ':', pipe: str = '|', underscore: str = '_',
+                     equal: str = '=', **kwargs):
         """
         creates a new KS001 instance by merging a readonly KS001 instance with new attributes
 
@@ -700,15 +703,18 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
             raise TypeError(f"invalid type of template! type={type(template)}")
 
         if label is not None:
-            other = KS001.single_labelled(label=label, key_alias=result.key_aliases._aliases, value_alias=result.value_aliases._aliases, **kwargs)
+            other = KS001.single_labelled(label=label, key_alias=result.key_aliases._aliases,
+                                          value_alias=result.value_aliases._aliases, **kwargs)
         else:
-            other = KS001.single(key_alias=result.key_aliases._aliases, value_alias=result.value_aliases._aliases, **kwargs)
+            other = KS001.single(key_alias=result.key_aliases._aliases, value_alias=result.value_aliases._aliases,
+                                 **kwargs)
         result.append(other=other, in_place=True)
 
         return result
 
     @classmethod
-    def get_from(cls, d: Dict[Any, Any], identifier: str = None, label: str = None, index: int = None, key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None):
+    def get_from(cls, d: Dict[Any, Any], identifier: str = None, label: str = None, index: int = None,
+                 key_alias: Dict[str, str] = None, value_alias: Dict[str, str] = None):
         """
         Generates a new structure starting from a dictionary
 
@@ -762,7 +768,8 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
 
         return result
 
-    def dump_str(self, use_key_alias: bool = True, use_value_alias: bool = True, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=") -> str:
+    def dump_str(self, use_key_alias: bool = True, use_value_alias: bool = True, colon: str = ":", pipe: str = "|",
+                 underscore: str = "_", equal: str = "=") -> str:
         """
         Generate a string representing this structure. This string can be parser by :parse_str: function
 
@@ -779,7 +786,8 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         :return: a string which can be parsed with this structure
         """
 
-        def sanitize(string: str, acolon: str = ":", apipe: str = "|", aunderscore: str = "_", aequal: str = "=") -> str:
+        def sanitize(string: str, acolon: str = ":", apipe: str = "|", aunderscore: str = "_",
+                     aequal: str = "=") -> str:
             aresult = ""
             for c in string:
                 if c in [acolon, apipe, aunderscore, aequal]:
@@ -810,7 +818,9 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
             result += pipe
         return result
 
-    def dump_filename(self, dir_name: str = None, extension: str = None, use_key_alias: str = True, use_value_alias: str = True, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "="):
+    def dump_filename(self, dir_name: str = None, extension: str = None, use_key_alias: str = True,
+                      use_value_alias: str = True, colon: str = ":", pipe: str = "|", underscore: str = "_",
+                      equal: str = "="):
         """
         Generate a filename specified by this KS001
 
@@ -851,7 +861,9 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
             return str(value)
 
     @classmethod
-    def parse_filename(cls, filename: str, key_alias: Union[Dict[str, str], Aliases] = None, value_alias: Union[Dict[str, str], Aliases] = None, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=", value_parsing_function: IKS001ValueParser = None):
+    def parse_filename(cls, filename: str, key_alias: Union[Dict[str, str], Aliases] = None,
+                       value_alias: Union[Dict[str, str], Aliases] = None, colon: str = ":", pipe: str = "|",
+                       underscore: str = "_", equal: str = "=", value_parsing_function: IKS001ValueParser = None):
         """
 
 
@@ -867,7 +879,9 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
         return cls.parse_str(filename, key_alias, value_alias, colon, pipe, underscore, equal, value_parsing_function)
 
     @classmethod
-    def parse_str(cls, string: str, key_alias: Union[Dict[str, str], Aliases] = None, value_alias: Union[Dict[str, str], Aliases] = None, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=", value_parsing_function: IKS001ValueParser = None):
+    def parse_str(cls, string: str, key_alias: Union[Dict[str, str], Aliases] = None,
+                  value_alias: Union[Dict[str, str], Aliases] = None, colon: str = ":", pipe: str = "|",
+                  underscore: str = "_", equal: str = "=", value_parsing_function: IKS001ValueParser = None):
 
         class State(enum.Enum):
             INIT = enum.auto(),
@@ -921,7 +935,8 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                 elif symbol == Symbol.PIPE:
                     state = State.NEW_DICT
                 else:
-                    raise ValueError(f"expected either string or pipe after {index}, got {symbol}! string was \"{string}\"!")
+                    raise ValueError(
+                        f"expected either string or pipe after {index}, got {symbol}! string was \"{string}\"!")
             elif state in [State.NEW_DICT, ]:
                 if symbol == Symbol.STRING:
                     # we have just read a |. And now we have a string. This string can either be the dicitonary name
@@ -941,7 +956,8 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                     next_string_is_key = True
                     next_string_is_value = False
                 else:
-                    raise ValueError(f"Error while parsing a dictionary:\n{string}\n{' '*index + '^'}:\n We expected either a string, equal but received {symbol} ({value})")
+                    raise ValueError(
+                        f"Error while parsing a dictionary:\n{string}\n{' ' * index + '^'}:\n We expected either a string, equal but received {symbol} ({value})")
             elif state in [State.NEW_PAIR, ]:
                 # we can enter after we have detected a = at the first key-value mapping
                 # or we can enter after we still need to read the key. None the less the first time we enter here we
@@ -965,7 +981,8 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                             parser = value_parsing_function
                         else:
                             parser = result
-                        value = parser.parse(result.identifier, dictionary_to_create_id, dictionary_label, key_str, value_str)
+                        value = parser.parse(result.identifier, dictionary_to_create_id, dictionary_label, key_str,
+                                             value_str)
                         if dictionary_label is not None:
                             result.add_key_value(place=dictionary_label, key=key_str, value=value)
                         else:
@@ -975,7 +992,8 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                 elif symbol == Symbol.EQUAL:
                     # when we enter here we should already have a key_str
                     if key_str is None:
-                        raise ValueError(f"bug inside the parser when decoding the = at {index}. We should already have a key!")
+                        raise ValueError(
+                            f"bug inside the parser when decoding the = at {index}. We should already have a key!")
                     next_string_is_key = False
                     next_string_is_value = True
                 elif symbol == Symbol.PIPE:
@@ -1020,7 +1038,8 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                     raise ValueError(f"unexpecxted symbol {symbol} ({value}) at {index}. Expecting _ or |")
 
             else:
-                raise ValueError(f"invalid parsing! Error at {index} after fetching {value} which we interpreted as {symbol}!")
+                raise ValueError(
+                    f"invalid parsing! Error at {index} after fetching {value} which we interpreted as {symbol}!")
 
         return result
 
@@ -1052,7 +1071,8 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
     #     logging.info("parsing complete!")
 
     @staticmethod
-    def _symbol_generator(input: str, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=") -> Tuple[Symbol, Any, int]:
+    def _symbol_generator(input: str, colon: str = ":", pipe: str = "|", underscore: str = "_", equal: str = "=") -> \
+    Tuple[Symbol, Any, int]:
 
         specials = [
             (colon, Symbol.COLON),
@@ -1073,11 +1093,11 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
             if i >= len(input):
                 break
 
-            is_last_character = i == (len(input)-1)
+            is_last_character = i == (len(input) - 1)
 
             if building_string:
                 # we were already building a string
-                if input[i] in map(lambda x:x[0], specials):
+                if input[i] in map(lambda x: x[0], specials):
                     # detected a special character. We need to check if the next character is the same special one too
                     if is_last_character:
                         # there can't be a next symbol: so input[i] does not belong to this string
@@ -1087,7 +1107,7 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                         value = ""
                     else:
                         # we check if input[i] is repeated twice
-                        if input[i] == input[i+1]:
+                        if input[i] == input[i + 1]:
                             # append character
                             value += input[i]
                             i += 2
@@ -1118,7 +1138,7 @@ class KS001(commons.SlottedClass, IKS001ValueParser):
                         value = ""
                     else:
                         # we check if the next character is the same of input[i]. If so, this is a start of a string
-                        if input[i] == input[i+1]:
+                        if input[i] == input[i + 1]:
                             # this is the beginning of a string
                             building_string = True
                             value += input[i]
