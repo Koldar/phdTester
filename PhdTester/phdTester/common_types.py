@@ -1,4 +1,5 @@
 # TODO use these type instad of str!
+import math
 import re
 
 KS001Str = str
@@ -81,7 +82,7 @@ class Interval(SlottedClass):
         """
         return self.__ub_included
 
-    def is_in(self, x: float) -> bool:
+    def contains(self, x: float) -> bool:
         """
         Checks if a number is included in a given interval
         :param x: the number involved
@@ -101,6 +102,16 @@ class Interval(SlottedClass):
             ub=self.ub,
             ub_included="]" if self.lb_included else ")",
         )
+
+    def __eq__(self, other):
+        if other is None:
+            return False
+        if not isinstance(other, Interval):
+            return False
+        return math.isclose(self.lb, other.lb) \
+               and math.isclose(self.ub, other.ub) \
+               and self.lb_included == other.lb_included \
+               and self.ub_included == other.ub_included
 
     @classmethod
     def parse(cls, string: str) -> "Interval":
