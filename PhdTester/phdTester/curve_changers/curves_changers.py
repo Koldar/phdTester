@@ -167,6 +167,36 @@ class ReplaceNanWithPreviousValue(ICurvesChanger):
         return XAxisStatus.UNKNOWN, curves
 
 
+class ReplaceNaNWithStops(ICurvesChanger):
+    """
+    This curve changer is pretty similar to ReplaceNanWithPreviousValue but if there is no first non NaN value
+    for a function, we will use a default fixed one
+
+    ```
+    (0, Nan), (1, Nan) (2, 10) (3, Nan) (4, 5), (5, 4), (5, Nan) (6, Nan)
+    ```
+    will be converted to (assuming first and last character is 20):
+    ```
+    (0, 20), (1, 20), (2, 10), (3, 10), (4, 5), (5,4), (5, 4), (5, 4)
+    ```
+    """
+
+    def __init__(self, first_value: float):
+        self.__first_value = first_value
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        for name in curves.function_names():
+            first_x = curves.get_first_x(name)
+            if np.isnan(first_x):
+                curves.update_function_point(name, first_x, self.__first_value)
+
+        curves.to_dataframe().fillna(method='ffill', inplace=True)
+        return XAxisStatus.SAME_X, curves
+
+
 class RemapInvalidValues(ICurvesChanger):
     """
     Iterate over all the functions values. If it finds an invalid y value, it replaces it with a fixed value
@@ -329,7 +359,7 @@ class CheckNoInvalidNumbers(ICurvesChanger):
     def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
         df = curves.to_dataframe()
         ddf: dd.DataFrame = dd.from_pandas(df, npartitions=os.cpu_count())
-        if ddf.mask(np.isnan(dff) or np.isinf(dff)).value().any().compute():
+        if ddf.mask(np.isnan(ddf) | np.isinf(ddf)).any().compute():
             raise ValueError(f"a cell in curves is either NaN, +infinite or -infinite!")
         return XAxisStatus.UNALTERED, curves
 
