@@ -1,10 +1,12 @@
 import abc
+import functools
 import logging
-from typing import Iterable, List, Any, Tuple, Dict
+from typing import Iterable, List, Any, Tuple, Dict, Callable
 
 import numpy as np
 import pandas as pd
 import string_utils
+from colors import colors
 
 from phdTester import commons
 from phdTester.common_types import PathStr
@@ -13,6 +15,40 @@ from phdTester.model_interfaces import ITestContextRepo, ITestContext, ITestCont
     IGlobalSettings, ICsvRow, IDataWriter, IFunctionsDict, IDataContainerPathGenerator, ISubtitleGenerator, \
     ISlotValueFetcher
 from phdTester.option_dicts import StandardOptionDict, DynamicOptionDict, DefaultAnonymuousOptionObject
+
+
+class PhdFormatter(logging.Formatter):
+
+    def __init__(self, fmt=None, datefmt=None, style='%', colors_dict: Dict[str, Callable[[str], str]] = None, limit_filename_size: int = None):
+        super().__init__(fmt, datefmt, style)
+        self.__limit_filename_size = limit_filename_size
+        self.__colors = colors_dict
+        if self.__colors is None:
+            self.__colors = {}
+            self.__colors['DEBUG'] = functools.partial(colors.color, fg='cyan')
+            self.__colors['INFO'] = self.__standard_print
+            self.__colors['WARN'] = functools.partial(colors.color, fg='yellow')
+            self.__colors['ERROR'] = functools.partial(colors.color, fg='red')
+            self.__colors['CRITICAL'] = functools.partial(colors.color, fg='red')
+
+    def __standard_print(self, x: str) -> str:
+        return x
+
+    def format(self, record: logging.LogRecord):
+        # colorized logs
+        try:
+            func = self.__colors[record.levelname]
+        except KeyError:
+            func = self.__standard_print
+
+        # remove .py extension in filename
+        record.filename = record.filename[:-3]
+        # add "..." on too long filenames
+        if self.__limit_filename_size is not None and len(record.filename) > self.__limit_filename_size:
+            record.filename = record.filename[:(self.__limit_filename_size-3)] + '...'
+
+        result = super().format(record)
+        return func(result)
 
 
 class UpperBoundSlotValueFetcher(ISlotValueFetcher):

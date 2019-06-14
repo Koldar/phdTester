@@ -2697,3 +2697,13 @@ class ISubtitleGenerator(abc.ABC):
     @abc.abstractmethod
     def fetch(self, tcm: "ITestContextMask") -> str:
         pass
+
+
+class ISlotValueFetcher(abc.ABC):
+    """
+    An interface that, given a certain interval decide what is the representation of such interval
+    """
+
+    @abc.abstractmethod
+    def fetch(self, lb: float, ub: float, lb_included: bool, ub_included: bool) -> float:
+        pass

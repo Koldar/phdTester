@@ -21,7 +21,7 @@ from phdTester.datasources import filesystem_sources
 from phdTester.datasources.filesystem_sources import CsvFileSystemResourceManager
 from phdTester.default_models import SimpleTestContextRepo, \
     DefaultGlobalSettings, DefaultTestEnvironment, DefaultStuffUnderTest, DefaultTestContext, DefaultStuffUnderTestMask, \
-    DefaultTestEnvironmentMask, DefaultTestContextMask, DefaultSubtitleGenerator
+    DefaultTestEnvironmentMask, DefaultTestContextMask, DefaultSubtitleGenerator, PhdFormatter
 from phdTester.exceptions import ValueToIgnoreError, IgnoreCSVRowError
 from phdTester.functions import DataFrameFunctionsDict
 from phdTester.image_computer import aggregators
@@ -414,11 +414,23 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         if settings.contains_option("logLevel"):
             importlib.reload(logging)  # issue  65
-            logging.basicConfig(
-                level=getattr(logging, settings.logLevel),
-                format=r"%(asctime)s %(processName)10s %(filename)-27s@%(lineno)4d %(message)s",
+
+            level = getattr(logging, settings.logLevel)
+
+            rootLogger = logging.getLogger(None)
+            rootLogger.setLevel(level)
+            stream_handler = logging.StreamHandler()
+            stream_handler.setLevel(level)
+            stream_handler.setFormatter(PhdFormatter(
+                fmt=r"%(asctime)s|%(processName)10s|%(filename)-20s@%(lineno)4d|%(message)s",
                 datefmt="%j-%H:%M:%S",
-            )
+                limit_filename_size=20
+            ))
+            rootLogger.addHandler(stream_handler)
+            # logging.basicConfig(
+            #     level=getattr(logging, settings.logLevel),
+            #
+            # )
             logging.critical("logging configured correctly!")
 
     def run(self, *args, cli_commands: List[str] = None, **kwargs):
