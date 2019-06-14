@@ -1,6 +1,5 @@
 # TODO use these type instad of str!
-import math
-import re
+import abc
 
 KS001Str = str
 PathStr = str
@@ -9,6 +8,7 @@ RegexStr = str
 """
 A string representing a python3.6 regular expression
 """
+
 
 class SlottedClass(object):
 
@@ -52,76 +52,24 @@ class Interval(SlottedClass):
 
     @property
     def lb(self) -> float:
-        """
-        :return: interval lowebound number
-        """
 
         return self.__lb
 
     @property
     def ub(self) -> float:
-        """
-
-        :return: interval upperbound number
-        """
         return self.__ub
 
     @property
     def lb_included(self) -> bool:
-        """
-        Checks if the lowerbound is included by "[" or by "("
-        :return: true if the lowerbound is included in the interval.
-        """
         return self.__lb_included
 
     @property
     def ub_included(self) -> bool:
-        """
-        Checks if the upperbound is included by "]" or by ")"
-        :return: true if the upperbound is included in the interval.
-        """
         return self.__ub_included
 
-    def contains(self, x: float) -> bool:
-        """
-        Checks if a number is included in a given interval
-        :param x: the number involved
-        :return: true if the number is inside an interval, false otherwise
-        """
+    def is_in(self, x: float) -> bool:
         if x == self.lb and self.lb_included:
             return True
         if x == self.ub and self.ub_included:
             return True
         return self.lb < x < self.ub
-
-    def __str__(self):
-
-        return "{lb_included}{lb}, {ub}{ub_included}".format(
-            lb_included="[" if self.lb_included else "(",
-            lb=self.lb,
-            ub=self.ub,
-            ub_included="]" if self.lb_included else ")",
-        )
-
-    def __eq__(self, other):
-        if other is None:
-            return False
-        if not isinstance(other, Interval):
-            return False
-        return math.isclose(self.lb, other.lb) \
-               and math.isclose(self.ub, other.ub) \
-               and self.lb_included == other.lb_included \
-               and self.ub_included == other.ub_included
-
-    @classmethod
-    def parse(cls, string: str) -> "Interval":
-        m = re.match(r"^\s*(?P<lb_included>[\(\[\)\]])\s*(?P<lb>[\+\-]?\d+\.?\d*)\s*,\s*(?P<ub>[\+\-]?\d+\.?\d*)\s*(?P<ub_included>[\(\[\)\]])\s*$", string)
-        if m is None:
-            raise ValueError(f"cannot parse \"{string}\" into {Interval.__class__.__name__}!")
-        lb_included = m.group("lb_included") in ["[", ")"]
-        ub_included = m.group("ub_included") in ["]", "("]
-        lb = float(m.group("lb"))
-        ub = float(m.group("ub"))
-
-        return Interval(lb=lb, ub=ub, lb_included=lb_included, ub_included=ub_included)
-

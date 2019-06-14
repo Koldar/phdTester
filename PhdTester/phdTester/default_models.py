@@ -10,8 +10,21 @@ from phdTester import commons
 from phdTester.common_types import PathStr
 from phdTester.model_interfaces import ITestContextRepo, ITestContext, ITestContextMask, ITestContextRepoView, \
     IOptionDict, IStuffUnderTest, ITestEnvironment, IStuffUnderTestMask, ITestEnvironmentMask, \
-    IGlobalSettings, ICsvRow, IDataWriter, IFunctionsDict, IDataContainerPathGenerator, ISubtitleGenerator
+    IGlobalSettings, ICsvRow, IDataWriter, IFunctionsDict, IDataContainerPathGenerator, ISubtitleGenerator, \
+    ISlotValueFetcher
 from phdTester.option_dicts import StandardOptionDict, DynamicOptionDict, DefaultAnonymuousOptionObject
+
+
+class UpperBoundSlotValueFetcher(ISlotValueFetcher):
+
+    def fetch(self, lb: float, ub: float, lb_included: bool, ub_included: bool) -> float:
+        return ub
+
+
+class MeanSlotValueFetcher(ISlotValueFetcher):
+
+    def fetch(self, lb: float, ub: float, lb_included: bool, ub_included: bool) -> float:
+        return (lb + ub)/2
 
 
 class GnuplotDataWriter(IDataWriter):

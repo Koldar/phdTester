@@ -11,7 +11,7 @@ import pandas as pd
 from phdTester import commons
 from phdTester.common_types import SlottedClass
 from phdTester.functions import DataFrameFunctionsDict
-from phdTester.model_interfaces import IAggregator, IFunctionsDict
+from phdTester.model_interfaces import IAggregator, IFunctionsDict, ISlotValueFetcher
 
 import dask.array as da
 import dask.dataframe as dd
@@ -142,6 +142,49 @@ class SumAggregator(SlottedClass, IAggregator):
         tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
         tmp = tmp.groupby(tmp.index).sum()
         return DataFrameFunctionsDict.from_dataframe(tmp)
+
+
+class QuantizedSum(SlottedClass, IAggregator):
+    """
+    An aggregator which sum all the previously fetched elements but yields not the actual sum but
+    a quantized version of it.
+
+    So for example, assume you have the data stream 4, 5, 7,
+
+    """
+
+    __slots__ = ('__actual_sum', '__quantization_levels', '__slot_value_fetcher')
+
+    def __init__(self, quantization_levels: List[float], slot_value_fetcher: "ISlotValueFetcher"):
+        self.__actual_sum = 0
+        self.__quantization_levels = quantization_levels
+        self.__slot_value_fetcher = slot_value_fetcher
+
+    def clone(self) -> "IAggregator":
+        result = QuantizedSum(quantization_levels=self.__quantization_levels, slot_value_fetcher=self.__slot_value_fetcher)
+
+        result.__actual_sum = self.__actual_sum
+
+        return result
+
+    def reset(self):
+        self.__actual_sum = 0
+
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        raise NotImplementedError()
+
+    def get_current(self) -> float:
+        for lb, ub in commons.get_interval_ranges(self.__quantization_levels):
+            if lb < self.__actual_sum <= ub:
+                return self.__slot_value_fetcher.fetch(lb, ub, False, True)
+        else:
+            raise ValueError(f"""
+                cannot retrieve the quantization level of sum {self.__actual_sum}! 
+                Quantization levels allowed are {list(commons.get_interval_ranges(self.__quantization_levels))}""")
+
+    def aggregate(self, new: float) -> float:
+        self.__actual_sum += new
+        return self.get_current()
 
 
 class MeanAggregator(SlottedClass, IAggregator):
@@ -439,10 +482,17 @@ class MinAggregator(SlottedClass, IAggregator):
         function_names = list(function_names)
         logging.debug(f"function names are (len={len(function_names)}) {function_names}")
         logging.info(f"xaxis is (len={len(xaxis)})")
-        space_estimate = (len(xaxis) * len(function_names)* sys.getsizeof(float(0)))/(1000*1000)
+        space_estimate = (len(xaxis) * len(function_names)* sys.getsizeof(np.float32(0)))/(1000*1000)
         logging.info(f"generating min data frame. This operation will require ABOUT {space_estimate} MB")
 
+        # #TODO generlize the . Block code to handle MemoryError
+        # dataframe = pd.DataFrame(np.nan, columns=function_names, dtype=np.float32, index=[]).to_sparse(fill_value=np.nan, kind='block')
+        # dataframe = dataframe.reindex(xaxis)
+        # logging.info(f"the dataframe requires {sys.getsizeof(dataframe)/1000} MB")
+        # #dataframe.index = xaxis
+
         dataframe = pd.DataFrame(np.nan, columns=function_names, index=xaxis)
+        logging.info(f"the dataframe requires {sys.getsizeof(dataframe)/1000} MB")
         dataframe.index = xaxis
 
         for i, function_name in enumerate(function_names):

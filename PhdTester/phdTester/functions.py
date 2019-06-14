@@ -377,6 +377,12 @@ class DataFrameFunctionsDict(SlottedClass, IFunctionsDict):
         result._dataframe = other
         return result
 
+    @staticmethod
+    def create_dataframe_empty() -> pd.DataFrame:
+        result = pd.DataFrame().astype(np.float32)
+        result.index = result.index.astype(np.float32)
+        return result
+
     def function_names(self) -> Iterable[str]:
         yield from self._dataframe.columns.values
 
@@ -417,6 +423,9 @@ class DataFrameFunctionsDict(SlottedClass, IFunctionsDict):
         if np.isnan(result):
             raise KeyError(f"function {name} does not have a value on axis {x}")
         return result
+
+    def get_first_x(self, name: str) -> float:
+        return self._dataframe.index[0]
 
     def get_first_y(self, name: str) -> float:
         return self._dataframe.iloc[0][name]

@@ -11,10 +11,11 @@ import dask.dataframe as dd
 from phdTester import commons, common_types
 from phdTester.common_types import SlottedClass
 from phdTester.curve_changers.shared_curves_changers import AbstractTransformX, AbstractTransformY
+from phdTester.default_models import UpperBoundSlotValueFetcher
 from phdTester.functions import DataFrameFunctionsDict
 from phdTester.image_computer import aggregators
 from phdTester.model_interfaces import ICurvesChanger, ITestContext, IFunctionsDict, XAxisStatus, \
-    ITestContextMask
+    ITestContextMask, ISlotValueFetcher
 
 
 class StandardTransformX(AbstractTransformX):
@@ -445,18 +446,7 @@ class QuantizeXAxis(ICurvesChanger):
     If a function has no points in a quantum, we will give it the value "NaN"
     """
 
-    class ISlotValueFetcher(abc.ABC):
-
-        @abc.abstractmethod
-        def fetch(self, lb: float, ub: float, lb_included: bool, ub_included: bool) -> float:
-            pass
-
-    class DefaultSlotValueFetcher(ISlotValueFetcher):
-
-        def fetch(self, lb: float, ub: float, lb_included: bool, ub_included: bool) -> float:
-            return ub
-
-    def __init__(self, quantization_levels: Union[List[float]], merge_method: str, slot_value: ISlotValueFetcher = None):
+    def __init__(self, quantization_levels: List[float], merge_method: str, slot_value: "ISlotValueFetcher" = None):
         """
         Initialize the quantization
 
@@ -481,13 +471,10 @@ class QuantizeXAxis(ICurvesChanger):
 
         self.__quantization_levels = quantization_levels
         self.__merge_method = merge_method
-        self.__slot_value = slot_value or QuantizeXAxis.DefaultSlotValueFetcher()
+        self.__slot_value = slot_value or UpperBoundSlotValueFetcher()
 
     def require_same_xaxis(self) -> bool:
         return False
-
-    def __quantization_ranges(self) -> Iterable[Tuple[float, float]]:
-        yield from zip(self.__quantization_levels[:-1], self.__quantization_levels[1:])
 
     def alter_curves(self, curves: "IFunctionsDict") -> Tuple[XAxisStatus, "IFunctionsDict"]:
         df = curves.to_dataframe()
@@ -496,7 +483,7 @@ class QuantizeXAxis(ICurvesChanger):
         # see https://stackoverflow.com/a/33761120/1887602
         grouped = df.groupby(pd.cut(
             x=df.index,
-            bins=pd.IntervalIndex.from_tuples(list(self.__quantization_ranges())),
+            bins=pd.IntervalIndex.from_tuples(list(commons.get_interval_ranges(self.__quantization_levels))),
         ))
         # groups index is composed by intervals
 

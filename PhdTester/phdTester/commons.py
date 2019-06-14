@@ -18,6 +18,19 @@ import pandas
 import string_utils
 
 
+def get_interval_ranges(levels: List[float]) -> Iterable[Tuple[float, float]]:
+    """
+    Generate ranges of pairs starting from a flat list.
+
+    ```
+    list(get_interval_range(levels=[-1, 4, 7, 9, 15]))
+    # [(-1, 4), (4, 7), (7, 9), (9, 15)]
+    ```
+
+    :param levels: the numbers involve din the ranges to generate
+    :return: iterable representing the ranges
+    """
+    yield from zip(levels[:-1], levels[1:])
 
 def direct_call_or_method_call(obj, fallback_method_name: str, *args, **kwargs) -> Any:
     """

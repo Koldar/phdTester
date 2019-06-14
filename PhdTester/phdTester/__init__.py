@@ -12,7 +12,9 @@ from phdTester.default_models import \
     AbstractStuffUnderTestMask, \
     AbstractTestEnvironmentMask, \
     AbstractCSVRow, \
-    DefaultSubtitleGenerator
+    DefaultSubtitleGenerator, \
+    UpperBoundSlotValueFetcher, \
+    MeanSlotValueFetcher \
 
 from phdTester.common_types import \
     PathStr, \
