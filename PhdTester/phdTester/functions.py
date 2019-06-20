@@ -467,8 +467,6 @@ class DataFrameFunctionsDict(SlottedClass, IFunctionsDict):
     def to_dataframe(self) -> pd.DataFrame:
         return self._dataframe
 
-    def get_union_of_all_xaxis(self) -> Iterable[float]:
-        yield from self._dataframe.index
 
     def get_function_number_of_points(self, name: str) -> int:
         return self._dataframe.loc[:, name].dropna().shape[0]

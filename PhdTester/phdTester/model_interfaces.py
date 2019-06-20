@@ -1244,14 +1244,9 @@ class IFunctionsDict(abc.ABC):
         """
         pass
 
-    @abc.abstractmethod
-    def get_union_of_all_xaxis(self) -> Iterable[float]:
         """
 
-        :return: an iterable of all the x values where at leasrt one function in the dictionary has been defined.
-            Order is garantueed.
         """
-        pass
 
     @abc.abstractmethod
     def get_function_number_of_points(self, name: str) -> int:
