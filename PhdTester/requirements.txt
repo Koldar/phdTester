@@ -3,7 +3,6 @@ bleach==3.1.0
 certifi==2019.3.9
 chardet==3.0.4
 cloudpickle==1.1.1
-coloredlogs==10.0
 cycler==0.10.0
 dask==1.2.2
 dask[dataframe]==1.2.2
