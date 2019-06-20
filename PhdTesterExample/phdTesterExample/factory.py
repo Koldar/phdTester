@@ -173,39 +173,18 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             use_format='wide',
             csv_dest_data_source=self.filesystem_datasource,
             csv_dest_path='generatedCsvs',
-            curve_changer=[
-                phd.curves_changers.QuantizeXAxis(
-                    quantization_levels=list(range(0, 300, 25)),
-                    merge_method='max',
-                ),
-                phd.curves_changers.ReplaceFirstNaNValues(value=float('+inf')),
-                phd.curves_changers.StatisticsOfFunctionsPerX(
-                    test_context_template=self.generate_test_context(),
-                    include_infinities=True,
-                )
-
-            ],
-            function_splitter=phd.function_splitters.BasedOnCsv()
         )
 
-        # self.generate_batch_of_plots(
-        #     xaxis_name="run id",
-        #     yaxis_name="avg time (us)",
-        #     title="time over run id on several sequence size",
-        #     get_x_value=RunId(),
-        #     get_y_value=Time(),
-        #     y_aggregator=phd.aggregators.MeanAggregator(),
-        #     image_suffix=phd.KS001.single_labelled("image", type="time-over-runid-several-sequence-size"),
-        #     user_tcm=user_tcm,
-        #     curve_changer=[
-        #         phd.curves_changers.QuantizeXAxis(
-        #             quantization_levels=list(range(0, 300, 25)),
-        #             merge_method='max',
-        #         ),
-        #         phd.curves_changers.RemapInvalidValues(value=float('+inf')),
-        #     ],
-        #     function_splitter=phd.function_splitters.BasedOnCsv()
-        # )
+        self.generate_batch_of_plots(
+            xaxis_name="run id",
+            yaxis_name="avg time (us)",
+            title="time over run id on several sequence size",
+            get_x_value=supports.RunId(),
+            get_y_value=supports.Time(),
+            y_aggregator=phd.aggregators.MeanAggregator(),
+            image_suffix=phd.KS001.single_labelled("image", type="time-over-runid-several-sequence-size"),
+            user_tcm=user_tcm,
+        )
 
     def generate_csvs(self, settings: "phd.IGlobalSettings",
                       under_test_values: Dict[str, List[Any]], test_environment_values: Dict[str, List[Any]]):

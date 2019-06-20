@@ -1274,7 +1274,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             `_generate_datasource`;
         :param path_function: the path in the datasource where to look for csvs to read. Default to 'csvs'
         :return: a structure containing all the functions to print if the computation was successful
-            an empty dictionary otherwise
+            an empty dictionary otherwise. The generated functions has all the same xaxis
         """
         # TODO maybe we should return an exception!
 
@@ -1730,7 +1730,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
 
         # we know the xaxis is only one, so we pick the first
-        akey = list(functions_to_print.keys())[0]
         xaxis = DefaultAxis(functions_to_print.xaxis_ordered(), atype='x', name=xaxis_name)
         xaxis.label.wrap_up_to = 40
         xaxis.label.font_size = 10
@@ -1761,17 +1760,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         # add plots alphabetically to ensure there are no "swaps"
         for stuff_under_test_name in sorted(functions_to_print):
-            function_to_print = functions_to_print[stuff_under_test_name]
-            for x in xaxis.axis:
-                if x not in function_to_print:
-                    raise ValueError(f"""the x value {x} is not present in function {stuff_under_test_name}!
-                    xaxis            ={list(xaxis)}
-                    point in function={function_to_print.x_ordered_values()}
-                    """)
-
             plot = DefaultSinglePlot(
                 name=stuff_under_test_name,
-                values=map(lambda x2: function_to_print[x2], xaxis.axis),
+                values=map(lambda x2: functions_to_print.get_function_y(stuff_under_test_name, x2), xaxis.axis),
             )
             plotter.add_plot(plot)
 
