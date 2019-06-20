@@ -2335,7 +2335,7 @@ class IDataSource(abc.ABC):
 
         self.get_manager_of(data_type).save_at(self, path, ks001, data_type, content)
 
-    def get(self, path: str, ks001: KS001Str, data_type: DataTypeStr) -> Any:
+    def get(self, path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Any:
         """
         get the content of a particular file
         :param path: path of the file to load
@@ -2346,7 +2346,7 @@ class IDataSource(abc.ABC):
         """
         return self.get_manager_of(data_type).get(self, path, ks001, data_type)
 
-    def get_all(self, path: str = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[PathStr, KS001Str, DataTypeStr]]:
+    def get_all(self, path: PathStr = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[PathStr, KS001Str, DataTypeStr]]:
         return self.get_manager_of(data_type).get_all(
             datasource=self,
             path=path,
@@ -2357,7 +2357,7 @@ class IDataSource(abc.ABC):
             equal=equal
         )
 
-    def contains(self, path: str, ks001: KS001Str, data_type: DataTypeStr) -> bool:
+    def contains(self, path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> bool:
         """
         Check if a resource exists
 
@@ -2370,7 +2370,7 @@ class IDataSource(abc.ABC):
         """
         return self.get_manager_of(data_type).contains(self, path, ks001, data_type)
 
-    def remove(self, path: str, ks001: KS001Str, data_type: DataTypeStr):
+    def remove(self, path: PathStr, ks001: KS001Str, data_type: DataTypeStr):
         """
         Removes a resource in the data source
 
@@ -2384,7 +2384,7 @@ class IDataSource(abc.ABC):
         """
         self.get_manager_of(data_type).remove(self, path, ks001, data_type)
 
-    def iterate_over(self, path: str, ks001: KS001Str, data_type: DataTypeStr) -> Iterable[Any]:
+    def iterate_over(self, path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Iterable[Any]:
         """
         Open the resource specified and than perform an iteration of such resource.
 
@@ -2435,7 +2435,7 @@ class IDataSource(abc.ABC):
         if test_context_template is None and (has_single_filters or has_testcontext_filters or has_complex_filters):
             raise ValueError(f"rtest context template is None but we strictly require it since you have specified either a single filter or a complex one!")
 
-        def handle_generic_data(i: int, path: str, ks001str: str, data_type: DataTypeStr) -> Tuple[bool, Optional["ITestContext"], Optional["KS001"], Optional[str]]:
+        def handle_generic_data(i: int, path: PathStr, ks001str: KS001Str, data_type: DataTypeStr) -> Tuple[bool, Optional["ITestContext"], Optional["KS001"], Optional[DataTypeStr]]:
             logging.debug(f"considering {path}/{ks001str} (type={data_type})...")
             if not has_naive_filters and not has_single_filters and not has_testcontext_filters and not has_complex_filters:
                 # if there are no filters we accept everything!
@@ -2546,7 +2546,7 @@ class IDataSource(abc.ABC):
                 # we know for sure that both csv_ks001 and test_context are not None
                 yield GetSuchInfo(path, ks001str, data_type, csv_ks001, test_context)
 
-    def transfer_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: DataTypeStr, to_path: str = None, to_ks001: KS001Str = None, to_data_type: DataTypeStr = None, remove: bool = False):
+    def transfer_to(self, other: "IDataSource", from_path: PathStr, from_ks001: KS001Str, from_data_type: DataTypeStr, to_path: PathStr = None, to_ks001: KS001Str = None, to_data_type: DataTypeStr = None, remove: bool = False):
         """
         Transfer the resource from the current data source to another one. You can optionally specify
         new path, data type and ks001 in the target data source.
@@ -2581,8 +2581,8 @@ class IDataSource(abc.ABC):
 
         other.save_at(to_path, to_ks001, to_data_type, generic_data)
 
-    def move_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: DataTypeStr,
-                             to_path: str = None, to_ks001: KS001Str = None):
+    def move_to(self, other: "IDataSource", from_path: PathStr, from_ks001: KS001Str, from_data_type: DataTypeStr,
+                             to_path: PathStr = None, to_ks001: KS001Str = None):
         """
         Shortcut for transfer_csv_to  with remove set to True
         :param other:
@@ -2597,8 +2597,8 @@ class IDataSource(abc.ABC):
                          to_path=to_path, to_ks001=to_ks001, to_data_type=from_data_type, remove=True
                          )
 
-    def copy_to(self, other: "IDataSource", from_path: str, from_ks001: KS001Str, from_data_type: DataTypeStr,
-                    to_path: str = None, to_ks001: KS001Str = None):
+    def copy_to(self, other: "IDataSource", from_path: PathStr, from_ks001: KS001Str, from_data_type: DataTypeStr,
+                    to_path: PathStr = None, to_ks001: KS001Str = None):
         """
         Shortcut for transfer_csv_to  with remove set to False
 
@@ -2617,8 +2617,8 @@ class IDataSource(abc.ABC):
 
     def move_to_suchthat(self,
                               other: "IDataSource",
-                              from_path: str,
-                              data_type: DataTypeStr = None, to_path: str = None,
+                              from_path: PathStr,
+                              data_type: DataTypeStr = None, to_path: PathStr = None,
                               filters: List[ICsvFilter] = None,
                               test_context_template: "ITestContext" = None):
         for getsuchinfo in self.get_suchthat(
@@ -2628,8 +2628,8 @@ class IDataSource(abc.ABC):
 
     def copy_to_suchthat(self,
                               other: "IDataSource",
-                              from_path: str,
-                              data_type: DataTypeStr = None, to_path: str = None,
+                              from_path: PathStr,
+                              data_type: DataTypeStr = None, to_path: PathStr = None,
                               filters: List[ICsvFilter] = None,
                               test_context_template: "ITestContext" = None):
         for getsuchinfo in self.get_suchthat(
@@ -2638,7 +2638,7 @@ class IDataSource(abc.ABC):
             self.copy_to(other, getsuchinfo.path, getsuchinfo.name, to_path)
 
     def remove_suchthat(self,
-                                from_path: str,
+                                from_path: PathStr,
                                 data_type: DataTypeStr = None,
                                 filters: List[ICsvFilter] = None,
                                 test_context_template: "ITestContext" = None):

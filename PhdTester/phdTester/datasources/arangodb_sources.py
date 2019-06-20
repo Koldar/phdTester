@@ -219,15 +219,15 @@ class ArangoDB(IDataSource):
 
 class AbstractArangoDBResource(IResourceManager, abc.ABC):
 
-    def _is_path_in_collection_name(self, path: str, collection_name: str) -> bool:
+    def _is_path_in_collection_name(self, path: PathStr, collection_name: str) -> bool:
         collection_name = collection_name.replace(".", "")
         path = commons.expand_string(path, [('/', '-')])
         return path in collection_name
 
-    def _is_data_type_in_collection_name(self, data_type, collection_name: str) -> bool:
+    def _is_data_type_in_collection_name(self, data_type: DataTypeStr, collection_name: str) -> bool:
         return collection_name.endswith(f"-{data_type}")
 
-    def _get_collection_name(self, path: str, data_type: str) -> str:
+    def _get_collection_name(self, path: PathStr, data_type: DataTypeStr) -> str:
         """
         the collection name where the resource will be saved into
 
@@ -267,7 +267,7 @@ class AbstractArangoDBResource(IResourceManager, abc.ABC):
             for doc_ks001 in datasource.get_all_documents_ks001_in_collection(datasource.database[collection_name]):
                 yield (path, doc_ks001, data_type)
 
-    def remove(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str):
+    def remove(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr):
         assert isinstance(datasource, ArangoDB)
 
         collection_name = self._get_collection_name(path, data_type)
@@ -278,7 +278,7 @@ class AbstractArangoDBResource(IResourceManager, abc.ABC):
         else:
             raise ResourceNotFoundError(f"resource {collection_name}/{doc_name} (aka {path}/{ks001}/{data_type}) not found")
 
-    def contains(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> bool:
+    def contains(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> bool:
         assert isinstance(datasource, ArangoDB)
 
         collection_name = self._get_collection_name(path, data_type)
@@ -292,7 +292,7 @@ class BinaryArangoDB(AbstractArangoDBResource):
     def _on_attached(self, datasource: "IDataSource"):
         pass
 
-    def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str, content: Any):
+    def save_at(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr, content: Any):
         assert isinstance(datasource, ArangoDB)
 
         collection_name = self._get_collection_name(path, data_type)
@@ -304,7 +304,7 @@ class BinaryArangoDB(AbstractArangoDBResource):
         doc['data'] = content
         datasource.update_document(collection, doc)
 
-    def get(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> Any:
+    def get(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Any:
         assert isinstance(datasource, ArangoDB)
 
         collection_name = self._get_collection_name(path, data_type)
@@ -317,7 +317,7 @@ class BinaryArangoDB(AbstractArangoDBResource):
             doc = datasource.fetch_or_create_document(collection, doc_name)
             return doc['data']
 
-    def iterate_over(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> Iterable[Any]:
+    def iterate_over(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Iterable[Any]:
         for c in self.get(datasource, path, ks001, data_type):
             yield c
 
@@ -327,7 +327,7 @@ class CsvArangoDBResourceManager(AbstractArangoDBResource, AbstractCsvResourceMa
     def _on_attached(self, datasource: "IDataSource"):
         pass
 
-    def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str, content: Any):
+    def save_at(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr, content: Any):
         assert isinstance(datasource, ArangoDB)
         collection_name = self._get_collection_name(path, 'csv')
 
@@ -348,7 +348,7 @@ class CsvArangoDBResourceManager(AbstractArangoDBResource, AbstractCsvResourceMa
 
         datasource.update_document(collection, doc)
 
-    def get(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> Any:
+    def get(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Any:
         assert isinstance(datasource, ArangoDB)
 
         collection_name = self._get_collection_name(path, 'csv')

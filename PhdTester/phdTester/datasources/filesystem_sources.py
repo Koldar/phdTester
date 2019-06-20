@@ -184,14 +184,14 @@ class CsvFileSystemResourceManager(AbstractFileSystemResourceManager, AbstractCs
     def is_compliant_with(self, datasource: "IDataSource") -> bool:
         return isinstance(datasource, FileSystem)
 
-    def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str, content: Any):
+    def save_at(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr, content: Any):
         assert isinstance(datasource, FileSystem)
         abs_filename = self._gen_absfile(datasource, path, basename=ks001, extension='csv')
         os.makedirs(os.path.dirname(abs_filename), exist_ok=True)
         with open(abs_filename, "w") as f:
             f.write(content)
 
-    def get(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: str) -> Any:
+    def get(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Any:
         assert isinstance(datasource, FileSystem)
 
         abs_filename = self._gen_absfile(datasource, path, basename=ks001, extension='csv')
