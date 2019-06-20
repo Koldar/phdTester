@@ -14,6 +14,7 @@ from typing import Any, Tuple, Iterable, Dict, List, Callable, Optional, Set
 from phdTester import commons
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, DataTypeStr, RegexStr
 from phdTester.exceptions import ResourceTypeUnhandledError
+from phdTester.functions import BoxData
 from phdTester.graph import IMultiDirectedGraph, IMultiDirectedHyperGraph
 from phdTester.ks001.ks001 import KS001, Aliases
 
@@ -1121,7 +1122,7 @@ class IFunctionsDict(abc.ABC):
     def function_names(self) -> Iterable[str]:
         """
         iterable of function names
-        :return:
+        :return: the names of all the functions in this set
         """
         pass
 
@@ -1129,7 +1130,7 @@ class IFunctionsDict(abc.ABC):
     def size(self) -> int:
         """
         number of functions inside this structure
-        :return:
+        :return: number of functions in the set
         """
         pass
 
@@ -1152,23 +1153,13 @@ class IFunctionsDict(abc.ABC):
         """
         pass
 
-    def xaxis_ordered(self) -> Iterable[float]:
-        """
-        yields all the x value such that at least one function is defined in such x point.
-
-        Order is garantueed
-
-        :return:
-        """
-        yield from sorted(self.xaxis())
-
     @abc.abstractmethod
     def remove_function(self, name: str):
         """
         Remove a function inside the dictionary
+
         :param name: the name of the function to remove
         :raises KeyError: if the function is not present in the dictionary
-        :return:
         """
         pass
 
@@ -1177,7 +1168,7 @@ class IFunctionsDict(abc.ABC):
         """
 
         :param name: the function to check
-        :return: true if the function is inside the dictionary
+        :return: true if the function is inside the dictionary, false otherwise
         """
         pass
 
@@ -1185,6 +1176,7 @@ class IFunctionsDict(abc.ABC):
     def contains_function_point(self, name: str, x: float) -> bool:
         """
         Check if a function has a particular x value
+
         :param name: the name fo the function to check
         :param x: the x value to check
         :return:  true if the function is defined on `x`, false otherwise
@@ -1194,11 +1186,11 @@ class IFunctionsDict(abc.ABC):
     @abc.abstractmethod
     def get_function_y(self, name: str, x: float) -> float:
         """
-        fetch hte y values of
+        fetch the y values of
         :param name: the name fo the function to check
         :param x: the value to check
         :raises KeyError: if the function is not defined on `x`
-        :return:
+        :return: the values of the function `name` at x `x`
         """
         pass
 
@@ -1210,7 +1202,6 @@ class IFunctionsDict(abc.ABC):
         :param name: the function name
         :param x: the x value to update or create
         :param y: the y value to update or create
-        :return:
         """
         pass
 
@@ -1237,23 +1228,24 @@ class IFunctionsDict(abc.ABC):
         """
         Convert the function dict into a dataframe
 
-        the data frame needs to have as many columns as functions. The index should be the x values.
+        the data frame needs to have as many columns as functions.
+        The index should be the x values.
         Missing values of a given function should have NaN value.
+
+        Note that the contract of this interface does not say if the generated
+        value is a copy of the underlying data structure or the actual underlying
+        data structure
 
         :return: the dataframe
         """
         pass
-
-        """
-
-        """
 
     @abc.abstractmethod
     def get_function_number_of_points(self, name: str) -> int:
         """
         the number of points where the function is defined
         :param name: name of the function to work with
-        :return:
+        :return: number of points where the function is defined
         """
         pass
 
@@ -1263,7 +1255,6 @@ class IFunctionsDict(abc.ABC):
         Drop all the function points after a particular x value
         :param x: the x value involved
         :param x_included: true if we want to remove `x` as well, false otherwise
-        :return:
         """
         pass
 
@@ -1279,20 +1270,15 @@ class IFunctionsDict(abc.ABC):
     def get_ith_xvalue(self, name: str, x_index: int) -> float:
         """
 
+        For example the function
+        ```
+            <1, 4> <10, 3> <14, 2>
+        ```
+        the 1-th x point is 10.
+
         :param name: name of the function whose x axis value we want to fetch
-        :param x_index: the i-th x axis value for the function
+        :param x_index: the i-th x axis value for the function. Points start from 0
         :return: the x axis value requested
-        """
-        pass
-
-    @abc.abstractmethod
-    def change_ith_x(self, x_index: int, new_value: float):
-        """
-        Change the x value into a new value
-
-        :param x_index: index of the x to alter
-        :param new_value: new value to associate to the x
-        :return:
         """
         pass
 
@@ -1311,12 +1297,13 @@ class IFunctionsDict(abc.ABC):
         :param name: the function to handle
         :return: max of f(x)
         """
+        pass
 
     @abc.abstractmethod
     def items(self) -> Iterable[Tuple[str, "pd.Series"]]:
         """
 
-        :note: It is not garantueed that the return value of this method is the the actual underlying data. It might be
+        :note: It is **not** garantueed that the return value of this method is the the actual underlying data. It might be
         a copy of it
 
         :return: an iterable of pairs where the first is the function name while the second one is a pandas series
@@ -1324,22 +1311,121 @@ class IFunctionsDict(abc.ABC):
         """
         pass
 
-    # def merge_dictionaries(self, other: "IFunctionsDict") -> "IFunctionsDict":
-    #     """
-    #     Merge 2 dictionaries
-    #
-    #     if the 2 dictionaries share the same function name, an error is thrown.
-    #     Merging is performed on sorted function names
-    #
-    #     :param other: the other dictionary to merge function on
-    #     :raises KeyError: if the 2 dictionaries share the same function name, regardless of its value
-    #     :return: self
-    #     """
-    #     for name in sorted(other.function_names()):
-    #         if self.contains_function(name):
-    #             raise KeyError(f"this dictionary already contains function named {name}")
-    #         self.set_function(name, other.get_function(name))
-    #     return self
+    @abc.abstractmethod
+    def get_first_x(self, name: str) -> float:
+        """
+        The first x-value of a given function, regardless if it's valid or not
+
+        Some data structure may use invalid values for unknown mappings.
+        This function may return such invalid values. If you don't want it,
+        see get_first_valid_x
+        :param name: the function involved
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_first_y(self, name: str) -> float:
+        """
+        The y value associated to the first x-value of a given function, regardless if it's valid or not
+
+        Some data structure may use invalid values for unknown mappings.
+        This function may return such invalid values. If you don't want it,
+        see get_first_valid_y
+        :param name: the function involved
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_last_y(self, name: str) -> float:
+        """
+        Like get_first_y but returns the y value of the last x-value
+        :param name:  the function involved
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_first_valid_y(self, name: str) -> float:
+        """
+        The y value associated to the first x-value of a given function
+
+        It will be always a correct value
+        :param name: the function involved
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_first_valid_x(self, name: str) -> float:
+        """
+        The y value associated to the first x-value of a given function
+
+        It will be always a correct value
+        :param name: the function involved
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_last_valid_y(self, name: str) -> float:
+        """
+        The y value associated to the last x-value of a given function
+
+        It will be always a correct value
+        :param name: the function involved
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_last_valid_x(self, name: str) -> float:
+        """
+        The first x-value of a given function
+
+        It will be always a correct value
+        :param name: the function involved
+        :return:
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_statistics(self, name: str, lower_percentile: float = 0.25, upper_percentile: float = 0.75) -> "BoxData":
+        """
+        generates the statistics of a given function.
+
+        Useful for box plots
+
+        :param name: name of the function invovled
+        :param lower_percentile: value between 0 and 1 representing the lower percentile to fetch
+        :param upper_percentile: value between 0 and 1 representing the upper percentile to fetch
+        :return: statistical value of the function
+        """
+        pass
+
+    @abc.abstractmethod
+    def replace_invalid_values(self, to_value: float):
+        """
+        Replace infinite and **all** NaN values with a fixed value
+
+        Note that some implementation may use these values inside the implementation
+        The contract of this interface explicitly says that, if this is the case,
+        even those values needs to be replaced
+
+        :param to_value: the value that will replace infinite and NaN values
+        """
+        pass
+
+    def xaxis_ordered(self) -> Iterable[float]:
+        """
+        yields all the x value such that at least one function is defined in such x point.
+
+        Order is garantueed
+
+        :return:
+        """
+        yield from sorted(self.xaxis())
 
     def get_ordered_xy(self, name: str) -> Iterable[Tuple[float, float]]:
         for x in self.get_ordered_x_axis(name):
@@ -1365,12 +1451,6 @@ class IFunctionsDict(abc.ABC):
     def __iter__(self) -> Iterable[str]:
         yield from self.function_names()
 
-    # def __getitem__(self, item: str) -> "IFunction2D":
-    #     return self.get_function(item)
-    #
-    # def __setitem__(self, key: str, value: "IFunction2D"):
-    #     self.set_function(key, value)
-
     def __len__(self) -> int:
         return self.size()
 
@@ -1379,24 +1459,6 @@ class IFunctionsDict(abc.ABC):
 
     def __delitem__(self, key: str):
         self.remove_function(key)
-
-    # def __add__(self, other: "IFunctionsDict") -> "IFunctionsDict":
-    #     """
-    #     Alias of merge_dictionaries
-    #
-    #     :param other: the other dictionary to merge
-    #     :return: the merge of the 2 dictionaries
-    #     """
-    #     result = self.__class__()
-    #     result += self
-    #     result += other
-    #
-    #     return result
-    #
-    # def __iadd__(self, other: "IFunctionsDict") -> "IFunctionsDict":
-    #     self.merge_dictionaries(other)
-    #     return self
-
 
 
 class AbstractDictionaryMergerTemplate(abc.ABC):

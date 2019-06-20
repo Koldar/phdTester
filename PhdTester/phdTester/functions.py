@@ -344,6 +344,19 @@ class DataFrameFunctionsDict(SlottedClass, IFunctionsDict):
     name is the function name. the x axis is the index of the dataframe.
     If a function does not have a y values associated to an xaxis, NAN is put instead.
 
+    When using the methods of IFunctionsDict, we always make sure that:
+     - nan only rows are removed
+     - index is sorted
+
+    However, you can by-pass this constraint by using `from_dataframe`:
+    this is intended to allow the developer to create a quick IFunctionsDict
+    from the dartaframe.
+
+    Another important property of this implementation is that `to_dataframe` return
+    the underlying data structure of this implementation: so changing the return
+    value of such function will change the underlying data structure of this object
+    as well.
+
     """
 
     __slots__ = ('_dataframe', )
@@ -411,9 +424,11 @@ class DataFrameFunctionsDict(SlottedClass, IFunctionsDict):
 
     def remove_function(self, name: str):
         self._dataframe.drop([name], axis=1, inplace=True)
+        # some rows may have only nan now. Remove them
+        self._dataframe.dropna(how='all')
 
-    def _number_of_rows(self) -> int:
-        return self._dataframe.shape[0]
+    def contains_function(self, name: str) -> bool:
+        return name in self._dataframe.columns.values
 
     def contains_function_point(self, name: str, x: float) -> bool:
         return not np.isnan(self._dataframe.loc[x, name])
@@ -423,6 +438,53 @@ class DataFrameFunctionsDict(SlottedClass, IFunctionsDict):
         if np.isnan(result):
             raise KeyError(f"function {name} does not have a value on axis {x}")
         return result
+
+    def update_function_point(self, name: str, x: float, y: float):
+        # this will add NaN in the missing spot or add a new row
+        self._dataframe.loc[x, name] = y
+        # we want that the index is always sorted
+        # we may need to sort the index
+        self._dataframe.sort_index(inplace=True)
+
+    def remove_function_point(self, name: str, x: float):
+        self._dataframe.loc[x, name] = np.NaN
+        self._dataframe.dropna(how='all')
+
+    def get_ordered_x_axis(self, name: str) -> Iterable[float]:
+        # TODO improve performances by caching xaxis of functions
+        for x in self._dataframe.index:
+            if not np.isnan(self._dataframe.loc[x, name]):
+                yield x
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return self._dataframe
+
+    def get_function_number_of_points(self, name: str) -> int:
+        return self._dataframe.loc[:, name].dropna().shape[0]
+
+    def drop_all_points_after(self, x: float, x_included: bool = True):
+        if x_included is False:
+            raise NotImplementedError()
+        self._dataframe.drop(self._dataframe.index[x:], inplace=True)
+
+    def functions_share_same_xaxis(self) -> bool:
+        return not self._dataframe.isnull().values.any()
+
+    def get_ith_xvalue(self, name: str, index: int) -> float:
+        for i, x in enumerate(self.get_ordered_x_axis(name)):
+            if i == index:
+                return x
+        raise ValueError(f"in valid {index}!")
+
+    def get_function_name_with_most_points(self) -> str:
+        return self._dataframe.count(axis=0, numeric_only=True).idxmax()
+
+    def max_of_function(self, name: str) -> float:
+        return self._dataframe[name].max(skipna=True)
+
+    def items(self) -> Iterable[Tuple[str, "pd.Series"]]:
+        for column in self._dataframe:
+            yield column, self._dataframe[column].dropna(axis=0, inplace=False)
 
     def get_first_x(self, name: str) -> float:
         return self._dataframe.index[0]
@@ -445,59 +507,8 @@ class DataFrameFunctionsDict(SlottedClass, IFunctionsDict):
     def get_last_valid_x(self, name: str) -> float:
         return self._dataframe[name].last_valid_index()
 
-    def update_function_point(self, name: str, x: float, y: float):
-        # this will add NaN in the missing spot or add a new row
-        self._dataframe.loc[x, name] = y
-        # we may need to sort the index
-        self._dataframe.sort_index(inplace=True)
-
-    def remove_function_point(self, name: str, x: float):
-        self._dataframe.loc[x, name] = np.NaN
-        self._dataframe.dropna(how='all')
-
-    def contains_function(self, name: str) -> bool:
-        return name in self._dataframe.columns.values
-
-    def get_ordered_x_axis(self, name: str) -> Iterable[float]:
-        # TODO improve performances by caching xaxis of functions
-        for x in self._dataframe.index:
-            if not np.isnan(self._dataframe.loc[x, name]):
-                yield x
-
-    def to_dataframe(self) -> pd.DataFrame:
-        return self._dataframe
-
-
-    def get_function_number_of_points(self, name: str) -> int:
-        return self._dataframe.loc[:, name].dropna().shape[0]
-
-    def drop_all_points_after(self, x: float, x_included: bool = True):
-        if x_included is False:
-            raise NotImplementedError()
-        self._dataframe.drop(self._dataframe.index[x:], inplace=True)
-
-    def functions_share_same_xaxis(self) -> bool:
-        return not self._dataframe.isnull().values.any()
-
-    def get_ith_xvalue(self, name: str, index: int) -> float:
-        for i, x in enumerate(self.get_ordered_x_axis(name)):
-            if i == index:
-                return x
-        raise ValueError(f"in valid {index}!")
-
-    def change_ith_x(self, x_index: int, new_value: float):
-        old_value = self._dataframe.index[x_index]
-        self._dataframe = self._dataframe.iloc[x_index].rename({old_value: new_value})
-
-    def get_function_name_with_most_points(self) -> str:
-        return self._dataframe.count(axis=0, numeric_only=True).idxmax()
-
-    def max_of_function(self, name: str) -> float:
-        return self._dataframe[name].max(skipna=True)
-
-    def items(self) -> Iterable[Tuple[str, "pd.Series"]]:
-        for column in self._dataframe:
-            yield column, self._dataframe[column].dropna(axis=0, inplace=False)
+    def _number_of_rows(self) -> int:
+        return self._dataframe.shape[0]
 
     def get_statistics(self, name: str, lower_percentile: float = 0.25, upper_percentile: float = 0.75) -> BoxData:
         result = self._dataframe[name].describe()
