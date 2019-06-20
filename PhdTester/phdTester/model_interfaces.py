@@ -2064,7 +2064,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def save_at(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: DataTypeStr, content: Any):
+    def save_at(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr, content: Any):
         """
         Upload a resource in the filesystem to the datasource by setting to a particular path
 
@@ -2081,7 +2081,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: DataTypeStr) -> Any:
+    def get(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Any:
         """
         get the content of a particular file
 
@@ -2095,7 +2095,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_all(self, datasource: "IDataSource", path: PathStr = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
+    def get_all(self, datasource: "IDataSource", path: PathStr = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[PathStr, KS001Str, DataTypeStr]]:
         """
         get all the resources which are in `path` and have type `data_type`
 
@@ -2109,7 +2109,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def contains(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: DataTypeStr) -> bool:
+    def contains(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> bool:
         """
         Check if a resource exists in the data source
 
@@ -2124,7 +2124,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def remove(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: DataTypeStr):
+    def remove(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr):
         """
         Removes a resource in the data source
 
@@ -2140,7 +2140,7 @@ class IResourceManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def iterate_over(self, datasource: "IDataSource", path: str, ks001: KS001Str, data_type: DataTypeStr) -> Iterable[Any]:
+    def iterate_over(self, datasource: "IDataSource", path: PathStr, ks001: KS001Str, data_type: DataTypeStr) -> Iterable[Any]:
         """
         Open the resource specified and than perform an iteration of such resource.
 
@@ -2290,7 +2290,7 @@ class IDataSource(abc.ABC):
         """
         return self.get_manager_of(data_type).get(self, path, ks001, data_type)
 
-    def get_all(self, path: str = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[str, str, str]]:
+    def get_all(self, path: str = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[PathStr, KS001Str, DataTypeStr]]:
         return self.get_manager_of(data_type).get_all(
             datasource=self,
             path=path,
