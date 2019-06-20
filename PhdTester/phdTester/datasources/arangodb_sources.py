@@ -256,7 +256,7 @@ class AbstractArangoDBResource(IResourceManager, abc.ABC):
     def is_compliant_with(self, datasource: "IDataSource") -> bool:
         return isinstance(datasource, ArangoDB)
 
-    def get_all(self, datasource: "IDataSource", path: str = None, data_type: str = None) -> Iterable[Tuple[str, str, str]]:
+    def get_all(self, datasource: "IDataSource", path: PathStr = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[PathStr, KS001Str, DataTypeStr]]:
         assert isinstance(datasource, ArangoDB)
 
         for collection_name in datasource.get_all_collection_names():
