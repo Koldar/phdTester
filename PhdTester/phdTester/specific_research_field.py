@@ -1731,7 +1731,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         # we know the xaxis is only one, so we pick the first
         akey = list(functions_to_print.keys())[0]
-        xaxis = DefaultAxis(functions_to_print[akey].x_ordered_values(), atype='x', name=xaxis_name)
+        xaxis = DefaultAxis(functions_to_print.xaxis_ordered(), atype='x', name=xaxis_name)
         xaxis.label.wrap_up_to = 40
         xaxis.label.font_size = 10
         xaxis.formatter = StringPlotTextFormatter()
