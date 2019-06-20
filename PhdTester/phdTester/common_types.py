@@ -15,6 +15,24 @@ class SlottedClass(object):
     __slots__ = ()
 
 
+class BoxData(SlottedClass):
+    """
+    Dumb object containing box plot data
+    """
+
+    __slots__ = ('count', 'min', 'max', 'lower_percentile', 'upper_percentile', 'median', 'mean', 'std')
+
+    def __init__(self, count: int, min: float, lower_percentile: float, median: float, mean: float, upper_percentile: float, max: float, std: float):
+        self.count = count
+        self.min = min
+        self.max = max
+        self.lower_percentile = lower_percentile
+        self.upper_percentile = upper_percentile
+        self.median = median
+        self.mean = mean
+        self.std = std
+
+
 class GetSuchInfo(object):
     """
     A class representing the return value of IDataSource.get_suchthat

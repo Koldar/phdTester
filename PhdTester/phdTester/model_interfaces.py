@@ -14,7 +14,6 @@ from typing import Any, Tuple, Iterable, Dict, List, Callable, Optional, Set
 from phdTester import commons
 from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, DataTypeStr, RegexStr
 from phdTester.exceptions import ResourceTypeUnhandledError
-from phdTester.functions import BoxData
 from phdTester.graph import IMultiDirectedGraph, IMultiDirectedHyperGraph
 from phdTester.ks001.ks001 import KS001, Aliases
 

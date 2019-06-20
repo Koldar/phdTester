@@ -1,7 +1,7 @@
 from typing import Iterable, Tuple, Dict
 
 from phdTester import commons
-from phdTester.common_types import SlottedClass
+from phdTester.common_types import SlottedClass, BoxData
 from phdTester.model_interfaces import IFunctionsDict
 
 import pandas as pd
@@ -168,24 +168,6 @@ import numpy as np
 #
 #     def to_dataframe(self) -> pd.DataFrame:
 #         return pd.DataFrame(self._series)
-
-
-class BoxData(SlottedClass):
-    """
-    Dumb object containing box plot data
-    """
-
-    __slots__ = ('count', 'min', 'max', 'lower_percentile', 'upper_percentile', 'median', 'mean', 'std')
-
-    def __init__(self, count: int, min: float, lower_percentile: float, median: float, mean: float, upper_percentile: float, max: float, std: float):
-        self.count = count
-        self.min = min
-        self.max = max
-        self.lower_percentile = lower_percentile
-        self.upper_percentile = upper_percentile
-        self.median = median
-        self.mean = mean
-        self.std = std
 
 
 # class PandasFunction(SlottedClass, IFunction2D):
@@ -510,7 +492,7 @@ class DataFrameFunctionsDict(SlottedClass, IFunctionsDict):
     def _number_of_rows(self) -> int:
         return self._dataframe.shape[0]
 
-    def get_statistics(self, name: str, lower_percentile: float = 0.25, upper_percentile: float = 0.75) -> BoxData:
+    def get_statistics(self, name: str, lower_percentile: float = 0.25, upper_percentile: float = 0.75) -> "BoxData":
         result = self._dataframe[name].describe()
         return BoxData(
             count=result['count'],
