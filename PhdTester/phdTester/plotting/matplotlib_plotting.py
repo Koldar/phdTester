@@ -1,13 +1,14 @@
 import itertools
 import logging
 import os
-from typing import Iterable, Tuple, Optional, Any, Union
+from typing import Iterable, Tuple, Optional, Any, Union, List
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import Formatter
 
+from phdTester import DataTypeStr, KS001Str
 from phdTester.ks001.ks001 import KS001
 from phdTester.plotting.common import DefaultLegend, DefaultGrid, DefaultText, IPlotTextFormatter
 from phdTester.plotting.plotting import IPlot2DGraph, IAxis, ISinglePlot, IText, ILegend, IGrid
@@ -264,7 +265,7 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
     def plots_map(self) -> Iterable[Tuple[IAxis, ISinglePlot]]:
         return {p.label: p for p in self._plots}
 
-    def save_image(self, image_name: KS001, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Any:
+    def save_image(self, image_name: KS001, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> List[Tuple[str, KS001Str, DataTypeStr]]:
         image_filename_no_ext = image_name.dump_str(
             colon=colon,
             pipe=pipe,
@@ -386,4 +387,5 @@ class MatplotLibPlot2DGraph(IPlot2DGraph):
         logging.info(f"creating image {image_abspath}")
         plt.savefig(image_abspath, bbox_inches='tight', format=extension)
 
-        return labels, lines
+        return [(image_abspath, image_filename_no_ext, extension)]
+        #return labels, lines

@@ -14,14 +14,14 @@ import pandas as pd
 import numpy as np
 
 from phdTester import commons, masks
-from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, SlottedClass
+from phdTester.common_types import KS001Str, GetSuchInfo, PathStr, SlottedClass, DataTypeStr
 from phdTester.commons import StringCsvWriter
 from phdTester.curve_changers.curves_changers import CheckSameXAxis
 from phdTester.datasources import filesystem_sources
-from phdTester.datasources.filesystem_sources import CsvFileSystemResourceManager
+from phdTester.datasources.filesystem_sources import CsvFileSystemResourceManager, BinaryFileSystemResourceManager
 from phdTester.default_models import SimpleTestContextRepo, \
     DefaultGlobalSettings, DefaultTestEnvironment, DefaultStuffUnderTest, DefaultTestContext, DefaultStuffUnderTestMask, \
-    DefaultTestEnvironmentMask, DefaultTestContextMask, DefaultSubtitleGenerator, PhdFormatter
+    DefaultTestEnvironmentMask, DefaultTestContextMask, DefaultSubtitleGenerator, PhdFormatter, FixedPathGenerator
 from phdTester.exceptions import ValueToIgnoreError, IgnoreCSVRowError
 from phdTester.functions import DataFrameFunctionsDict
 from phdTester.image_computer import aggregators
@@ -64,6 +64,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         self.__run_kwargs = None
         """
         the \*\*kwargs passed in run() method, as is
+        """
+        self.__tmp_directory: str = None
+        """
+        The absdolute path of a directory inside the system we can use to put random internal stuff
         """
 
         self.__colon: str = None
@@ -174,6 +178,16 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             raise ValueError(f"we haven't set the test environment dict values yet!")
         return self.__test_environment_dict_values
 
+    @property
+    def tmp_directory(self) -> str:
+        """
+        Absolute path of the temporary directory
+        :return:
+        """
+        if self.__tmp_directory is None:
+            raise ValueError(f"we haven't set yet the temporary directory!")
+        return self.__tmp_directory
+
     def _get_ks001_colon(self, settings: "IGlobalSettings") -> str:
         """
 
@@ -244,6 +258,18 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         generate the structure in the output folder needed to generate the tests
 
         :param filesystem: a datasource representing the root of the output directory
+        :param settings:
+        """
+        pass
+
+    def setup_datasource(self, datasource: "IDataSource", settings: "IGlobalSettings"):
+        """
+        Set of instructions to conjfigure the datasource
+
+        The difference between this method and the generate one is that here
+        we have opened the datasource
+
+        :param datasource: the data source involved
         :param settings:
         """
         pass
@@ -433,6 +459,22 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             # )
             logging.critical("logging configured correctly!")
 
+    def _configure_tmp_directory(self, settings: "IGlobalSettings") -> str:
+        """
+        fetch the path where we will crete temporary files.
+        Don't save anything important here because we make no garantuees upon when we flush this directory.
+
+        This directory is used mainly for internal stuff.
+
+        :param settings: the settings fetched from the CLI
+        :return: the absolute path of the temporary directory
+        """
+        return "/tmp/"
+
+    #####################################################################
+    # RUN METHOD
+    #####################################################################
+
     def run(self, *args, cli_commands: List[str] = None, **kwargs):
         """
         Run the experiments for this template
@@ -470,18 +512,24 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         ###################################################
         # Configure log, if present
         ###################################################
-        self._configure_logging(self.__global_settings)
+        self._configure_logging(self.global_settings)
 
-        self.__colon = self._get_ks001_colon(self.__global_settings)
-        self.__pipe = self._get_ks001_pipe(self.__global_settings)
-        self.__underscore = self._get_ks001_underscore(self.__global_settings)
-        self.__equal = self._get_ks001_equal(self.__global_settings)
+        self.__colon = self._get_ks001_colon(self.global_settings)
+        self.__pipe = self._get_ks001_pipe(self.global_settings)
+        self.__underscore = self._get_ks001_underscore(self.global_settings)
+        self.__equal = self._get_ks001_equal(self.global_settings)
+
+        self.__tmp_directory = self._configure_tmp_directory(self.global_settings)
 
         with self._generate_filesystem_datasource(self.__global_settings) as self.__filesystem_datasource:
             # register csv in the filesystem
             self.__filesystem_datasource.register_resource_manager(
                 resource_type=r"csv",
                 manager=CsvFileSystemResourceManager()
+            )
+            self.__filesystem_datasource.register_resource_manager(
+                resource_type=r"eps",
+                manager=BinaryFileSystemResourceManager()
             )
             with self._generate_datasource(self.__global_settings) as self.__datasource:
 
@@ -490,6 +538,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 # ###################################################
                 logging.info("setupping filesystem output directory structure...")
                 self.setup_filesystem_datasource(self.filesystem_datasource, self.__global_settings)
+                self.setup_datasource(self.datasource, self.global_settings)
 
                 ###################################################
                 # generate all the possible values each option can have
@@ -867,6 +916,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                 csv_filter: Union[ICsvFilter, List[ICsvFilter]] = None,
                                 data_source: "IDataSource" = None,
                                 subtitle_function: "ISubtitleGenerator" = None,
+                                dest_datasource: "IDataSource" = None,
+                                dest_path: "IDataContainerPathGenerator" = None,
                                 ):
         """
         Gather all the possible combination test environments which are compliant with `user_tcm`. Then for each of them
@@ -925,6 +976,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             away test contexts depending entirely on the contents of the data source.
         :param data_source: the data source where we want to fetch the data. If None we will use the one generated by
             `_generate_datasource`;
+        :param dest_datasource: the datasource where this image will be saved into. If absent we will use the filesystem
+        :param dest_path: a function which will generate the path where the image will be saved into. If absent
+            we will use "images".
         """
 
         def get_empty_mask_options(te: "ITestEnvironment", tcm: "ITestContextMask", name: str, visited: List["ITestContextMask"]) -> Dict[str, Any]:
@@ -1009,6 +1063,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 x_aggregator=x_aggregator,
                 csv_filter=csv_filter,
                 data_source=data_source,
+                dest_datasource=dest_datasource,
+                dest_path=dest_path,
             )
             if result is False:
                 logging.warning(f"ignored since {tcm_to_use} has no compliant csvs!")
@@ -1139,6 +1195,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                     csv_filter: Union["ICsvFilter", List["ICsvFilter"]] = None,
                                     data_source: "IDataSource" = None,
                                     subtitle_function: "ISubtitleGenerator" = None,
+                                    dest_datasource: "IDataSource" = None,
+                                    dest_path: "IDataContainerPathGenerator" = None,
                                     ) -> bool:
         """
         Generate a single plot listing all the csvs compliant with the specifications in `test_context_template`
@@ -1185,6 +1243,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         representation of it. Useful when you want to alter how to print the label in the plot
         :param data_source: the data source where we want to fetch the data. If None we will use the one generated by
             `_generate_datasource`;
+        :param dest_datasource: the datasource where this image will be saved into. If absent we will use the filesystem
+        :param dest_path: a function which will generate the path where the image will be saved into. If absent
+            we will use "images".
         :return: True if we have generated an image, False otherwise
         """
 
@@ -1217,6 +1278,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             image_suffix=image_suffix,
             subtitle_function=subtitle_function,
             title=title,
+            dest_datasource=dest_datasource,
+            dest_path=dest_path
         )
         return True
 
@@ -1321,6 +1384,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             y_aggregator=y_aggregator,
             function_splitter=function_splitter,
             x_aggregator=x_aggregator,
+            data_source=data_source,
         )
 
         ############################
@@ -1482,6 +1546,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             global_lock = lock
             multiprocessing.current_process().name = f"csvPool{multiprocessing.current_process()._identity[0]:02d}"
 
+        logging.info(f"we're going to read from {data_source.name()}")
         # use as many processes as there are CPUs
         with multiprocessing.Pool(processes=os.cpu_count(), initializer=init_process, initargs=(multiprocessing.Value('i', 0), multiprocessing.Lock())) as pool:
             # set all the attributes which do not change as "fixed"
@@ -1714,6 +1779,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                       title: str,
                       image_suffix: KS001,
                       subtitle_function: "ISubtitleGenerator" = None,
+                      dest_datasource: "IDataSource" = None,
+                      dest_path: "IDataContainerPathGenerator" = None,
                       ):
         """
         Creates an image inside the file system datasource, under "images" folder
@@ -1726,6 +1793,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         :param title: title of the figure
         :param subtitle_function: a function from which we can obtain a subtitle
         :param image_suffix: a KS001 instance that will be appended to the KS001 generated by the test context mask
+        :param dest_datasource: the datasource where this image will be saved into. If absent we will use the filesystem
+        :param dest_path: a function which will generate the path where the image will be saved into. If absent
+            we will use "images".
         :return:
         """
 
@@ -1747,6 +1817,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         #     subtitle=DefaultText(subtitle_function(test_context_template)),
         #     create_subfigure_images=True,
         #     dictonary_to_add_information="image_infos",
+        # )
         # )
 
         subtitle_function = subtitle_function if subtitle_function is not None else DefaultSubtitleGenerator()
@@ -1774,12 +1845,33 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         d = d.append(image_suffix)
 
         # TODO we should be able to save images in a generic data_source as well
-        self.filesystem_datasource.make_folders("images")
-        plotter.save_image(
+        if dest_datasource is None:
+            dest_datasource = self.filesystem_datasource
+        if dest_path is None:
+            dest_path = FixedPathGenerator("images")
+
+        #TODO remove
+        # self.filesystem_datasource
+        # dest_datasource.make_folders("images")
+        images_generated: List[str, KS001Str, DataTypeStr] = plotter.save_image(
             image_name=d,
-            folder=self.filesystem_datasource.get_path("images"),
+            folder=self.tmp_directory,
             colon=self.__colon,
             pipe=self.__pipe,
             underscore=self.__underscore,
             equal=self.__equal,
         )
+
+        # now upload the image from the temporary directory to the datasource
+        for full_path, image_generated, data_type_generated in images_generated:
+            with open(full_path, "rb") as f:
+                content = f.read()
+            dest_datasource.save_at(
+                path=dest_path.fetch(test_context_template),
+                ks001=image_generated,
+                data_type=data_type_generated,
+                content=content
+            )
+            # remove the temporary file
+            os.unlink(full_path)
+            # just for testing

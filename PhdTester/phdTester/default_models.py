@@ -18,6 +18,14 @@ from phdTester.option_dicts import StandardOptionDict, DynamicOptionDict, Defaul
 
 
 class PhdFormatter(logging.Formatter):
+    """
+    A logging formatter allowing to tweak the log format as I want
+
+    What I want? the following:
+     - log level is encoded by the color of the log;
+     - the filename where the log comes from is truncated if too long
+
+    """
 
     def __init__(self, fmt=None, datefmt=None, style='%', colors_dict: Dict[str, Callable[[str], str]] = None, limit_filename_size: int = None):
         super().__init__(fmt, datefmt, style)
@@ -52,12 +60,18 @@ class PhdFormatter(logging.Formatter):
 
 
 class UpperBoundSlotValueFetcher(ISlotValueFetcher):
+    """
+    Slot value which always return the upperbound of an interval, regardless of its inclusion
+    """
 
     def fetch(self, lb: float, ub: float, lb_included: bool, ub_included: bool) -> float:
         return ub
 
 
 class MeanSlotValueFetcher(ISlotValueFetcher):
+    """
+    Slot value which always return the mean between lower and upper bound of an interval, regardles of their inclusions
+    """
 
     def fetch(self, lb: float, ub: float, lb_included: bool, ub_included: bool) -> float:
         return (lb + ub)/2
@@ -107,9 +121,27 @@ class CsvDataWriter(IDataWriter):
 
 
 class DefaultSubtitleGenerator(ISubtitleGenerator):
+    """
+    Subtitle generattor which generate a string containing all the mask options which have a well defined values
+    for the TestEnvironment
+    """
 
     def fetch(self, tcm: "ITestContextMask") -> str:
         return tcm.te.get_have_value_string(ignore_some_tcm_keys=[])
+
+
+class FixedPathGenerator(IDataContainerPathGenerator):
+    """
+    A path generator which will always return the given string, regardless of the ITestContextMask
+    """
+
+    __slots__ = ('__path', )
+
+    def __init__(self, path: PathStr):
+        self.__path = path
+
+    def fetch(self, tcm: "ITestContextMask") -> PathStr:
+        return self.__path
 
 
 class AbstractTestingGlobalSettings(IGlobalSettings, StandardOptionDict, abc.ABC):

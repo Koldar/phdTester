@@ -2,8 +2,9 @@ import abc
 import logging
 import math
 import os
-from typing import Iterable, Tuple, Optional, Any, Union
+from typing import Iterable, Tuple, Optional, Any, Union, List
 
+from phdTester import KS001Str, DataTypeStr
 from phdTester.ks001.ks001 import KS001
 
 
@@ -206,22 +207,23 @@ class IPlot2DGraph(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def save_image(self, image_filename_no_extension: Union[str, KS001], save_raw_data: bool, folder: str = None) -> Any:
+    def save_image(self, image_name: KS001, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> List[Tuple[str, KS001Str, DataTypeStr]]:
         """
         Generate the plot and saves it in the filesystem
 
         ::note
         this operation is time consuming
 
-        :param image_filename_no_extension: a structure representing the basename of the image to generate.
-            If it's a string we will use it as a basename to generate image related files. If it's a KS001
-            object we will use its dump
-        :param folder: the folder where we're going to save the image. The option is used only if
-            `image_filename_no_extension` is a relative path or when it is actually a KS001 object. Otherwise
-            it is ignored.
-        :param save_raw_data: if true we will create a CSV in the same directory of the image containing the data
-        related to the image. The name will be the same of the image associated but the extension will be csv.
-        :return:
+        :param image_name: a structure representing the basename of the image to generate.
+        :param folder: the folder where we're going to save the image.
+        :param colon: used by KS001
+        :param pipe: used by KS001
+        :param underscore: used by KS001
+        :param equal: used by KS001
+        :return: a list representing every image generated. each element in the list is a triple structure as follows:
+         - the asbolute filename of the image generated;
+         - the name of the image generated (this should be KS001 compliant);
+         - the extension of the image generated
         """
         pass
 
