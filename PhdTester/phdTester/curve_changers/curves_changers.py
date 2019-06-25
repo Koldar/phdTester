@@ -18,6 +18,53 @@ from phdTester.model_interfaces import ICurvesChanger, ITestContext, IFunctionsD
     ITestContextMask, ISlotValueFetcher
 
 
+class OverwriteFunctions(ICurvesChanger):
+    """
+    A curve changer that, no matter what input it receives, the output that will generated will always be the one
+    you've injected during the constructor of the changer.
+
+    :note: This changer is pretty useful in testing
+
+    You have 2 ways to easily generate the function dict to replace:
+
+    - by a csv. It needs to be structured like this:
+        X, FUN1, FUN2, FUN3
+        0, 3   , 5   , 8
+        1, 4   , 6   , 9
+        ...
+
+    - by python dictionary.
+    """
+
+    def __init__(self, function_dict: "IFunctionsDict"):
+        self.__function_dict = function_dict
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        return XAxisStatus.UNKNOWN, self.__function_dict
+
+    @classmethod
+    def from_file(self, csv_file: str, xaxis_name: str, function_names: List[str]):
+        df = pd.read_csv(csv_file, index_col=xaxis_name, names=function_names)
+        df.sort_index(inplace=True)
+        return OverwriteFunctions(DataFrameFunctionsDict.from_dataframe(df))
+
+    @classmethod
+    def from_dict(cls, xaxis: Iterable[float], functions: Dict[str, Iterable[float]]):
+        result = DataFrameFunctionsDict()
+        xaxis = list(xaxis)
+        for name, yvalues in functions.items():
+            yvalues = list(yvalues)
+            if len(xaxis) != len(yvalues):
+                raise ValueError(f"function {name} has {len(yvalues)} ys but the x axis is {len(xaxis)} element long!")
+            for x, y in zip(xaxis, yvalues):
+                result.update_function_point(name, x, y)
+
+        return OverwriteFunctions(result)
+
+
 class StandardTransformX(AbstractTransformX):
     """
     Transform each xaxis of each curve passed to this changes
