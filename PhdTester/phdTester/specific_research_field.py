@@ -1707,18 +1707,20 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             test_context=csv_info.tc,
             path=csv_info.path,
             name=csv_info.name,
+            ks001=csv_info.ks001,
             content=csv_dataframe,
             rowid=csv_row_index,
-            row=csv_outcome
+            row=csv_outcome,
         )
         y_value = get_y_value.fetch(
             factory=self,
             test_context=csv_info.tc,
             path=csv_info.path,
             name=csv_info.name,
+            ks001=csv_info.ks001,
             content=csv_dataframe,
             rowid=csv_row_index,
-            row=csv_outcome
+            row=csv_outcome,
         )
         check_x_y(x_value, y_value, csv_info.name, csv_row_index, csv_outcome)
 

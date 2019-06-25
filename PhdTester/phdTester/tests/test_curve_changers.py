@@ -6,11 +6,10 @@ from phdTester.curve_changers.curves_changers import CheckNoInvalidNumbers, Over
 
 class MyTestCase(unittest.TestCase):
 
-
     def test_CheckNoInvalidNumbers_01(self):
         _, fd = OverwriteFunctions.from_dict(
             xaxis=[1, 2, 3],
-            functions={"A": [3, 4, 5], "B":[6, 7, 8], "C": [9, 10, 11]}
+            functions={"A": [3, 4, 5], "B": [6, 7, 8], "C": [9, 10, 11]}
         ).alter_curves(None)
         CheckNoInvalidNumbers().alter_curves(fd)
 

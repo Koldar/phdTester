@@ -2806,7 +2806,7 @@ class IDataRowExtrapolator(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def fetch(self, factory: "AbstractSpecificResearchFieldFactory", test_context: "ITestContext", path: PathStr, name: "KS001Str", content: pd.DataFrame, rowid: int, row: "ICsvRow") -> float:
+    def fetch(self, factory: "AbstractSpecificResearchFieldFactory", test_context: "ITestContext", path: PathStr, name: "KS001Str", ks001: "KS001", content: pd.DataFrame, rowid: int, row: "ICsvRow") -> float:
         """
         Fetch a single data from a row inside a data container (e.g., csv)
 
