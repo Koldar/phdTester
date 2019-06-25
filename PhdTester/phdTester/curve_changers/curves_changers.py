@@ -9,7 +9,7 @@ import pandas as pd
 import dask.dataframe as dd
 
 from phdTester import commons, common_types
-from phdTester.common_types import SlottedClass
+from phdTester.common_types import SlottedClass, Interval
 from phdTester.curve_changers.shared_curves_changers import AbstractTransformX, AbstractTransformY
 from phdTester.default_models import UpperBoundSlotValueFetcher
 from phdTester.functions import DataFrameFunctionsDict
@@ -549,7 +549,7 @@ class QuantizeXAxis(ICurvesChanger):
     If a function has no points in a quantum, we will give it the value "NaN"
     """
 
-    def __init__(self, quantization_levels: List[float], merge_method: "aggregators.IAggregator", slot_value: "ISlotValueFetcher" = None):
+    def __init__(self, quantization_levels: List[float], quantization_intervals: List["Interval"], merge_method: "aggregators.IAggregator", slot_value: "ISlotValueFetcher" = None):
         """
         Initialize the quantization
 
@@ -572,7 +572,14 @@ class QuantizeXAxis(ICurvesChanger):
         """
         ICurvesChanger.__init__(self)
 
-        self.__quantization_levels = quantization_levels
+        if quantization_levels is not None and quantization_intervals is not None:
+            raise ValueError(f"quantization_levels and quantization_intervals are mutually exclusive!")
+        if quantization_levels is None and quantization_intervals is None:
+            raise ValueError(f"you need to specifiy either quantizartion_levels or quantization_intervals!")
+        if quantization_levels is not None:
+            self.__quantization_levels: List[Interval] = list(commons.get_interval_ranges(quantization_levels))
+        else:
+            self.__quantization_levels: List[Interval] = quantization_intervals
         self.__merge_method = merge_method
         self.__slot_value = slot_value or UpperBoundSlotValueFetcher()
 
@@ -582,11 +589,23 @@ class QuantizeXAxis(ICurvesChanger):
     def alter_curves(self, curves: "IFunctionsDict") -> Tuple[XAxisStatus, "IFunctionsDict"]:
         df = curves.to_dataframe()
 
+        #fetch the closeness
+        if self.__quantization_levels[0].lb_included and self.__quantization_levels[0].ub_included:
+            closed = 'both'
+        elif not self.__quantization_levels[0].lb_included and not self.__quantization_levels[0].ub_included:
+            closed = 'neither'
+        elif self.__quantization_levels[0].lb_included and not self.__quantization_levels[0].ub_included:
+            closed = 'left'
+        elif not self.__quantization_levels[0].lb_included and self.__quantization_levels[0].ub_included:
+            closed = 'right'
+        else:
+            raise ValueError(f"cannot determine interval ranges")
+
         # see https://stackoverflow.com/a/52872853/1887602
         # see https://stackoverflow.com/a/33761120/1887602
         grouped = df.groupby(pd.cut(
             x=df.index,
-            bins=pd.IntervalIndex.from_tuples(list(commons.get_interval_ranges(self.__quantization_levels))),
+            bins=pd.IntervalIndex.from_tuples(map(lambda i: (i.lb, i.ub), self.__quantization_levels), closed=closed),
         ))
         # groups index is composed by intervals
 

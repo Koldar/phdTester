@@ -17,10 +17,11 @@ from typing import Any, Iterable, Callable, Union, Dict, Tuple, List
 import pandas
 import string_utils
 
+from phdTester.common_types import Interval
 from phdTester.exceptions import ExternalProgramFailureError
 
 
-def get_interval_ranges(levels: List[float]) -> Iterable[Tuple[float, float]]:
+def get_interval_ranges(levels: List[float]) -> Iterable["Interval"]:
     """
     Generate ranges of pairs starting from a flat list.
 
@@ -32,7 +33,7 @@ def get_interval_ranges(levels: List[float]) -> Iterable[Tuple[float, float]]:
     :param levels: the numbers involve din the ranges to generate
     :return: iterable representing the ranges
     """
-    yield from zip(levels[:-1], levels[1:])
+    yield from map(lambda pair: Interval(pair[0], pair[1], True, False), zip(levels[:-1], levels[1:]))
 
 def direct_call_or_method_call(obj, fallback_method_name: str, *args, **kwargs) -> Any:
     """
