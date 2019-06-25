@@ -256,33 +256,3 @@ class IPlot2DGraph(abc.ABC):
     @abc.abstractmethod
     def grid(self) -> "IGrid":
         pass
-
-    def _save_raw_data(self, csv_filename_no_extension: str):
-        csv_filename = f"{csv_filename_no_extension}.csv"
-        try:
-            os.remove(csv_filename)
-        except OSError:
-            pass
-
-        with open(csv_filename, "w") as f:
-            f.write("LABEL,X,Y\n")
-            for i, x in enumerate(self.xaxis):
-
-                old_values = {}
-                for j, p in enumerate(self.plots()):
-                    try:
-                        if self.xaxis.linear:
-                            xvalue = x
-                        else:
-                            if p.label.text not in old_values:
-                                old_values[p.label.text] = 0
-                            xvalue = old_values[p.label.text] + x
-
-                        if self.yaxis.identity:
-                            yvalue = p[i]
-                        else:
-                            yvalue = math.log10(p[i])
-
-                        f.write(f"{p.label.text},{xvalue},{yvalue}\n")
-                    except ValueError:
-                        logging.debug(f"skip value {x};{p[i]}: possible because of log?")

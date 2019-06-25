@@ -92,7 +92,7 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
     def plots_map(self) -> Iterable[Tuple[IAxis, ISinglePlot]]:
         return {p.label: p for p in self._plots}
 
-    def save_image(self, image_name: KS001, save_raw_data: bool, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Any:
+    def save_image(self, image_name: KS001, folder: str = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Any:
         """
 
         :param image_filename_no_extension:
@@ -176,6 +176,10 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
             labels, lines = plot_figure.save_image(
                 image_name=sub_image,
                 folder=folder,
+                colon=colon,
+                pipe=pipe,
+                underscore=underscore,
+                equal=equal
             )
 
             if i == 0:
@@ -209,6 +213,10 @@ class FourMatplotLibPlot2DGraph(IPlot2DGraph):
                 single_figure.save_image(
                     image_name=single_image,
                     folder=folder,
+                    colon=colon,
+                    pipe=pipe,
+                    underscore=underscore,
+                    equal=equal
                 )
 
 
