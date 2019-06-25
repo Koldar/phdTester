@@ -6,6 +6,7 @@ import subprocess
 import pandas as pd
 import phdTester as phd
 from phdTester.common_types import PathStr, DataTypeStr
+from phdTester.datasources.mysql_sources import MySqlDataSource, MySqlASCIIResourceManager, MySqlBinaryResourceManager
 from phdTesterExample import supports
 from phdTesterExample.models import SortSettings, SortEnvironment, SortAlgorithm, SortTestContext, SortAlgorithmMask, \
     SortEnvironmentMask, SortTestContextMask, PerformanceCsvRow
@@ -51,6 +52,23 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         ).add_default_settings(
         ).get_option_graph()
 
+    def _generate_datasource(self, settings: "IGlobalSettings") -> "IDataSource":
+        datasource = MySqlDataSource(
+            host_name="127.0.0.1",
+            database_name="sortTest",
+            username="root",
+            password="root",
+        )
+        datasource.register_resource_manager(
+            resource_type="csv",
+            manager=MySqlASCIIResourceManager(),
+        )
+        datasource.register_resource_manager(
+            resource_type="eps",
+            manager=MySqlBinaryResourceManager()
+        )
+        return datasource
+
     def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.filesystem.FileSystem":
         result = phd.filesystem.FileSystem(root=settings.buildDirectory)
 
@@ -60,6 +78,9 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         filesystem.make_folders("images")
         filesystem.make_folders("csvs")
         filesystem.make_folders("cwd")
+
+    def setup_datasource(self, datasource: "phd.IDataSource", settings: "SortSettings"):
+        datasource.clear()
 
     def generate_environment(self) -> "phd.ITestEnvironment":
         return SortEnvironment()
@@ -164,16 +185,16 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         user_tcm.te.sequenceSize = phd.masks.CannotBeNull()
         user_tcm.te.run = phd.masks.CannotBeNull()
 
-        self.generate_curves_csvs(
-            get_x_value=supports.RunId(),
-            get_y_value=supports.Time(),
-            y_aggregator=phd.aggregators.MeanAggregator(),
-            user_tcm=user_tcm,
-            ks001_to_add=phd.KS001.single_labelled("csvGenerated", type="time-over-runid"),
-            use_format='wide',
-            csv_dest_data_source=self.filesystem_datasource,
-            csv_dest_path='generatedCsvs',
-        )
+        # self.generate_curves_csvs(
+        #     get_x_value=supports.RunId(),
+        #     get_y_value=supports.Time(),
+        #     y_aggregator=phd.aggregators.MeanAggregator(),
+        #     user_tcm=user_tcm,
+        #     ks001_to_add=phd.KS001.single_labelled("csvGenerated", type="time-over-runid"),
+        #     use_format='wide',
+        #     csv_dest_data_source=self.filesystem_datasource,
+        #     csv_dest_path='generatedCsvs',
+        # )
 
         self.generate_batch_of_plots(
             xaxis_name="run id",
@@ -184,6 +205,9 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             y_aggregator=phd.aggregators.MeanAggregator(),
             image_suffix=phd.KS001.single_labelled("image", type="time-over-runid-several-sequence-size"),
             user_tcm=user_tcm,
+            data_source=self.filesystem_datasource,
+            dest_datasource=self.datasource,
+            dest_path=phd.default_models.FixedPathGenerator("qwerty"),
         )
 
     def generate_csvs(self, settings: "phd.IGlobalSettings",
