@@ -18,6 +18,59 @@ from phdTester.model_interfaces import ICurvesChanger, ITestContext, IFunctionsD
     ITestContextMask, ISlotValueFetcher
 
 
+class CheckFunctions(ICurvesChanger):
+    """
+    A curve changer that checks if the actual input cxorrespond on an excepted one
+    """
+
+    def __init__(self, function_dict: "IFunctionsDict"):
+        self.__function_dict = function_dict
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        expected_xaxis = list(self.__function_dict.xaxis())
+        actual_xaxis = list(curves.xaxis())
+
+        if expected_xaxis != actual_xaxis:
+            raise ValueError(f"xaxis do not match!")
+
+        expected_names = set(self.__function_dict.function_names())
+        actual_names = set(curves.function_names())
+
+        if expected_names != actual_names:
+            raise ValueError(f"function names do not match!")
+
+        for name in expected_names:
+            for x in expected_xaxis:
+                expected_y = self.__function_dict.get_function_y(name, x)
+                actual_y = curves.get_function_y(name, x)
+                if expected_y != actual_y:
+                    raise ValueError(f"Expected <{name}, {x}, {expected_y}> but got <{name}, {x}, {actual_y}>")
+
+        return XAxisStatus.UNALTERED, curves
+
+    @classmethod
+    def from_file(self, csv_file: str, xaxis_name: str, function_names: List[str]):
+        df = pd.read_csv(csv_file, index_col=xaxis_name, names=function_names)
+        df.sort_index(inplace=True)
+        return OverwriteFunctions(DataFrameFunctionsDict.from_dataframe(df))
+
+    @classmethod
+    def from_dict(cls, xaxis: Iterable[float], functions: Dict[str, Iterable[float]]):
+        result = DataFrameFunctionsDict()
+        xaxis = list(xaxis)
+        for name, yvalues in functions.items():
+            yvalues = list(yvalues)
+            if len(xaxis) != len(yvalues):
+                raise ValueError(f"function {name} has {len(yvalues)} ys but the x axis is {len(xaxis)} element long!")
+            for x, y in zip(xaxis, yvalues):
+                result.update_function_point(name, x, y)
+
+        return OverwriteFunctions(result)
+
+
 class OverwriteFunctions(ICurvesChanger):
     """
     A curve changer that, no matter what input it receives, the output that will generated will always be the one
