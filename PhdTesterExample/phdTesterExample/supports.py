@@ -1,6 +1,17 @@
+from typing import Dict
+
 import phdTester as phd
 import pandas as pd
 from phdTester.common_types import PathStr, DataTypeStr
+from phdTester.model_interfaces import IDataRowConverter
+from phdTesterExample.models import PerformanceCsvRow
+
+
+class SortPerformanceCsv(IDataRowConverter):
+
+    def get_csv_row(self, d: Dict[str, str], path: "phd.PathStr", name: "phd.KS001Str", ks001: "phd.KS001",
+                    data_type: "phd.DataTypeStr") -> "phd.ICsvRow":
+        return PerformanceCsvRow()
 
 
 class RunId(phd.IDataRowExtrapolator):

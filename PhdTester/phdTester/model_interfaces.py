@@ -2787,6 +2787,67 @@ class IDataContainerPathGenerator(abc.ABC):
         pass
 
 
+class IDataRowConverter(abc.ABC):
+    """
+    Represents an object which converts the data obtained by looking at a single row in a data container and converts it
+    in a human readable object
+
+    For example, assume your data container is a csv structures as follows:
+
+    ```
+    X,NAME1,NAME2,NAME3,VALUE
+    1,2,3,4,5
+    ...
+    ```
+
+    The software for each csv row will generate a dictionary, like:
+
+    ```
+    X=1
+    NAME1=2
+    NAME2=3
+    NAME3=4
+    VALUE=5
+    ```
+
+    Normally you could simply use this dictionary for your uses, but programmer are more comfortable with
+    object with well defined properties, such as:
+
+    ```
+    class MyRow(object):
+        __slots__ = ('x', 'name1', 'name2, 'name3', 'value')
+
+       def __init__(self, d):
+           self.x = None
+           self.name1 = None
+           self.name2 = None
+           self.name3 = None
+           self.value = None
+    ```
+
+    the object which generates an empty instance of `MyRow` is an instance of this class.
+
+    """
+
+    @abc.abstractmethod
+    def get_csv_row(self, d: Dict[str, str], path: "PathStr", name: "KS001Str", ks001: "KS001", data_type: "DataTypeStr") -> "ICsvRow":
+        """
+        fetch a structure representing a row inside a CSV
+
+        ::note
+        you can return different version of ICSVRow, depending on the fields presents in the row
+        (via `d`) or via the csv name (thanks `ks_csv`)
+
+        :param d: dictionary containing the row values, mapped by header name
+        :param path: the path of the data container fetched
+        :param name: the name of the data container fetched
+        :param ks001: the KS001 instance representing the name of the data container fetched
+        :param data_type: the data type of the data container fetched
+        :return: an instance representing the csv row
+        """
+        pass
+
+
 class IDataRowExtrapolator(abc.ABC):
     """
     Represents an instance allowing you to fetch a data starting from a data row inside a data container (e.g., csv).

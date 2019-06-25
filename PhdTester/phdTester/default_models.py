@@ -8,12 +8,13 @@ import pandas as pd
 import string_utils
 from colors import colors
 
+from phdTester.ks001.ks001 import KS001
 from phdTester import commons
-from phdTester.common_types import PathStr
+from phdTester.common_types import PathStr, DataTypeStr, KS001Str
 from phdTester.model_interfaces import ITestContextRepo, ITestContext, ITestContextMask, ITestContextRepoView, \
     IOptionDict, IStuffUnderTest, ITestEnvironment, IStuffUnderTestMask, ITestEnvironmentMask, \
     IGlobalSettings, ICsvRow, IDataWriter, IFunctionsDict, IDataContainerPathGenerator, ISubtitleGenerator, \
-    ISlotValueFetcher
+    ISlotValueFetcher, IDataRowConverter
 from phdTester.option_dicts import StandardOptionDict, DynamicOptionDict, DefaultAnonymuousOptionObject
 
 
@@ -142,6 +143,17 @@ class FixedPathGenerator(IDataContainerPathGenerator):
 
     def fetch(self, tcm: "ITestContextMask") -> PathStr:
         return self.__path
+
+
+class IdentityDataRowConverter(IDataRowConverter):
+    """
+    Generates a DefaultCSVRow object which simply allows you to access the dictionary of the data row
+    as you were calling instance fields.
+    """
+
+    def get_csv_row(self, d: Dict[str, str], path: "PathStr", name: "KS001Str", ks001: "KS001",
+                    data_type: "DataTypeStr") -> "ICsvRow":
+        return DefaultCSVRow()
 
 
 class AbstractTestingGlobalSettings(IGlobalSettings, StandardOptionDict, abc.ABC):
@@ -288,6 +300,14 @@ class AbstractTestContext(ITestContext, abc.ABC):
 
 class DefaultTestContext(ITestContext):
 
+    @property
+    def ut(self) -> "IStuffUnderTest":
+        return self._ut
+
+    @property
+    def te(self) -> "ITestEnvironment":
+        return self._te
+
     def __init__(self, ut: IStuffUnderTest, te: ITestEnvironment):
         ITestContext.__init__(self, ut, te)
 
@@ -354,6 +374,13 @@ class AbstractCSVRow(ICsvRow, StandardOptionDict, abc.ABC):
     def __init__(self):
         ICsvRow.__init__(self)
         StandardOptionDict.__init__(self)
+
+
+class DefaultCSVRow(ICsvRow, DefaultAnonymuousOptionObject):
+
+    def __init__(self):
+        ICsvRow.__init__(self)
+        DefaultAnonymuousOptionObject.__init__(self, fields=[])
 
 
 class SimpleTestContextRepoView(ITestContextRepoView):

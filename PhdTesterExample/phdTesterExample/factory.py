@@ -10,6 +10,7 @@ from phdTester.datasources.mysql_sources import MySqlDataSource, MySqlASCIIResou
 from phdTesterExample import supports
 from phdTesterExample.models import SortSettings, SortEnvironment, SortAlgorithm, SortTestContext, SortAlgorithmMask, \
     SortEnvironmentMask, SortTestContextMask, PerformanceCsvRow
+from phdTesterExample.supports import SortPerformanceCsv
 
 
 class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
@@ -53,21 +54,22 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         ).get_option_graph()
 
     def _generate_datasource(self, settings: "IGlobalSettings") -> "IDataSource":
-        datasource = MySqlDataSource(
-            host_name="127.0.0.1",
-            database_name="sortTest",
-            username="root",
-            password="root",
-        )
-        datasource.register_resource_manager(
-            resource_type="csv",
-            manager=MySqlASCIIResourceManager(),
-        )
-        datasource.register_resource_manager(
-            resource_type="eps",
-            manager=MySqlBinaryResourceManager()
-        )
-        return datasource
+        # datasource = MySqlDataSource(
+        #     host_name="127.0.0.1",
+        #     database_name="sortTest",
+        #     username="root",
+        #     password="root",
+        # )
+        # datasource.register_resource_manager(
+        #     resource_type="csv",
+        #     manager=MySqlASCIIResourceManager(),
+        # )
+        # datasource.register_resource_manager(
+        #     resource_type="eps",
+        #     manager=MySqlBinaryResourceManager()
+        # )
+        # return datasource
+        return self.filesystem_datasource
 
     def _generate_filesystem_datasource(self, settings: "SortSettings") -> "phd.filesystem.FileSystem":
         result = phd.filesystem.FileSystem(root=settings.buildDirectory)
@@ -80,7 +82,8 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
         filesystem.make_folders("cwd")
 
     def setup_datasource(self, datasource: "phd.IDataSource", settings: "SortSettings"):
-        datasource.clear()
+        # datasource.clear()
+        pass
 
     def generate_environment(self) -> "phd.ITestEnvironment":
         return SortEnvironment()
@@ -208,6 +211,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             data_source=self.filesystem_datasource,
             dest_datasource=self.datasource,
             dest_path=phd.default_models.FixedPathGenerator("qwerty"),
+            data_row_converter=SortPerformanceCsv(),
         )
 
     def generate_csvs(self, settings: "phd.IGlobalSettings",
@@ -218,11 +222,6 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
                         tests_performed: "phd.ITestContextRepo", under_test_values: Dict[str, List[Any]],
                         test_environment_values: Dict[str, List[Any]]):
         pass
-
-    # TODO allows multiple csv rows. This should be done by removing this method
-    def get_csv_row(self, d: Dict[str, str], ks_csv: "phd.KS001") -> "PerformanceCsvRow":
-        result = PerformanceCsvRow()
-        return result
 
 
 def main():

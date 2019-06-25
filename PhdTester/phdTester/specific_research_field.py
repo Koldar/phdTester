@@ -21,7 +21,8 @@ from phdTester.datasources import filesystem_sources
 from phdTester.datasources.filesystem_sources import CsvFileSystemResourceManager, BinaryFileSystemResourceManager
 from phdTester.default_models import SimpleTestContextRepo, \
     DefaultGlobalSettings, DefaultTestEnvironment, DefaultStuffUnderTest, DefaultTestContext, DefaultStuffUnderTestMask, \
-    DefaultTestEnvironmentMask, DefaultTestContextMask, DefaultSubtitleGenerator, PhdFormatter, FixedPathGenerator
+    DefaultTestEnvironmentMask, DefaultTestContextMask, DefaultSubtitleGenerator, PhdFormatter, FixedPathGenerator, \
+    IdentityDataRowConverter
 from phdTester.exceptions import ValueToIgnoreError, IgnoreCSVRowError
 from phdTester.functions import DataFrameFunctionsDict
 from phdTester.image_computer import aggregators
@@ -30,7 +31,7 @@ from phdTester.model_interfaces import ITestEnvironment, IStuffUnderTest, ITestC
     ICsvRow, OptionBelonging, AbstractOptionNode, ITestContextMask, \
     IAggregator, ITestContextRepo, ITestContextMaskOption, ICurvesChanger, \
     ITestEnvironmentMask, IStuffUnderTestMask, IFunctionSplitter, ICsvFilter, IDataSource, IFunctionsDict, \
-    IDataRowExtrapolator, IDataContainerPathGenerator, ISubtitleGenerator, Priority, XAxisStatus
+    IDataRowExtrapolator, IDataContainerPathGenerator, ISubtitleGenerator, Priority, XAxisStatus, IDataRowConverter
 from phdTester.options_builder import OptionGraph
 from phdTester.path_generators import CsvDataContainerPathGenerator
 from phdTester.plotting import matplotlib_plotting
@@ -416,21 +417,6 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         """
         pass
 
-    @abc.abstractmethod
-    def get_csv_row(self, d: Dict[str, str], ks_csv: "KS001") -> "ICsvRow":
-        """
-        fetch a structure representing a row inside a CSV
-
-        ::note
-        you can return different version of ICSVRow, depending on the fields presents in the row
-        (via `d`) or via the csv name (thanks `ks_csv`)
-
-        :param d: dictionary containing the row values, mapped by header name
-        :param ks_csv: a structure representing the csv filename
-        :return: an instance representing the csv row
-        """
-        pass
-
     def _configure_logging(self, settings: "IGlobalSettings"):
         """
         Sequence of step to configure the log
@@ -735,6 +721,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                              csv_filter: Union[ICsvFilter, List[ICsvFilter]] = None,
                              data_source: "IDataSource" = None,
                              skip_if_csv_already_exist: bool = False,
+                             data_row_converter: "IDataRowConverter" = None,
                              ):
 
         def get_empty_mask_options(te: "ITestEnvironment", tcm: "ITestContextMask", name: str, visited: List["ITestContextMask"]) -> Dict[str, Any]:
@@ -825,6 +812,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 csv_filter=csv_filter,
                 data_source=data_source,
                 path_function=path_function,
+                data_row_converter=data_row_converter,
             )
 
             if len(functions_to_print) == 0:
@@ -919,6 +907,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                 subtitle_function: "ISubtitleGenerator" = None,
                                 dest_datasource: "IDataSource" = None,
                                 dest_path: "IDataContainerPathGenerator" = None,
+                                data_row_converter: "IDataRowConverter" = None,
                                 ):
         """
         Gather all the possible combination test environments which are compliant with `user_tcm`. Then for each of them
@@ -979,6 +968,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             `_generate_datasource`;
         :param dest_datasource: the datasource where this image will be saved into. If absent we will use the filesystem
         :param dest_path: a function which will generate the path where the image will be saved into. If absent
+        :param data_row_converter: object that will generate an instance of ICsvRow
             we will use "images".
         """
 
@@ -1066,6 +1056,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 data_source=data_source,
                 dest_datasource=dest_datasource,
                 dest_path=dest_path,
+                data_row_converter=data_row_converter,
             )
             if result is False:
                 logging.warning(f"ignored since {tcm_to_use} has no compliant csvs!")
@@ -1198,6 +1189,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                     subtitle_function: "ISubtitleGenerator" = None,
                                     dest_datasource: "IDataSource" = None,
                                     dest_path: "IDataContainerPathGenerator" = None,
+                                    data_row_converter: "IDataRowConverter" = None,
                                     ) -> bool:
         """
         Generate a single plot listing all the csvs compliant with the specifications in `test_context_template`
@@ -1261,6 +1253,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             csv_filter=csv_filter,
             data_source=data_source,
             path_function=path_function,
+            data_row_converter=data_row_converter,
         )
 
         if len(functions_to_print) == 0:
@@ -1295,6 +1288,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                          x_aggregator: IAggregator = None,
                          csv_filter: Union["ICsvFilter", List["ICsvFilter"]] = None,
                          data_source: "IDataSource" = None,
+                         data_row_converter: "IDataRowConverter" = None,
                          ) -> "IFunctionsDict":
         """
         Generate a "IFunctionsDict" which can be used for other objectives, like printing it in an image or in a csv
@@ -1337,6 +1331,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         :param data_source: the data source where we want to fetch the data. If None we will use the one generated by
             `_generate_datasource`;
         :param path_function: the path in the datasource where to look for csvs to read. Default to 'csvs'
+        :param data_row_converter: an object whose job is to convert a data row into an object human readable.
+            If None we won't do anything at all
         :return: a structure containing all the functions to print if the computation was successful
             an empty dictionary otherwise. The generated functions has all the same xaxis
         """
@@ -1386,6 +1382,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             function_splitter=function_splitter,
             x_aggregator=x_aggregator,
             data_source=data_source,
+            data_row_converter=data_row_converter,
         )
 
         ############################
@@ -1475,6 +1472,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                          function_splitter: IFunctionSplitter = None,
                                          x_aggregator: IAggregator = None,
                                          data_source: "IDataSource" = None,
+                                         data_row_converter: "IDataRowConverter" = None,
                                          ) -> "IFunctionsDict":
         """
         Compute a particular measurement over a well specific column in the csv
@@ -1506,7 +1504,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             (e.g., summing them) then you can use this field tov aggregate. Note: this field is actually a template; we
             will use `clone` method to generate the actual aggregator
         :param data_source: the data source we will poll for the csv data in csvs_contexts. If None we will use the default datasource
-        :param parallelize_csv: if you want to create different tasks each processing a whole csv
+        :param data_row_converter: the object whose work  i to conver t a dictioanry into an ICsvRow.
+            If None we will not doing anything
         :return: a dictionary where the keys are the label of the stuff under test while the values are dictionary where the key
             are the x values of a function and the values are the y values of a function
         """
@@ -1559,6 +1558,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                                             function_splitter=function_splitter,
                                             x_aggregator=x_aggregator,
                                             y_aggregator=y_aggregator,
+                                            data_row_converter=data_row_converter,
             )
             csv_functions: List["IFunctionsDict"] = pool.starmap(
                 process_csv,
@@ -1570,77 +1570,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         # by aggregating the partial results. see https://stackoverflow.com/a/19490199/1887602
         return y_aggregator.with_pandas(csv_functions)
 
-
-
-        # for csv_number, csv_info in enumerate(sorted(csv_contexts, key=lambda x: x.tc.ut.get_label())):
-        #     assert isinstance(csv_info.tc, ITestContext)
-        #     logging.info(f"reading csv #{csv_number} out of {csv_numbers} ({float(100* csv_number/csv_numbers):2.1f}) {csv_info.name}")
-        #
-        #     # what are we testing?
-        #     # we can have multiple for loops where the under_test_key do not change
-        #     current_function_label = csv_info.tc.ut.get_label()
-        #     logging.debug(f"generating values for stuff under test {current_function_label}")
-        #
-        #     # fetch data from CSV
-        #     csv_content: str = data_source.get(csv_info.path, csv_info.name, 'csv')
-        #     # read csv with pandas
-        #     csv_dataframe = pd.read_csv(io.StringIO(csv_content))
-        #     for i, (_, d) in enumerate(csv_dataframe.iterrows()):
-        #         # force the creation of a dictionary from the pandas data structures
-        #         d = {k: d[k] for k in d.keys()}
-        #         csv_outcome = self.get_csv_row(d, csv_info.ks001)
-        #         csv_outcome.set_options(d)
-        #         try:
-        #             x_value = float(get_x_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome))
-        #             y_value = float(get_y_value.fetch(csv_info.tc, csv_info.path, csv_info.name, csv_dataframe, i, csv_outcome))
-        #             check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
-        #         except IgnoreCSVRowError:
-        #             # this data needs to be ignored
-        #             continue
-        #
-        #         if function_splitter is not None:
-        #             # a function splitter may redirect the just computed value into another function or, even better
-        #             # a new one
-        #             x_value, y_value, function_label = function_splitter.fetch_function(
-        #                 x=x_value,
-        #                 y=y_value,
-        #                 under_test_function_key=current_function_label,
-        #                 csv_tc=csv_info.tc,
-        #                 csv_name=csv_info.name,
-        #                 csv_ks001=csv_info.ks001,
-        #                 i=i,
-        #                 csv_outcome=csv_outcome,
-        #             )
-        #             check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
-        #         else:
-        #             function_label = current_function_label
-        #
-        #         # the function may have changed. Check it and create it if necessary
-        #         # creating a new function, if needed
-        #         if function_label not in functions_to_draw:
-        #             functions_to_draw[function_label] = FunctionData(
-        #                 name=function_label,
-        #                 x_aggregator=x_aggregator.clone(),
-        #                 y_aggregator=y_aggregator.clone(),
-        #             )
-        #
-        #         # handle x
-        #         x_value = functions_to_draw[function_label].x_aggregator.aggregate(x_value)
-        #         check_x_y(x_value, y_value, csv_info.name, i, csv_outcome)
-        #         # handle y
-        #         if x_value not in functions_to_draw[function_label].y_aggregator_per_x:
-        #             functions_to_draw[function_label].y_aggregator_per_x[x_value] = functions_to_draw[function_label].y_aggregator.clone()
-        #         y_value = functions_to_draw[function_label].y_aggregator_per_x[x_value].aggregate(y_value)
-        #         if y_value is None:
-        #             raise ValueError(f"value associated to {x_value} cannot be null for function {functions_to_draw}")
-        #
-        #         result.update_function_point(function_label, x_value, y_value)
-        #
-        #     functions_to_draw[function_label].x_aggregator.reset()
-
-        return result
-
-    def _generate_functions_dict_from_csv(self, csv_number: int, csv_info: GetSuchInfo, csv_numbers: int, data_source: "IDataSource", get_x_value: "IDataRowExtrapolator", get_y_value: "IDataRowExtrapolator", function_splitter: "IFunctionSplitter", x_aggregator: "aggregators.IAggregator", y_aggregator: "aggregators.IAggregator") -> "IFunctionsDict":
+    def _generate_functions_dict_from_csv(self, csv_number: int, csv_info: GetSuchInfo, csv_numbers: int, data_source: "IDataSource", get_x_value: "IDataRowExtrapolator", get_y_value: "IDataRowExtrapolator", function_splitter: "IFunctionSplitter", x_aggregator: "aggregators.IAggregator", y_aggregator: "aggregators.IAggregator", data_row_converter: "IDataRowConverter") -> "IFunctionsDict":
 
         assert isinstance(csv_info.tc, ITestContext)
         with global_lock:
@@ -1651,6 +1581,9 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         result = DataFrameFunctionsDict()
         functions_to_draw: Dict[str, "AbstractSpecificResearchFieldFactory.FunctionData"] = {}
+
+        if data_row_converter is None:
+            data_row_converter = IdentityDataRowConverter()
 
         # what are we testing?
         # we can have multiple for loops where the under_test_key do not change
@@ -1676,6 +1609,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                     functions_to_draw=functions_to_draw,
                     x_aggregator=x_aggregator,
                     y_aggregator=y_aggregator,
+                    data_row_converter=data_row_converter,
                 )
             except IgnoreCSVRowError:
                 # this data needs to be ignored
@@ -1683,11 +1617,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             else:
                 result.update_function_point(function_label, x_value, y_value)
 
-
         # TODO remove since x aggregator is trashed wawy functions_to_draw[function_label].x_aggregator.reset()
         return result
 
-    def __handle_csv_row(self, csv_row_index: int, csv_row_data: Dict[str, Any], csv_info: "GetSuchInfo", csv_dataframe: pd.DataFrame, get_x_value: "IDataRowExtrapolator", get_y_value: "IDataRowExtrapolator", function_splitter: "IFunctionSplitter", current_function_label: str, functions_to_draw: Dict[str, FunctionData], x_aggregator: "aggregators.IAggregator", y_aggregator: "aggregators.IAggregator") -> Tuple[str, float, float]:
+    def __handle_csv_row(self, csv_row_index: int, csv_row_data: Dict[str, Any], csv_info: "GetSuchInfo", csv_dataframe: pd.DataFrame, get_x_value: "IDataRowExtrapolator", get_y_value: "IDataRowExtrapolator", function_splitter: "IFunctionSplitter", current_function_label: str, functions_to_draw: Dict[str, FunctionData], x_aggregator: "aggregators.IAggregator", y_aggregator: "aggregators.IAggregator", data_row_converter: "IDataRowConverter") -> Tuple[str, float, float]:
 
         def check_x_y(x: float, y: float, csv_name: KS001Str, i: int, csv_outcome: "ICsvRow"):
             if x is None:
@@ -1699,7 +1632,13 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         # force the creation of a dictionary from the pandas data structures
         csv_row_data = {k: csv_row_data[k] for k in csv_row_data.keys()}
-        csv_outcome = self.get_csv_row(csv_row_data, csv_info.ks001)
+        csv_outcome = data_row_converter.get_csv_row(
+            d=csv_row_data,
+            path=csv_info.path,
+            name=csv_info.name,
+            ks001=csv_info.ks001,
+            data_type=csv_info.type,
+        )
         csv_outcome.set_options(csv_row_data)
 
         x_value = get_x_value.fetch(

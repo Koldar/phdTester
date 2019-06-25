@@ -1,5 +1,6 @@
 import abc
 import io
+import logging
 import os
 import shutil
 from typing import Iterable, Tuple, Any, List, Dict
@@ -20,6 +21,7 @@ class FileSystem(IDataSource):
         self.root = os.path.abspath(root)
 
     def __enter__(self) -> "IDataSource":
+        self.make_folders(self.root)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -30,6 +32,7 @@ class FileSystem(IDataSource):
 
     def clear(self):
         shutil.rmtree(self.root)
+        self.make_folders(self.root)
 
     def get_path(self, *p: str) -> str:
         """
@@ -47,7 +50,9 @@ class FileSystem(IDataSource):
         :return:
         """
 
-        os.makedirs(os.path.abspath(os.path.join(self.root, *p)), exist_ok=True)
+        folder = os.path.abspath(os.path.join(self.root, *p))
+        logging.info(f"creating directory {folder}...")
+        os.makedirs(folder,  exist_ok=True)
 
 
 class AbstractFileSystemResourceManager(IResourceManager, abc.ABC):
