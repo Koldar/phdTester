@@ -1416,6 +1416,29 @@ class IFunctionsDict(abc.ABC):
         """
         pass
 
+    def is_equal(self, xaxis: List[float], d: "Dict[str, List[float]]") -> bool:
+        """
+        check if the given IFunctionDict is equal to a human readable version of it
+
+        :note: function really useful when testing
+
+        :param xaxis: the shared xaxis of every function in d
+        :param d: a dictionary representing the function values
+        :return: true if the IFunctionsDict is the same as the given one, false otherwise
+        """
+
+        xaxis = list(xaxis)
+        for name, values in d.items():
+            values = list(values)
+            if len(xaxis) != len(values):
+                raise ValueError(f"xaxis has a different length against values")
+            for x, y in zip(xaxis, values):
+                actual_y = self.get_function_y(name, x)
+                if actual_y != y:
+                    return False
+        else:
+            return True
+
     def xaxis_ordered(self) -> Iterable[float]:
         """
         yields all the x value such that at least one function is defined in such x point.
