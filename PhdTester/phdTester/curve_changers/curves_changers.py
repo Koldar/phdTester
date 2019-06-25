@@ -460,7 +460,7 @@ class CheckNoInvalidNumbers(ICurvesChanger):
     def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
         df = curves.to_dataframe()
         ddf: dd.DataFrame = dd.from_pandas(df, npartitions=os.cpu_count())
-        if ddf.mask(np.isnan(ddf) | np.isinf(ddf)).any().compute():
+        if ddf.where(np.isnan(ddf) | np.isinf(ddf)).any().compute().any():
             raise ValueError(f"a cell in curves is either NaN, +infinite or -infinite!")
         return XAxisStatus.UNALTERED, curves
 
