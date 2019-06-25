@@ -527,6 +527,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 resource_type=r"csv",
                 manager=CsvFileSystemResourceManager()
             )
+            # register eps in the filesystem (the user wants to save images)
             self.__filesystem_datasource.register_resource_manager(
                 resource_type=r"eps",
                 manager=BinaryFileSystemResourceManager()
@@ -1872,6 +1873,5 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 data_type=data_type_generated,
                 content=content
             )
-            # remove the temporary file
+            # remove the temporary file image
             os.unlink(full_path)
-            # just for testing
