@@ -2347,6 +2347,21 @@ class IDataSource(abc.ABC):
         return self.get_manager_of(data_type).get(self, path, ks001, data_type)
 
     def get_all(self, path: PathStr = None, data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '=') -> Iterable[Tuple[PathStr, KS001Str, DataTypeStr]]:
+        """
+        Iterate over all the resources stored in this datasource
+
+        :param path: path where to fetch the resources from. If None, we will iterate over all the available
+        paths in the datasource
+        :param data_type: data type of the resources to fetch. If None, we will iterate over all types of resources
+        :param colon: used to parse KS001 instances
+        :param pipe: used to parse KS001 instances
+        :param underscore: used to parse KS001 instances
+        :param equal: used to parse KS001 instances
+        :return: iterable of all the resources in the datasource. Each resource is identified by a tuple where:
+            - first is the path of the resource
+            - second is the KS001 name of the resource
+            - third is the data type of the resource
+        """
         return self.get_manager_of(data_type).get_all(
             datasource=self,
             path=path,
@@ -2580,6 +2595,45 @@ class IDataSource(abc.ABC):
             self.remove(from_path, from_ks001, from_data_type)
 
         other.save_at(to_path, to_ks001, to_data_type, generic_data)
+
+    def copy_datasource_to(self, destination: "IDataSource", data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '='):
+        """
+        Copy the whole self datasource into another one
+
+        :param destination: the datasource that will accepts the content of self datasource
+        :param data_type: if not None, represents the the only data type that will be transferred to the destination
+            datasource. Otherwise, all resoruces will be transferred
+        :param colon: used to parse KS001 strings
+        :param pipe: used to parse KS001 strings
+        :param underscore: used to parse KS001 strings
+        :param equal: used to parse KS001 strings
+        """
+        for from_path, from_ks001str, from_datatype in self.get_all(path=None, data_type=data_type, colon=colon, pipe=pipe, underscore=underscore, equal=equal):
+            self.transfer_to(
+                other=destination,
+                from_path=from_path, from_ks001=from_ks001str, from_data_type=from_datatype,
+                remove=False
+            )
+
+    def move_datasource_to(self, destination: "IDataSource", data_type: DataTypeStr = None, colon: str = ':', pipe: str = '|', underscore: str = '_', equal: str = '='):
+        """
+        Move the whole self datasource into another one
+
+        :param destination: the datasource that will accepts the content of self datasource
+        :param data_type: if not None, represents the the only data type that will be transferred to the destination
+            datasource. Otherwise, all resoruces will be transferred
+        :param colon: used to parse KS001 strings
+        :param pipe: used to parse KS001 strings
+        :param underscore: used to parse KS001 strings
+        :param equal: used to parse KS001 strings
+        """
+        for from_path, from_ks001str, from_datatype in self.get_all(path=None, data_type=data_type, colon=colon, pipe=pipe, underscore=underscore, equal=equal):
+            self.transfer_to(
+                other=destination,
+                from_path=from_path, from_ks001=from_ks001str, from_data_type=from_datatype,
+                remove=True
+            )
+
 
     def move_to(self, other: "IDataSource", from_path: PathStr, from_ks001: KS001Str, from_data_type: DataTypeStr,
                              to_path: PathStr = None, to_ks001: KS001Str = None):
