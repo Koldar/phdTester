@@ -17,6 +17,8 @@ from typing import Any, Iterable, Callable, Union, Dict, Tuple, List
 import pandas
 import string_utils
 
+from phdTester.exceptions import ExternalProgramFailureError
+
 
 def get_interval_ranges(levels: List[float]) -> Iterable[Tuple[float, float]]:
     """
@@ -451,21 +453,6 @@ def distinct(it: Iterable[Any]) -> Iterable[Any]:
         if v not in unique:
             unique.append(v)
             yield v
-
-
-class ExternalProgramFailureError(Exception):
-
-    def __init__(self, exit_code: int, cwd: str, program: str):
-        self.exit_code = exit_code
-        self.cwd = cwd
-        self.program = program
-
-    def __str__(self):
-        return f"""
-        CWD= {self.cwd}
-        PROGRAM = {self.program}
-        EXIT CODE = {self.exit_code}
-        """
 
 
 class ProgramExecutor(abc.ABC):
