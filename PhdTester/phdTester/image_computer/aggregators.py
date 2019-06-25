@@ -1,3 +1,4 @@
+import abc
 import logging
 import math
 import multiprocessing
@@ -17,7 +18,52 @@ import dask.array as da
 import dask.dataframe as dd
 
 
-class Count(SlottedClass, IAggregator):
+class IAggregatorSharedOperations(abc.ABC):
+    """
+    An interface useful only to share common code among all the aggregators
+    """
+
+    @abc.abstractmethod
+    def _from_pandas_specific_operation(self, concat) -> "pd.Series":
+        pass
+
+    def _with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        # fetch all function names
+        function_names = set()
+        xaxis = set()
+        for d in functions_dict:
+            function_names = function_names.union(set(d.function_names()))
+            xaxis = xaxis.union(set(d.to_dataframe().index))
+        function_names = list(function_names)
+        logging.debug(f"function names are (len={len(function_names)}) {function_names}")
+        logging.info(f"xaxis is (len={len(xaxis)})")
+        space_estimate = (len(xaxis) * len(function_names) * sys.getsizeof(np.float32(0))) / (1000 * 1000)
+        logging.info(f"generating min data frame. This operation will require ABOUT {space_estimate} MB")
+
+        # #TODO generlize the . Block code to handle MemoryError
+        # dataframe = pd.DataFrame(np.nan, columns=function_names, dtype=np.float32, index=[]).to_sparse(fill_value=np.nan, kind='block')
+        # dataframe = dataframe.reindex(xaxis)
+        # logging.info(f"the dataframe requires {sys.getsizeof(dataframe)/1000} MB")
+        # #dataframe.index = xaxis
+
+        dataframe = pd.DataFrame(np.nan, columns=function_names, index=xaxis)
+        logging.info(f"the dataframe requires {sys.getsizeof(dataframe) / 1000} MB")
+        dataframe.index = xaxis
+
+        for i, function_name in enumerate(function_names):
+            tmp = list(map(lambda x: dd.from_pandas(x.to_dataframe()[function_name], npartitions=os.cpu_count()),
+                           filter(lambda x: function_name in x.function_names(), functions_dict)))
+            concat = dd.concat(tmp)
+            series = self._from_pandas_specific_operation(concat)
+            dataframe[function_name] = series
+            logging.debug(f"done processing {i}-th function...")
+
+        result = DataFrameFunctionsDict()
+        result._dataframe = dataframe
+        return result
+
+
+class Count(SlottedClass, IAggregator, IAggregatorSharedOperations):
     """
     An aggregator which keeps track of the number of values you have called this object onto
     """
@@ -46,13 +92,13 @@ class Count(SlottedClass, IAggregator):
         return self.value
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        # see https://stackoverflow.com/a/19490199/1887602
-        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        tmp = tmp.groupby(tmp.index).count()
-        return DataFrameFunctionsDict.from_dataframe(tmp)
+        return self._with_pandas(functions_dict)
+
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).count().compute(scheduler='threads')
 
 
-class IdentityAggregator(SlottedClass, IAggregator):
+class IdentityAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     """
     A fake aggregator which actually does not aggregate anything. IOt just return the new value
     """
@@ -78,10 +124,13 @@ class IdentityAggregator(SlottedClass, IAggregator):
         return new
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        raise NotImplementedError()
+        return self._with_pandas(functions_dict)
+
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).last().compute(scheduler='threads')
 
 
-class SingleAggregator(SlottedClass, IAggregator):
+class SingleAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     """
     An aggregator that enforce the fule that you can set the y-value of an x-value once
     """
@@ -108,11 +157,14 @@ class SingleAggregator(SlottedClass, IAggregator):
         self.__value = new
         return self.__value
 
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        raise ValueError(f"{self.__class__} cannot aggregate anything!")
+
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
         raise ValueError(f"{self.__class__} cannot aggregate anything!")
 
 
-class SumAggregator(SlottedClass, IAggregator):
+class SumAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     """
     An aggregator which keeps track of the sum of all the values in a series
     """
@@ -138,13 +190,13 @@ class SumAggregator(SlottedClass, IAggregator):
         return self.__value
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        # see https://stackoverflow.com/a/19490199/1887602
-        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        tmp = tmp.groupby(tmp.index).sum()
-        return DataFrameFunctionsDict.from_dataframe(tmp)
+        return self._with_pandas(functions_dict)
+
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).sum().compute(scheduler='threads')
 
 
-class QuantizedSum(SlottedClass, IAggregator):
+class QuantizedSum(SlottedClass, IAggregator, IAggregatorSharedOperations):
     """
     An aggregator which sum all the previously fetched elements but yields not the actual sum but
     a quantized version of it.
@@ -170,24 +222,30 @@ class QuantizedSum(SlottedClass, IAggregator):
     def reset(self):
         self.__actual_sum = 0
 
-    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        raise NotImplementedError()
-
-    def get_current(self) -> float:
+    def get_quantum(self, x: float) -> float:
         for lb, ub in commons.get_interval_ranges(self.__quantization_levels):
-            if lb < self.__actual_sum <= ub:
+            if lb < x <= ub:
                 return self.__slot_value_fetcher.fetch(lb, ub, False, True)
         else:
             raise ValueError(f"""
-                cannot retrieve the quantization level of sum {self.__actual_sum}! 
+                cannot retrieve the quantization level of sum {x}! 
                 Quantization levels allowed are {list(commons.get_interval_ranges(self.__quantization_levels))}""")
+
+    def get_current(self) -> float:
+        return self.get_quantum(self.__actual_sum)
 
     def aggregate(self, new: float) -> float:
         self.__actual_sum += new
         return self.get_current()
 
+    def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+        return self._with_pandas(functions_dict)
 
-class MeanAggregator(SlottedClass, IAggregator):
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).sum().apply(lambda x: self.get_quantum(x)).compute(scheduler='threads')
+
+
+class MeanAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     __slots__ = ('n', 'mean', )
 
     def __init__(self):
@@ -215,13 +273,13 @@ class MeanAggregator(SlottedClass, IAggregator):
         return self.mean
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        # see https://stackoverflow.com/a/19490199/1887602
-        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        tmp = tmp.groupby(tmp.index).mean()
-        return DataFrameFunctionsDict.from_dataframe(tmp)
+        return self._with_pandas(functions_dict)
+
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).mean().compute(scheduler='threads')
 
 
-class SampleVarianceAggregator(SlottedClass, IAggregator):
+class SampleVarianceAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     """
     An aggregator keeping track of the sample variance
 
@@ -266,13 +324,13 @@ class SampleVarianceAggregator(SlottedClass, IAggregator):
         return self.variance
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        # see https://stackoverflow.com/a/19490199/1887602
-        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        tmp = tmp.groupby(tmp.index).var()
-        return DataFrameFunctionsDict.from_dataframe(tmp)
+        return self._with_pandas(functions_dict)
+
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).var(ddof=1).compute(scheduler='threads')
 
 
-class SampleStandardDeviationAggregator(SlottedClass, IAggregator):
+class SampleStandardDeviationAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     __slots__ = ('variance_aggregator', 'variance', )
 
     def __init__(self):
@@ -300,13 +358,13 @@ class SampleStandardDeviationAggregator(SlottedClass, IAggregator):
         return math.sqrt(self.variance)
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        # see https://stackoverflow.com/a/19490199/1887602
-        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        tmp = tmp.groupby(tmp.index).std()
-        return DataFrameFunctionsDict.from_dataframe(tmp)
+        return self._with_pandas(functions_dict)
+
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).std(ddof=1).compute(scheduler='threads')
 
 
-class PopulationVarianceAggregator(SlottedClass, IAggregator):
+class PopulationVarianceAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
 
     __slots__ = ('n', 'mean_aggregator', 'mean', 'variance')
 
@@ -345,13 +403,13 @@ class PopulationVarianceAggregator(SlottedClass, IAggregator):
         return self.variance
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        # see https://stackoverflow.com/a/19490199/1887602
-        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        tmp = tmp.groupby(tmp.index).var()
-        return DataFrameFunctionsDict.from_dataframe(tmp)
+        return self._with_pandas(functions_dict)
+
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).var(ddof=0).compute(scheduler='threads')
 
 
-class PopulationStandardDeviationAggregator(SlottedClass, IAggregator):
+class PopulationStandardDeviationAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     __slots__ = ('variance_aggregator', 'variance')
 
     def __init__(self):
@@ -379,13 +437,13 @@ class PopulationStandardDeviationAggregator(SlottedClass, IAggregator):
         return math.sqrt(self.variance)
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        # see https://stackoverflow.com/a/19490199/1887602
-        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        tmp = tmp.groupby(tmp.index).std()
-        return DataFrameFunctionsDict.from_dataframe(tmp)
+        return self._with_pandas(functions_dict)
+
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).std(ddof=0).compute(scheduler='threads')
 
 
-class PercentileAggregator(SlottedClass, IAggregator):
+class PercentileAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     __slots__ = ('__percentile', '__sequence', '__value')
 
     def __init__(self, percentile: int):
@@ -414,13 +472,13 @@ class PercentileAggregator(SlottedClass, IAggregator):
         return self.__value
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        # see https://stackoverflow.com/a/19490199/1887602
-        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        tmp = tmp.groupby(tmp.index).quantile(self.__percentile/100)
-        return DataFrameFunctionsDict.from_dataframe(tmp)
+        return self._with_pandas(functions_dict)
+
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).quantile(q=self.__percentile/100.).compute(scheduler='threads')
 
 
-class MaxAggregator(SlottedClass, IAggregator):
+class MaxAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     __slots__ = ('__value',)
 
     def __init__(self):
@@ -442,13 +500,14 @@ class MaxAggregator(SlottedClass, IAggregator):
         return self.__value
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        # see https://stackoverflow.com/a/19490199/1887602
-        tmp = pd.concat(map(lambda x: x.to_dataframe(), functions_dict), sort=False)
-        tmp = tmp.groupby(tmp.index).max()
-        return DataFrameFunctionsDict.from_dataframe(tmp)
+        return self._with_pandas(functions_dict)
+
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).max().compute(scheduler='threads')
 
 
-class MinAggregator(SlottedClass, IAggregator):
+class MinAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
+
     __slots__ = ('__value',)
 
     def __init__(self):
@@ -470,38 +529,7 @@ class MinAggregator(SlottedClass, IAggregator):
         return self.__value
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        # see https://stackoverflow.com/a/19490199/1887602
+        return self._with_pandas(functions_dict)
 
-        # fetch all function names
-        function_names = set()
-        xaxis = set()
-        # TODO create a function for this
-        for d in functions_dict:
-            function_names = function_names.union(set(d.function_names()))
-            xaxis = xaxis.union(set(d.to_dataframe().index))
-        function_names = list(function_names)
-        logging.debug(f"function names are (len={len(function_names)}) {function_names}")
-        logging.info(f"xaxis is (len={len(xaxis)})")
-        space_estimate = (len(xaxis) * len(function_names)* sys.getsizeof(np.float32(0)))/(1000*1000)
-        logging.info(f"generating min data frame. This operation will require ABOUT {space_estimate} MB")
-
-        # #TODO generlize the . Block code to handle MemoryError
-        # dataframe = pd.DataFrame(np.nan, columns=function_names, dtype=np.float32, index=[]).to_sparse(fill_value=np.nan, kind='block')
-        # dataframe = dataframe.reindex(xaxis)
-        # logging.info(f"the dataframe requires {sys.getsizeof(dataframe)/1000} MB")
-        # #dataframe.index = xaxis
-
-        dataframe = pd.DataFrame(np.nan, columns=function_names, index=xaxis)
-        logging.info(f"the dataframe requires {sys.getsizeof(dataframe)/1000} MB")
-        dataframe.index = xaxis
-
-        for i, function_name in enumerate(function_names):
-            tmp = list(map(lambda x: dd.from_pandas(x.to_dataframe()[function_name], npartitions=os.cpu_count()), filter(lambda x: function_name in x.function_names(), functions_dict)))
-            concat = dd.concat(tmp)
-            series = concat.groupby(concat.index).min().compute(scheduler='threads')
-            dataframe[function_name] = series
-            logging.debug(f"done processing {i}-th function...")
-
-        result = DataFrameFunctionsDict()
-        result._dataframe = dataframe
-        return result
+    def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
+        return concat.groupby(concat.index).min().compute(scheduler='threads')
