@@ -1544,7 +1544,7 @@ class IAggregator(abc.ABC):
     @abc.abstractmethod
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
         """
-        Perform the aggregation via pandas
+        Perform the aggregation of several functions dicts via pandas
 
 
         Perform the aggregated operation over the columns of all the input
@@ -1552,6 +1552,15 @@ class IAggregator(abc.ABC):
         :return: a single IFunctionDict where each function name is handled independently to the others.
             Within different IFunctionsDict, if a function has 2 different value for the same x, we perform
             the aggregation declared by self
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_pandas_method(self, df) -> float:
+        """
+        perform the aggregation operation on a data frame using pandas itself
+        :param df: the pandas concept whose aggregation we need to apply on.
+        :return:
         """
         pass
 

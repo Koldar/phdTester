@@ -457,10 +457,13 @@ class CheckNoInvalidNumbers(ICurvesChanger):
     def require_same_xaxis(self) -> bool:
         return False
 
+    def __cond(self, x) -> bool:
+        return np.isnan(x) | np.isinf(x)
+
     def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
         df = curves.to_dataframe()
         ddf: dd.DataFrame = dd.from_pandas(df, npartitions=os.cpu_count())
-        if ddf.where(np.isnan(ddf) | np.isinf(ddf)).any().compute().any():
+        if ddf.apply(self.__cond, axis=1).any().compute().any():
             raise ValueError(f"a cell in curves is either NaN, +infinite or -infinite!")
         return XAxisStatus.UNALTERED, curves
 
@@ -546,7 +549,7 @@ class QuantizeXAxis(ICurvesChanger):
     If a function has no points in a quantum, we will give it the value "NaN"
     """
 
-    def __init__(self, quantization_levels: List[float], merge_method: str, slot_value: "ISlotValueFetcher" = None):
+    def __init__(self, quantization_levels: List[float], merge_method: "aggregators.IAggregator", slot_value: "ISlotValueFetcher" = None):
         """
         Initialize the quantization
 
@@ -587,12 +590,14 @@ class QuantizeXAxis(ICurvesChanger):
         ))
         # groups index is composed by intervals
 
-        if self.__merge_method == 'min':
-            df = grouped.min()
-        elif self.__merge_method == 'max':
-            df = grouped.max()
-        else:
-            raise ValueError(f"invalid value {self.__merge_method}! Only min is accepted!")
+        df = self.__merge_method.get_pandas_method(grouped)
+        # TODO remove
+        # if self.__merge_method == 'min':
+        #     df = grouped.min()
+        # elif self.__merge_method == 'max':
+        #     df = grouped.max()
+        # else:
+        #     raise ValueError(f"invalid value {self.__merge_method}! Only min is accepted!")
 
         # see https://stackoverflow.com/a/30590280/1887602
         # see https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Interval.html

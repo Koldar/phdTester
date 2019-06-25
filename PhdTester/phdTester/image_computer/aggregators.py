@@ -97,6 +97,9 @@ class Count(SlottedClass, IAggregator, IAggregatorSharedOperations):
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).count().compute(scheduler='threads')
 
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.count()
+
 
 class IdentityAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     """
@@ -128,6 +131,9 @@ class IdentityAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations)
 
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).last().compute(scheduler='threads')
+
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.last()
 
 
 class SingleAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
@@ -163,6 +169,9 @@ class SingleAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
         raise ValueError(f"{self.__class__} cannot aggregate anything!")
 
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        raise ValueError(f"{self.__class__} cannot aggregate anything!")
+
 
 class SumAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     """
@@ -194,6 +203,9 @@ class SumAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
 
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).sum().compute(scheduler='threads')
+
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.sum()
 
 
 class QuantizedSum(SlottedClass, IAggregator, IAggregatorSharedOperations):
@@ -244,6 +256,9 @@ class QuantizedSum(SlottedClass, IAggregator, IAggregatorSharedOperations):
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).sum().apply(lambda x: self.get_quantum(x)).compute(scheduler='threads')
 
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return self.get_quantum(df.sum())
+
 
 class MeanAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     __slots__ = ('n', 'mean', )
@@ -277,6 +292,9 @@ class MeanAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
 
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).mean().compute(scheduler='threads')
+
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.mean()
 
 
 class SampleVarianceAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
@@ -329,6 +347,9 @@ class SampleVarianceAggregator(SlottedClass, IAggregator, IAggregatorSharedOpera
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).var(ddof=1).compute(scheduler='threads')
 
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.var(ddof=1)
+
 
 class SampleStandardDeviationAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     __slots__ = ('variance_aggregator', 'variance', )
@@ -362,6 +383,9 @@ class SampleStandardDeviationAggregator(SlottedClass, IAggregator, IAggregatorSh
 
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).std(ddof=1).compute(scheduler='threads')
+
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.std(ddof=1)
 
 
 class PopulationVarianceAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
@@ -408,6 +432,9 @@ class PopulationVarianceAggregator(SlottedClass, IAggregator, IAggregatorSharedO
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).var(ddof=0).compute(scheduler='threads')
 
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.var(ddof=0)
+
 
 class PopulationStandardDeviationAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     __slots__ = ('variance_aggregator', 'variance')
@@ -442,6 +469,9 @@ class PopulationStandardDeviationAggregator(SlottedClass, IAggregator, IAggregat
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).std(ddof=0).compute(scheduler='threads')
 
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.std(ddof=0)
+
 
 class PercentileAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     __slots__ = ('__percentile', '__sequence', '__value')
@@ -475,7 +505,18 @@ class PercentileAggregator(SlottedClass, IAggregator, IAggregatorSharedOperation
         return self._with_pandas(functions_dict)
 
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
-        return concat.groupby(concat.index).quantile(q=self.__percentile/100.).compute(scheduler='threads')
+        return concat.groupby(concat.index).quantile(q=self.percentile_as_1).compute(scheduler='threads')
+
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.quantile(q=self.percentile_as_1)
+
+    @property
+    def percentile_as_100(self) -> float:
+        return self.__percentile
+
+    @property
+    def percentile_as_1(self) -> float:
+        return self.__percentile/100.
 
 
 class MaxAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
@@ -505,6 +546,9 @@ class MaxAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).max().compute(scheduler='threads')
 
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.max()
+
 
 class MinAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
 
@@ -533,3 +577,6 @@ class MinAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
 
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
         return concat.groupby(concat.index).min().compute(scheduler='threads')
+
+    def get_pandas_method(self, df: pd.DataFrame) -> float:
+        return df.min()
