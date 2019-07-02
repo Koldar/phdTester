@@ -1632,6 +1632,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
         # force the creation of a dictionary from the pandas data structures
         csv_row_data = {k: csv_row_data[k] for k in csv_row_data.keys()}
+        # csv_outcome is populated
         csv_outcome = data_row_converter.get_csv_row(
             d=csv_row_data,
             path=csv_info.path,
@@ -1639,7 +1640,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             ks001=csv_info.ks001,
             data_type=csv_info.type,
         )
-        csv_outcome.set_options(csv_row_data)
+        # TODO remove csv_outcome.set_options(csv_row_data)
 
         x_value = get_x_value.fetch(
             factory=self,
