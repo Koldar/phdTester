@@ -1,8 +1,6 @@
 import abc
-import logging
 import os
-from typing import Any, Iterable, Tuple, List, Dict, Callable
-
+from typing import Any, Iterable, Tuple, List, Dict
 
 
 class ISingleDirectedGraph(abc.ABC):

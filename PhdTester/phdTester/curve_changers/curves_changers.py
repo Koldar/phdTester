@@ -2,7 +2,7 @@ import abc
 import logging
 import math
 import os
-from typing import Dict, Callable, Union, Tuple, Any, Optional, Set, List, Iterable
+from typing import Dict, Union, Tuple, Any, Optional, Set, List, Iterable
 
 import numpy as np
 import pandas as pd
@@ -116,58 +116,6 @@ class OverwriteFunctions(ICurvesChanger):
                 result.update_function_point(name, x, y)
 
         return OverwriteFunctions(result)
-
-
-class StandardTransformX(AbstractTransformX):
-    """
-    Transform each xaxis of each curve passed to this changes
-
-    In this curve changer, every x value of every function will be put as input inside a mapping function and a new x
-    value will be generated.
-
-    For example if you have
-    ```
-    (0,3) (1,4) (2,5)
-    ```
-
-    you can pass x_new = x_old + 3
-    to obtain:
-    ```
-    (3,3) (4,4) (5,5)
-    ```
-
-    :note: this curve changer is likely to be very slow for big IFunctionDict
-    """
-
-    def __init__(self, mapping: Callable[[str, float, float], float]):
-        """
-
-        :param mapping: the mapping function. the parameters are the following:
-         - the name of the function
-         - the x value (that will be replaced)
-         - the y value the function `name` has at value `x`
-         - the return value is the new x value
-        """
-        AbstractTransformX.__init__(self)
-        self.__mapping = mapping
-
-    def _mapping(self, function_name: str, x_value: float, y_value: float) -> float:
-        return self.__mapping(function_name, x_value, y_value)
-
-
-class StandardTransformY(AbstractTransformY):
-    """
-    Transform all y values into something else
-
-    this curve changer is slow, since it needs to scan all the values in the IFunctionDict
-    """
-
-    def __init__(self, mapping: Callable[[str, float, float], float]):
-        AbstractTransformY.__init__(self)
-        self.mapping = mapping
-
-    def _mapping(self, name: str, x: float, y: float) -> float:
-        return self.mapping(name, x, y)
 
 
 class ReplaceFirstNaNValues(ICurvesChanger):
@@ -353,7 +301,16 @@ class AddCurve(ICurvesChanger):
     Adds a curve based
     """
 
-    def __init__(self, function_name: str, func: Callable[[int, float, "IFunctionsDict"], float]):
+    class IPointsGenerator(abc.ABC):
+        """
+        Allows to generate points for creating a new curve
+        """
+
+        @abc.abstractmethod
+        def fetch(self, x: float, y: float, functions_dict: "IFunctionsDict") -> float:
+            pass
+
+    def __init__(self, function_name: str, func: "IPointsGenerator"):
         self.__function_name = function_name
         self.__func = func
 
@@ -363,7 +320,7 @@ class AddCurve(ICurvesChanger):
     def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
         new_function = pd.Series(name=self.__function_name, index=curves.xaxis())
         for i, x in enumerate(curves.xaxis_ordered()):
-            new_function[x] = self.__func(i, x, curves)
+            new_function[x] = self.__func.fetch(i, x, curves)
 
         df = curves.to_dataframe()
         df[self.__function_name] = new_function
