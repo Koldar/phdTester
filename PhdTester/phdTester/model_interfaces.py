@@ -2884,6 +2884,7 @@ class IDataRowExtrapolator(abc.ABC):
         :param test_context: the test context representing the test we're currently analyzing
         :param path: the path of the data container (e.g., csvs/) inside the data source
         :param name: the name of the data container inside the data source
+        :param ks001: ks001 instance representing the name of the data container
         :param content: the content of the dta container, in its fullness
         :param rowid: number identifying the row inside `content` we're currnetly analyzing. These numbers starts from 0
         :param row: the actual row we're analyzing

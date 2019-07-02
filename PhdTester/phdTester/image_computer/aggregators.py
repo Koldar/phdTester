@@ -164,13 +164,31 @@ class SingleAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
         return self.__value
 
     def _from_pandas_specific_operation(self, concat: "dd.DataFrame") -> "pd.Series":
-        raise ValueError(f"{self.__class__} cannot aggregate anything!")
+        # we pick the first since we know we can have only one entry per group
+
+        # check if in the given column every index appears at most 1 time
+        if not concat.groupby(concat.index).count().compute().apply(lambda x: x in [0, 1]).all():
+            raise ValueError(f"cannot aggregate values!")
+        return concat.groupby(concat.index).first().compute(scheduler='threads')
 
     def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
-        raise ValueError(f"{self.__class__} cannot aggregate anything!")
+        return self._with_pandas(functions_dict)
+
+    # def with_pandas(self, functions_dict: "List[IFunctionsDict]") -> "IFunctionsDict":
+    #     # Since we don't tolerate merging of 2 ys of the function on the same x in the previous code,
+    #     # we are SURE that every x-y-label in functions_dict is disjoint. Hence we can
+    #     # we can compress functions_dict without any merging
+    #     df: pd.DataFrame = pd.concat(map(lambda fd: fd.to_dataframe(), functions_dict), ignore_index=True)
+    #     df.sort_index(inplace=True)
+    #
+    #     return DataFrameFunctionsDict.from_dataframe(df)
 
     def get_pandas_method(self, df: pd.DataFrame) -> float:
-        raise ValueError(f"{self.__class__} cannot aggregate anything!")
+        if df.count() > 1:
+            # there is more than one element per column: we need to raise an error since this is a single aggregator
+            raise ValueError(f"{self.__class__} cannot aggregate anything!")
+        else:
+            return df.first()
 
 
 class SumAggregator(SlottedClass, IAggregator, IAggregatorSharedOperations):
