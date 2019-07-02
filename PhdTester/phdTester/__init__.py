@@ -35,7 +35,8 @@ from phdTester.model_interfaces import \
     ISubtitleGenerator, \
     IDataRowExtrapolator, ICsvRow, \
     IOptionType, \
-    ITestContextRepo
+    ITestContextRepo, \
+    IDataRowConverter
 
 
 from phdTester.specific_research_field import AbstractSpecificResearchFieldFactory
