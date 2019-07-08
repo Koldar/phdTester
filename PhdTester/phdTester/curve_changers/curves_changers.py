@@ -2,7 +2,7 @@ import abc
 import logging
 import math
 import os
-from typing import Dict, Union, Tuple, Any, Optional, Set, List, Iterable
+from typing import Dict, Callable, Union, Tuple, Any, Optional, Set, List, Iterable
 
 import numpy as np
 import pandas as pd
