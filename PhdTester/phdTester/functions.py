@@ -493,19 +493,43 @@ class DataFrameFunctionsDict(SlottedClass, IFunctionsDict):
         return self._dataframe.shape[0]
 
     def get_statistics(self, name: str, lower_percentile: float = 0.25, upper_percentile: float = 0.75) -> "BoxData":
-        result = self._dataframe[name].describe()
+        result = self._dataframe[name].describe(percentiles=[lower_percentile, 0.5, upper_percentile])
         return BoxData(
             count=result['count'],
             min=result['min'],
             max=result['max'],
-            lower_percentile=result[f'{lower_percentile * 100}%'],
-            upper_percentile=result[f'{upper_percentile * 100}%'],
+            lower_percentile=result[f'{commons.convert_percentage_number(lower_percentile)}%'],
+            upper_percentile=result[f'{commons.convert_percentage_number(upper_percentile)}%'],
             median=result['50%'],
             mean=result['mean'],
             std=result['std'],
         )
 
+    def get_all_statistics(self, lower_percentile: float = 0.25, upper_percentile: float = 0.75) -> Dict[str, "BoxData"]:
+        description = self._dataframe.describe(percentiles=[lower_percentile, 0.5, upper_percentile])
+        return {k: BoxData(
+            count=int(description[k]['count']),
+            min=description[k]['min'],
+            max=description[k]['max'],
+            median=description[k]['50%'],
+            mean=description[k]['mean'],
+            std=description[k]['std'],
+            lower_percentile=description[k][f'{commons.convert_percentage_number(lower_percentile)}%'],
+            upper_percentile=description[k][f'{commons.convert_percentage_number(upper_percentile)}%']
+        ) for k in list(description)}
+
     def replace_invalid_values(self, to_value: float):
         self._dataframe.replace([np.inf, -np.inf], np.nan, inplace=True)
         self._dataframe.fillna(value=to_value, inplace=True)
+
+    def replace_infinites_with(self, to_value: float = None, inplace: bool = False) -> "IFunctionsDict":
+        if to_value is None:
+            to_value = np.nan
+
+        if inplace:
+            self._dataframe.replace([np.inf, -np.inf], to_value, inplace=True)
+            return self
+        else:
+            return DataFrameFunctionsDict.from_dataframe(self._dataframe.replace([np.inf, -np.inf], to_value, inplace=False))
+
 

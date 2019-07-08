@@ -714,8 +714,8 @@ class StatisticsOfFunctionsPerX(ICurvesChanger):
             df_result[f"{group_name} count"] = with_infinities['count']
             df_result[f"{group_name} min"] = with_infinities['min']
             df_result[f"{group_name} max"] = with_infinities['max']
-            df_result[f"{group_name} {int(self.__lower_percentile * 100)}%"] = with_infinities[f'{int(self.__lower_percentile * 100)}%']
-            df_result[f"{group_name} {int(self.__upper_percentile * 100)}%"] = with_infinities[f'{int(self.__upper_percentile * 100)}%']
+            df_result[f"{group_name} {commons.convert_percentage_number(self.__lower_percentile)}%"] = with_infinities[f'{commons.convert_percentage_number(self.__lower_percentile)}%']
+            df_result[f"{group_name} {commons.convert_percentage_number(self.__upper_percentile)}%"] = with_infinities[f'{commons.convert_percentage_number(self.__upper_percentile)}%']
             df_result[f"{group_name} median"] = with_infinities[f'50%']
             df_result[f"{group_name} mean"] = with_infinities[f'mean']
 
@@ -729,12 +729,84 @@ class StatisticsOfFunctionsPerX(ICurvesChanger):
                 df_result[f"{group_name} count (no inf)"] = without_infinities['count']
                 df_result[f"{group_name} min (no inf)"] = without_infinities['min']
                 df_result[f"{group_name} max (no inf)"] = without_infinities['max']
-                df_result[f"{group_name} {int(self.__lower_percentile * 100)}% (no inf)"] = without_infinities[f'{int(self.__lower_percentile * 100)}%']
-                df_result[f"{group_name} {int(self.__upper_percentile* 100)}% (no inf)"] = without_infinities[f'{int(self.__upper_percentile * 100)}%']
+                df_result[f"{group_name} {commons.convert_percentage_number(self.__lower_percentile)}% (no inf)"] = without_infinities[f'{commons.convert_percentage_number(self.__lower_percentile)}%']
+                df_result[f"{group_name} {commons.convert_percentage_number(self.__upper_percentile)}% (no inf)"] = without_infinities[f'{commons.convert_percentage_number(self.__upper_percentile)}%']
                 df_result[f"{group_name} median (no inf)"] = without_infinities[f'50%']
                 df_result[f"{group_name} mean (no inf)"] = without_infinities[f'mean']
 
         return XAxisStatus.UNALTERED, result
+
+
+class StatisticsOfFunctions(ICurvesChanger):
+    """
+    A curve changer which discard all the functions in input and replace them with statistical indices (a group per function).
+    All functions will have one x value (whose semantic is void).
+
+    For instance, if the input IFunctionsDict is:
+
+    ```
+    X A  B
+    0 0  1
+    2 4  7
+    3 10 2
+    ```
+
+    The output will be:
+
+    ```
+    X A_min A_max ... B_min B_max ...
+    0 0     10        1     7
+    ```
+
+    The statistical indices generated are:
+     - min
+     - max
+     - average
+     - median
+     - lower percentile
+     - upper perncentile
+     - count
+
+    Optionally you can also automatically generates statistical indices without inifite values.
+
+    """
+
+    def __init__(self, xaxis_value: float, lower_percentile: float = 0.25, upper_percentile: float = 0.75, include_infinities: bool = False):
+        self.__lower_percentile = lower_percentile
+        self.__upper_percentile = upper_percentile
+        self.__xaxis_value = xaxis_value
+        self.__include_infinities = include_infinities
+
+    def require_same_xaxis(self) -> bool:
+        return False
+
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
+        result = DataFrameFunctionsDict.from_dataframe(pd.DataFrame())
+
+        statistics = curves.get_all_statistics(lower_percentile=self.__lower_percentile, upper_percentile=self.__upper_percentile)
+
+        for name, data in statistics.items():
+            result.update_function_point(name=f"{name} count", x=self.__xaxis_value, y=data.count)
+            result.update_function_point(name=f"{name} min", x=self.__xaxis_value, y=data.min)
+            result.update_function_point(name=f"{name} max", x=self.__xaxis_value, y=data.max)
+            result.update_function_point(name=f"{name} {commons.convert_percentage_number(self.__lower_percentile)}%", x=self.__xaxis_value, y=data.lower_percentile)
+            result.update_function_point(name=f"{name} {commons.convert_percentage_number(self.__upper_percentile)}%", x=self.__xaxis_value, y=data.upper_percentile)
+            result.update_function_point(name=f"{name} median", x=self.__xaxis_value, y=data.median)
+            result.update_function_point(name=f"{name} mean", x=self.__xaxis_value, y=data.mean)
+
+        if self.__include_infinities:
+            statistics = curves.replace_infinites_with().get_all_statistics(lower_percentile=self.__lower_percentile, upper_percentile=self.__upper_percentile)
+
+            for name, data in statistics.items():
+                result.update_function_point(name=f"{name} count (no inf)", x=self.__xaxis_value, y=data.count)
+                result.update_function_point(name=f"{name} min (no inf)", x=self.__xaxis_value, y=data.min)
+                result.update_function_point(name=f"{name} max (no inf)", x=self.__xaxis_value, y=data.max)
+                result.update_function_point(name=f"{name} {commons.convert_percentage_number(self.__lower_percentile)}% (no inf)", x=self.__xaxis_value, y=data.lower_percentile)
+                result.update_function_point(name=f"{name} {commons.convert_percentage_number(self.__upper_percentile)}% (no inf)", x=self.__xaxis_value, y=data.upper_percentile)
+                result.update_function_point(name=f"{name} median (no inf)", x=self.__xaxis_value, y=data.median)
+                result.update_function_point(name=f"{name} mean (no inf)", x=self.__xaxis_value, y=data.mean)
+
+        return XAxisStatus.SAME_X, result
 
 
 class Identity(ICurvesChanger):

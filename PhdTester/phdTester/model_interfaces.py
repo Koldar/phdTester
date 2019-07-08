@@ -1404,6 +1404,18 @@ class IFunctionsDict(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def get_all_statistics(self, lower_percentile: float = 0.25, upper_percentile: float = 0.75) -> Dict[
+        str, "BoxData"]:
+        """
+        Generates a dictionary containing, foreach function declared, statistics regarding it
+
+        :param lower_percentile: percentile you want to show. accepted values goes from 0.0 till 1.0. Default to 0.25
+        :param upper_percentile: percentile you want to show. accepted values goes from 0.0 till 1.0. Default to 0.75
+        :return: a dictionary whose keys are the functions names in self
+        """
+        pass
+
+    @abc.abstractmethod
     def replace_invalid_values(self, to_value: float):
         """
         Replace infinite and **all** NaN values with a fixed value
@@ -1413,6 +1425,17 @@ class IFunctionsDict(abc.ABC):
         even those values needs to be replaced
 
         :param to_value: the value that will replace infinite and NaN values
+        """
+        pass
+
+    @abc.abstractmethod
+    def replace_infinites_with(self, to_value: float = None, inplace: bool = False) -> "IFunctionsDict":
+        """
+        Replace inifite values with a given value
+
+        :param to_value: the value to replace infinites with. If None we will use NaN as value
+        :param inplace: if True we will replace this very structure, otherwise we will generate a copy of it
+        :return: self if `inplace` is True, a modified copy of `self` otherwise
         """
         pass
 
@@ -1451,7 +1474,7 @@ class IFunctionsDict(abc.ABC):
 
     def get_ordered_xy(self, name: str) -> Iterable[Tuple[float, float]]:
         for x in self.get_ordered_x_axis(name):
-            yield self.get_function_y(name, x)
+            yield x, self.get_function_y(name, x)
 
     def keys(self) -> Iterable[str]:
         """
@@ -1481,6 +1504,25 @@ class IFunctionsDict(abc.ABC):
 
     def __delitem__(self, key: str):
         self.remove_function(key)
+
+    def __eq__(self, other: "IFunctionsDict") -> bool:
+        """
+        Check if 2 IFunctionsDict are the same
+
+        :param other: the other function dict to check
+        :return:
+        """
+        if other is None:
+            return False
+        if set(self.function_names()) != set(other.function_names()):
+            return False
+        for name in self.function_names():
+            if set(self.get_ordered_x_axis(name)) != set(other.get_ordered_x_axis(name)):
+                return False
+            for x in self.get_ordered_x_axis(name):
+                if self.get_function_y(name, x) != other.get_function_y(name, x):
+                    return False
+        return True
 
 
 class AbstractDictionaryMergerTemplate(abc.ABC):

@@ -21,6 +21,25 @@ from phdTester.common_types import Interval
 from phdTester.exceptions import ExternalProgramFailureError
 
 
+def convert_percentage_number(decimal_percentage: float) -> str:
+    """
+    Convert a decimal percentage in a hundred percentage
+
+    the percentage generated won't have fraction part
+
+    For example:
+    ```
+    convert_percentage_number(0.1) # 10
+    convert_percentage_number(0.05) # 5
+    convert_percentage_number(1.0) # 100
+    ```
+
+    :param decimal_percentage: the decimal to convert
+    :return: the convert decimal
+    """
+    return str(int(decimal_percentage * 100))
+
+
 def get_interval_ranges(levels: List[float]) -> Iterable["Interval"]:
     """
     Generate ranges of pairs starting from a flat list.
@@ -34,6 +53,7 @@ def get_interval_ranges(levels: List[float]) -> Iterable["Interval"]:
     :return: iterable representing the ranges
     """
     yield from map(lambda pair: Interval(pair[0], pair[1], True, False), zip(levels[:-1], levels[1:]))
+
 
 def direct_call_or_method_call(obj, fallback_method_name: str, *args, **kwargs) -> Any:
     """
@@ -83,7 +103,6 @@ def direct_call_or_method_call(obj, fallback_method_name: str, *args, **kwargs) 
         return obj(*args, **kwargs)
     else:
         return getattr(obj, fallback_method_name)(*args, **kwargs)
-
 
 
 def sequential_numbers(int_stream: Iterable[float], interval: float = 1.0) -> Tuple[float, float]:
