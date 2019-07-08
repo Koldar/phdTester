@@ -506,7 +506,7 @@ class QuantizeXAxis(ICurvesChanger):
     If a function has no points in a quantum, we will give it the value "NaN"
     """
 
-    def __init__(self, quantization_levels: List[float], quantization_intervals: List["Interval"], merge_method: "aggregators.IAggregator", slot_value: "ISlotValueFetcher" = None):
+    def __init__(self, merge_method: "aggregators.IAggregator", quantization_levels: List[float] = None, quantization_intervals: List["Interval"] = None, slot_value: "ISlotValueFetcher" = None):
         """
         Initialize the quantization
 
