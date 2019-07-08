@@ -1,5 +1,6 @@
 # TODO use these type instad of str!
 import abc
+from typing import Tuple
 
 KS001Str = str
 PathStr = str
@@ -67,6 +68,9 @@ class Interval(SlottedClass):
         self.__lb_included = lb_included
         self.__ub = ub
         self.__ub_included = ub_included
+
+    def __contains__(self, item) -> bool:
+        return self.is_in(item)
 
     @property
     def lb(self) -> float:

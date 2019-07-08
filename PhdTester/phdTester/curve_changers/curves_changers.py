@@ -30,11 +30,16 @@ class CheckFunctions(ICurvesChanger):
         return False
 
     def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
-        expected_xaxis = list(self.__function_dict.xaxis())
-        actual_xaxis = list(curves.xaxis())
+        expected_xaxis = set(self.__function_dict.xaxis())
+        actual_xaxis = set(curves.xaxis())
 
         if expected_xaxis != actual_xaxis:
-            raise ValueError(f"xaxis do not match!")
+            raise ValueError(f"""xaxis do not match!
+                length expected: {len(expected_xaxis)}
+                length actual: {len(actual_xaxis)}
+                expected / actual: {expected_xaxis.difference(actual_xaxis)}
+                actual / expected: {actual_xaxis.difference(expected_xaxis)}
+            """)
 
         expected_names = set(self.__function_dict.function_names())
         actual_names = set(curves.function_names())
@@ -43,7 +48,7 @@ class CheckFunctions(ICurvesChanger):
             raise ValueError(f"function names do not match!")
 
         for name in expected_names:
-            for x in expected_xaxis:
+            for x in self.__function_dict.get_ordered_x_axis(name):
                 expected_y = self.__function_dict.get_function_y(name, x)
                 actual_y = curves.get_function_y(name, x)
                 if expected_y != actual_y:
@@ -69,6 +74,22 @@ class CheckFunctions(ICurvesChanger):
                 result.update_function_point(name, x, y)
 
         return OverwriteFunctions(result)
+
+    @classmethod
+    def from_xaxis_dict(cls, functions: Dict[str, Iterable[Tuple[float, float]]]) -> "CheckFunctions":
+        """
+        Like from_dict, but generate a new IFunctionsDict where each function may have different xaxis
+        :param functions: dictionary where ech kety represents a function name and each value represents the function points.
+            The function points are a sequence of point 2D (namely pairs) where the first value is the x and the second value
+            is the y
+        :return:
+        """
+        result = DataFrameFunctionsDict()
+        for name, series in functions.items():
+            for x, y in series:
+                result.update_function_point(name, x, y)
+
+        return CheckFunctions(result)
 
 
 class OverwriteFunctions(ICurvesChanger):
@@ -105,7 +126,7 @@ class OverwriteFunctions(ICurvesChanger):
         return OverwriteFunctions(DataFrameFunctionsDict.from_dataframe(df))
 
     @classmethod
-    def from_dict(cls, xaxis: Iterable[float], functions: Dict[str, Iterable[float]]):
+    def from_dict(cls, xaxis: Iterable[float], functions: Dict[str, Iterable[float]]) -> "OverwriteFunctions":
         result = DataFrameFunctionsDict()
         xaxis = list(xaxis)
         for name, yvalues in functions.items():
@@ -113,6 +134,22 @@ class OverwriteFunctions(ICurvesChanger):
             if len(xaxis) != len(yvalues):
                 raise ValueError(f"function {name} has {len(yvalues)} ys but the x axis is {len(xaxis)} element long!")
             for x, y in zip(xaxis, yvalues):
+                result.update_function_point(name, x, y)
+
+        return OverwriteFunctions(result)
+
+    @classmethod
+    def from_xaxis_dict(cls, functions: Dict[str, Iterable[Tuple[float, float]]]) -> "OverwriteFunctions":
+        """
+        Like from_dict, but generate a new IFunctionsDict where each function may have different xaxis
+        :param functions: dictionary where ech kety represents a function name and each value represents the function points.
+            The function points are a sequence of point 2D (namely pairs) where the first value is the x and the second value
+            is the y
+        :return:
+        """
+        result = DataFrameFunctionsDict()
+        for name, series in functions.items():
+            for x, y in series:
                 result.update_function_point(name, x, y)
 
         return OverwriteFunctions(result)
@@ -546,7 +583,7 @@ class QuantizeXAxis(ICurvesChanger):
     def alter_curves(self, curves: "IFunctionsDict") -> Tuple[XAxisStatus, "IFunctionsDict"]:
         df = curves.to_dataframe()
 
-        #fetch the closeness
+        # fetch the closeness
         if self.__quantization_levels[0].lb_included and self.__quantization_levels[0].ub_included:
             closed = 'both'
         elif not self.__quantization_levels[0].lb_included and not self.__quantization_levels[0].ub_included:
@@ -562,7 +599,7 @@ class QuantizeXAxis(ICurvesChanger):
         # see https://stackoverflow.com/a/33761120/1887602
         grouped = df.groupby(pd.cut(
             x=df.index,
-            bins=pd.IntervalIndex.from_tuples(map(lambda i: (i.lb, i.ub), self.__quantization_levels), closed=closed),
+            bins=pd.IntervalIndex.from_tuples(list(map(lambda i: (i.lb, i.ub), self.__quantization_levels)), closed=closed),
         ))
         # groups index is composed by intervals
 

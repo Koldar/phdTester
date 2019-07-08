@@ -4,13 +4,13 @@ import math
 import multiprocessing
 import os
 import sys
-from typing import Any, Iterable, List, Tuple
+from typing import Any, Iterable, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
 
 from phdTester import commons
-from phdTester.common_types import SlottedClass
+from phdTester.common_types import SlottedClass, Interval
 from phdTester.functions import DataFrameFunctionsDict
 from phdTester.model_interfaces import IAggregator, IFunctionsDict, ISlotValueFetcher
 
@@ -237,13 +237,21 @@ class QuantizedSum(SlottedClass, IAggregator, IAggregatorSharedOperations):
 
     __slots__ = ('__actual_sum', '__quantization_levels', '__slot_value_fetcher')
 
-    def __init__(self, quantization_levels: List[float], slot_value_fetcher: "ISlotValueFetcher"):
+    def __init__(self, slot_value_fetcher: "ISlotValueFetcher", quantization_levels: List[float] = None, quantization_intervals: List[Interval] = None):
         self.__actual_sum = 0
-        self.__quantization_levels = quantization_levels
         self.__slot_value_fetcher = slot_value_fetcher
 
+        if quantization_levels is not None and quantization_intervals is not None:
+            raise ValueError(f"quantization_levels and quantization_intervals are mutually exclusive!")
+        if quantization_levels is None and quantization_intervals is None:
+            raise ValueError(f"you need to specifiy either quantizartion_levels or quantization_intervals!")
+        if quantization_levels is not None:
+            self.__quantization_levels: List[Interval] = list(commons.get_interval_ranges(quantization_levels))
+        else:
+            self.__quantization_levels: List[Interval] = quantization_intervals
+
     def clone(self) -> "IAggregator":
-        result = QuantizedSum(quantization_levels=self.__quantization_levels, slot_value_fetcher=self.__slot_value_fetcher)
+        result = QuantizedSum(quantization_intervals=self.__quantization_levels, slot_value_fetcher=self.__slot_value_fetcher)
 
         result.__actual_sum = self.__actual_sum
 
@@ -253,13 +261,13 @@ class QuantizedSum(SlottedClass, IAggregator, IAggregatorSharedOperations):
         self.__actual_sum = 0
 
     def get_quantum(self, x: float) -> float:
-        for lb, ub in commons.get_interval_ranges(self.__quantization_levels):
-            if lb < x <= ub:
-                return self.__slot_value_fetcher.fetch(lb, ub, False, True)
+        for interval in self.__quantization_levels:
+            if x in interval:
+                return self.__slot_value_fetcher.fetch(interval.lb, interval.ub, interval.lb_included, interval.ub_included)
         else:
             raise ValueError(f"""
                 cannot retrieve the quantization level of sum {x}! 
-                Quantization levels allowed are {list(commons.get_interval_ranges(self.__quantization_levels))}""")
+                Quantization levels allowed are {list(self.__quantization_levels)}""")
 
     def get_current(self) -> float:
         return self.get_quantum(self.__actual_sum)

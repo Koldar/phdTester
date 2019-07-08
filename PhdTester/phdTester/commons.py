@@ -27,7 +27,7 @@ def get_interval_ranges(levels: List[float]) -> Iterable["Interval"]:
 
     ```
     list(get_interval_range(levels=[-1, 4, 7, 9, 15]))
-    # [(-1, 4), (4, 7), (7, 9), (9, 15)]
+    # Intervals [-1; 4[, [4, 7[, [7, 9[, [9, 15[
     ```
 
     :param levels: the numbers involve din the ranges to generate
@@ -35,10 +35,9 @@ def get_interval_ranges(levels: List[float]) -> Iterable["Interval"]:
     """
     yield from map(lambda pair: Interval(pair[0], pair[1], True, False), zip(levels[:-1], levels[1:]))
 
-
 def direct_call_or_method_call(obj, fallback_method_name: str, *args, **kwargs) -> Any:
     """
-    Sometimes you need to call a generic function. Sometimes it's a lambda while sometimes it's a method of an implementation
+    Sometimes you need to call a generic function. Sometimes it's a lambdan while sometimes it's a method of an implementation
     of a interface. For example:
 
     ```
@@ -73,7 +72,7 @@ def direct_call_or_method_call(obj, fallback_method_name: str, *args, **kwargs) 
     (namely `sorter.sort()`). This function does this
 
     :param obj: the obj which we need to decide if it's a function or an implementation
-    :param fallback_method_name: name of the method to call if the `obj` is actuall an implementation of an object
+    :param fallback_method_name: name of the method to call if the `obj` is not a callable
     :param args: parameters of `fallback_method_name` or `obj` (if callable)
     :param kwargs: parameters or `fallback_method_name` or `obj` (if callable)
     :return: return value of the called function
