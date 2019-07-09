@@ -55,7 +55,7 @@ def get_interval_ranges(levels: List[float]) -> Iterable["Interval"]:
     yield from map(lambda pair: Interval(pair[0], pair[1], True, False), zip(levels[:-1], levels[1:]))
 
 
-def direct_call_or_method_call(obj, fallback_method_name: str, *args, **kwargs) -> Any:
+def direct_call_or_method_call(obj, fallback_method_name: Union[str, Callable], *args, **kwargs) -> Any:
     """
     Sometimes you need to call a generic function. Sometimes it's a lambdan while sometimes it's a method of an implementation
     of a interface. For example:
@@ -89,14 +89,18 @@ def direct_call_or_method_call(obj, fallback_method_name: str, *args, **kwargs) 
     ```
 
     In `generic_sort` I need a way to either call the `sorter` directly (aka `sorter()`) or indirectly
-    (namely `sorter.sort()`). This function does this
+    (namely `sorter.sort()`). This function does this.
 
     :param obj: the obj which we need to decide if it's a function or an implementation
-    :param fallback_method_name: name of the method to call if the `obj` is not a callable
+    :param fallback_method_name: name of the method to call if the `obj` is not a callable. You can also use the method
+    reference if you want to avoid the string of the method name (e.g., `ISort.sort`).
     :param args: parameters of `fallback_method_name` or `obj` (if callable)
     :param kwargs: parameters or `fallback_method_name` or `obj` (if callable)
     :return: return value of the called function
     """
+
+    if hasattr(fallback_method_name, "__call__"):
+        fallback_method_name = fallback_method_name.__name__
 
     # see https://stackoverflow.com/a/2435074/1887602
     if hasattr(obj, "__call__"):
