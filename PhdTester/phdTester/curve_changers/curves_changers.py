@@ -357,7 +357,7 @@ class AddCurve(ICurvesChanger):
     def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
         new_function = pd.Series(name=self.__function_name, index=curves.xaxis())
         for i, x in enumerate(curves.xaxis_ordered()):
-            new_function[x] = self.__func.fetch(i, x, curves)
+            new_function[x] = commons.direct_call_or_method_call(self.__func, AddCurve.IPointsGenerator.fetch, i, x, curves)  # self.__func.fetch(i, x, curves)
 
         df = curves.to_dataframe()
         df[self.__function_name] = new_function
@@ -783,6 +783,7 @@ class StatisticsOfFunctions(ICurvesChanger):
     def alter_curves(self, curves: "IFunctionsDict") -> Tuple["XAxisStatus", "IFunctionsDict"]:
         result = DataFrameFunctionsDict.from_dataframe(pd.DataFrame())
 
+        logging.debug(f"data frame is {curves.to_dataframe()}")
         statistics = curves.get_all_statistics(lower_percentile=self.__lower_percentile, upper_percentile=self.__upper_percentile)
 
         for name, data in statistics.items():
