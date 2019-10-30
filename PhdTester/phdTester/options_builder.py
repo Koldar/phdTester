@@ -33,22 +33,44 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
     A graph which represents which allows us to understand if a test context represents a valid tests or not
     """
 
-    def is_compliant_with_test_context(self, tc: "ITestContext", vertices_to_consider: Set[str], priority_to_ignore: Priority) -> bool:
+    def __init__(self):
+        DefaultMultiDirectedHyperGraph.__init__(self)
+        self._essential_to_run_edges = []
+        """
+        List of edges which priority is ESSENTIAL_TO_RUN.
+        
+        edges still contains all the edges in the graph. This is just a sublist
+        """
+
+    def add_edge(self, source: Any, sinks: Iterable[Any], payload: "IDependencyCondition") -> "IMultiDirectedHyperGraph.HyperEdge":
+        result = IMultiDirectedHyperGraph.HyperEdge(source=source, sinks=list(sinks), payload=payload)
+        self.__edges.append(result)
+        if payload.priority() == Priority.ESSENTIAL_TO_RUN:
+            self._essential_to_run_edges.append(result)
+        return result
+
+    def is_compliant_with_test_context(self, tc: "ITestContext", vertices_to_consider: Set[str], priority_to_consider: Priority) -> bool:
         """
         Check if all the hyper edges which lays over `vertices_to_consider` have their constraint satisfied
+        We will consider only edges with the given `priority_to_consider`, not all of them
 
         This function is not a DFS, but it just iterate over a list.
 
         :param tc: the test context whose compliance we need to check
         :param vertices_to_consider:
-        :param priority_to_ignore:
+        :param priority_to_consider: the priority of the only edges to consider
         :return:
         """
 
         # we just iterate over all the hyper edges and we consider only the ones laid over the vertices to consider.
         # we ignore the hyperedges with high priority (since we assume they are true)
 
-        for hyperedge in self.edges():
+        if priority_to_consider == Priority.ESSENTIAL_TO_RUN:
+            it = self._essential_to_run_edges
+        else:
+            it = self.edges()
+
+        for hyperedge in it:
             source_name = hyperedge.source
             sinks = hyperedge.sinks
             condition = hyperedge.payload
@@ -57,7 +79,8 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
                 raise TypeError(f"edge payload needs to be instance of IDependencyCondition!")
             if not hyperedge.is_laid_on(vertices_to_consider):
                 continue
-            if hyperedge.payload.priority() >= priority_to_ignore:
+            if hyperedge.payload.priority() != priority_to_consider:
+                # edges whose priority is at least "priority_to_ignore" are ignored themselves
                 continue
 
             valid = condition.accept(
@@ -78,6 +101,9 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
     def fetches_options_to_consider(self, tc: "ITestContext", priority: Priority) -> Tuple[bool, Set[str]]:
         """
         Generates a set of option nodes ids which are the set of options relevant to the ITestContext.
+
+        We run several DFS, one for each node which has no "prioriy" marked in-edges.
+        Then we follow only edges which priority is greater or equal to "priority".
 
         We assume that the only options which have greater priority than `priority` are those which, if followed,
         generate the set of relevant options for `tc`
@@ -113,6 +139,13 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
         return True, result
 
     def __is_not_sink_of_important_edge(self, v: Any) -> bool:
+        """
+        Check if at least in-edges of this vertex is important.
+
+        If at least one in-edge is important, the vertex itself is important
+        :param v:
+        :return:
+        """
         for in_edge in self.in_edges(v):
             if in_edge.payload.priority() == Priority.IMPORTANT:
                 return False
@@ -163,7 +196,7 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
                     )
                     followed.add(sink)
 
-            #there are other cases: if valid is NOT_RELEVANT we basically ignore the condition
+            # there are other cases: if valid is NOT_RELEVANT we basically ignore the condition
 
 
 
@@ -256,6 +289,9 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
                 elif hyperedge.payload.priority() == Priority.NORMAL:
                     color = "black"
                     width = 1
+                elif hyperedge.payload.priority() == Priority.ESSENTIAL_TO_RUN:
+                    color = "blue"
+                    width = 2
                 else:
                     raise ValueError(f"invalid priority {hyperedge.payload.priority()}!")
 
@@ -436,8 +472,54 @@ class OptionBuilder(abc.ABC):
     # CONDITIONS
     #################################################
 
+    def constraint_quick_which_has_to_happen(self, option1: str, option2: str, condition: Callable[[str, Any, str, Any], bool]):
         """
-        if `option1` value is within the given set, then `option2` can't left set to None but it is required to
+        A condition that it's easy to verify and is required to generate compliant test contexts.
+        Use this constraints when you want to remove something that is for sure wrong. We will check this condition first.
+
+        Note that this required that both option1 and option2 are present, so they cannot be null. Use it only for really
+        basic options!
+
+        :param option1: name of the first option
+        :param option2: name of the second option
+        :param condition: condition that is required to stand in order for the test context to be compliant
+        :return: self
+        """
+
+        self.option_graph.add_edge(option1, [option2], conditions.NeedsToHappen(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.ESSENTIAL_TO_RUN,
+            condition=lambda list_of_tuples: condition(list_of_tuples[0][0], list_of_tuples[0][1], list_of_tuples[1][0],
+                                                       list_of_tuples[1][1]),
+        ))
+
+        return self
+
+    def constraint_quick_which_cannot_to_happen(self, option1: str, option2: str, condition: Callable[[str, Any, str, Any], bool]):
+        """
+        A condition that it's easy to verify and is required to generate compliant test contexts.
+        Use this constraints when you want to remove something that is for sure wrong. We will check this condition first.
+
+        Note that this required that both option1 and option2 are present, so they cannot be null. Use it only for really
+        basic options!
+
+        :param option1: name of the first option
+        :param option2: name of the second option
+        :param condition: condition that is required not to stand in order for the test context to be compliant
+        :return: self
+        """
+
+        self.option_graph.add_edge(option1, [option2], conditions.CantHappen(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.ESSENTIAL_TO_RUN,
+            condition=lambda list_of_tuples: condition(list_of_tuples[0][0], list_of_tuples[0][1], list_of_tuples[1][0],
+                                                       list_of_tuples[1][1]),
+        ))
+
+        return self
+
     def constraint_option_value_needs_option(self, enabling_option: str, enabling_values: List[Any], enabled_option: str) -> "OptionBuilder":
         """
         if `enabling_option` value is within the given set, then `enabled_option` can't left set to None but it is required to

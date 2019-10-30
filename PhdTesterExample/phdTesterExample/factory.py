@@ -46,7 +46,7 @@ class SortResearchField(phd.AbstractSpecificResearchFieldFactory):
             name="run",
             option_type=phd.option_types.Int(),
             ahelp="""number of runs to execute for each test context""",
-        ).option_value_needs_other_option(
+        ).constraint_option_value_needs_option(
             enabling_option="algorithm",
             enabling_values=["COMBSORT"],
             enabled_option="shrinkFactor",

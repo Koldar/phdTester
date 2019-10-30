@@ -8,7 +8,7 @@ import logging
 import multiprocessing
 import os
 import sys
-from typing import Dict, Any, Iterable, List, Tuple, Callable, Union, Optional
+from typing import Dict, Any, Iterable, List, Tuple, Callable, Union, Optional, Set, FrozenSet
 
 import pandas as pd
 import numpy as np
@@ -243,7 +243,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _generate_option_graph(self) -> OptionGraph:
+    def _generate_option_graph(self) -> "phd.OptionGraph":
         """
         the option graph allows to setup dependencies between the options of your testing framework
         In my case, I had 2 heuristic functions (e.g., A and B), each with some set of options (A had alpha and beta
@@ -392,7 +392,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def perform_test(self, tc: ITestContext, global_settings: "IGlobalSettings"):
+    def perform_test(self, tc: "ITestContext", global_settings: "IGlobalSettings"):
         pass
 
     @abc.abstractmethod
@@ -1142,6 +1142,8 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
         test_environment_labels = list(test_environment_values.keys())
         test_environment = [test_environment_values[x] for x in test_environment_labels]
 
+        option_graph_vertices_set: FrozenSet[str] = frozenset(map(lambda x: x[0], g.vertices()))
+
         for values in itertools.product(*under_test, *test_environment):
             ut = self.generate_under_testing()
             te = self.generate_environment()
@@ -1154,14 +1156,20 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
 
             test_context_to_add = self._generate_test_context(ut, te)
             logging.debug(f"checking if {test_context_to_add} is a valid test...")
+            # check if the options values are compliant with the constraint with the set priority ESSENTIAL_TO_RUN
+            if not g.is_compliant_with_test_context(test_context_to_add, option_graph_vertices_set, priority_to_consider=Priority.ESSENTIAL_TO_RUN):
+                # the test context is not complaint even with the most basic options
+                continue
+
             # fetch the options which are relevant for the ITestContext
             success, followed_vertices = g.fetches_options_to_consider(test_context_to_add, Priority.IMPORTANT)
             if not success:
-                # the test context is not compliant with even the most basic options
+                # the test context is not compliant with the options that requires you to follow constraints
                 continue
             # followed_vertices contains the set fo vertices which are semantically useful
             # check if the other constraints are satisfied
-            if not g.is_compliant_with_test_context(test_context_to_add, followed_vertices, priority_to_ignore=Priority.IMPORTANT):
+            if not g.is_compliant_with_test_context(test_context_to_add, followed_vertices, priority_to_consider=Priority.NORMAL):
+                # test context is not compliant with
                 continue
             logging.debug(f"relevant options are: {followed_vertices}")
 

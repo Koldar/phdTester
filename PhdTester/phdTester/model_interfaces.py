@@ -66,10 +66,21 @@ class IOptionType(abc.ABC):
 
 
 class Priority(enum.Enum):
+
     NORMAL = 50
+    ESSENTIAL_TO_RUN = 60
+    """
+    Constraints which, if not satisfied, will make the test context analyzed invalid.
+    """
     IMPORTANT = 100
 
-    def __ge__(self, other):
+    def __eq__(self, other) -> bool:
+        return self.value == other.value
+
+    def __ne__(self, other) -> bool:
+        return self.value != other.value
+
+    def __ge__(self, other) -> bool:
         return self.value >= other.value
 
 
