@@ -49,7 +49,7 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
             self._essential_to_run_edges.append(result)
         return result
 
-    def is_compliant_with_test_context(self, tc: "ITestContext", vertices_to_consider: Set[str], priority_to_consider: Priority) -> bool:
+    def is_compliant_with_test_context(self, tc: "ITestContext", vertices_to_consider: Set[str], priority_to_consider: Priority) -> Tuple[bool, IMultiDirectedHyperGraph.HyperEdge]:
         """
         Check if all the hyper edges which lays over `vertices_to_consider` have their constraint satisfied
         We will consider only edges with the given `priority_to_consider`, not all of them
@@ -59,7 +59,8 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
         :param tc: the test context whose compliance we need to check
         :param vertices_to_consider:
         :param priority_to_consider: the priority of the only edges to consider
-        :return:
+        :return: a tuple. the first element is the success of the function. The second (popoulate donly if the first one is false)
+            is the edge which falsified the check
         """
 
         # we just iterate over all the hyper edges and we consider only the ones laid over the vertices to consider.
@@ -94,9 +95,9 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
             )
 
             if valid == ConditionOutcome.REJECT and condition.is_required():
-                return False
+                return False, hyperedge
 
-        return True
+        return True, None
 
     def fetches_options_to_consider(self, tc: "ITestContext", priority: Priority) -> Tuple[bool, Set[str]]:
         """

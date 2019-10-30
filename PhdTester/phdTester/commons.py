@@ -21,6 +21,22 @@ from phdTester.common_types import Interval
 from phdTester.exceptions import ExternalProgramFailureError
 
 
+def implies(*terms) -> bool:
+    """
+    Logical implication
+
+    P_1 ^ P2 ^ P3 ^ ... P^N => Q
+
+    The formula is false only when P is true and Q is false
+    :param terms: at least 2 arguments. The last is considered the effect of the implication
+    :return:
+    """
+    if all(terms[:-1]) and not terms[-1]:
+        return False
+    else:
+        return True
+
+
 def convert_percentage_number(decimal_percentage: float) -> str:
     """
     Convert a decimal percentage in a hundred percentage

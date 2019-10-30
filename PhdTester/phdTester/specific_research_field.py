@@ -1157,8 +1157,13 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             test_context_to_add = self._generate_test_context(ut, te)
             logging.debug(f"checking if {test_context_to_add} is a valid test...")
             # check if the options values are compliant with the constraint with the set priority ESSENTIAL_TO_RUN
-            if not g.is_compliant_with_test_context(test_context_to_add, option_graph_vertices_set, priority_to_consider=Priority.ESSENTIAL_TO_RUN):
+            success, hyperedge = g.is_compliant_with_test_context(
+                test_context_to_add,
+                option_graph_vertices_set,
+                priority_to_consider=Priority.ESSENTIAL_TO_RUN)
+            if not success:
                 # the test context is not complaint even with the most basic options
+                logging.warning(f"SKIPPED since it doesn't satisfy the ESSENTIAL TO RUN {hyperedge}")
                 continue
 
             # fetch the options which are relevant for the ITestContext
@@ -1168,8 +1173,10 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 continue
             # followed_vertices contains the set fo vertices which are semantically useful
             # check if the other constraints are satisfied
-            if not g.is_compliant_with_test_context(test_context_to_add, followed_vertices, priority_to_consider=Priority.NORMAL):
+            success, hyperedge = g.is_compliant_with_test_context(test_context_to_add, followed_vertices, priority_to_consider=Priority.NORMAL)
+            if not success:
                 # test context is not compliant with
+                logging.warning(f"SKIPPED since it doesn't satisfy the NORMAL {hyperedge}")
                 continue
             logging.debug(f"relevant options are: {followed_vertices}")
 
