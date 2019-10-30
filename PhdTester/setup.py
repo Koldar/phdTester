@@ -3,7 +3,7 @@ from typing import Iterable
 import semantic_version
 from setuptools import setup, find_packages
 
-VERSION = "0.7-alpha"
+VERSION = "0.8-alpha"
 
 
 def load_readme() -> str:
@@ -13,7 +13,6 @@ def load_readme() -> str:
 
 def load_requirements() -> Iterable[str]:
     useless = [
-        "ansicolors",
         "bleach",
         "certifi",
         "chardet",

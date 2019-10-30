@@ -6,8 +6,8 @@ from typing import Iterable, List, Any, Tuple, Dict, Callable
 import numpy as np
 import pandas as pd
 import string_utils
-from colours import colour
 
+from blessings import Terminal
 from phdTester.ks001.ks001 import KS001
 from phdTester import commons
 from phdTester.common_types import PathStr, DataTypeStr, KS001Str
@@ -32,13 +32,17 @@ class PhdFormatter(logging.Formatter):
         super().__init__(fmt, datefmt, style)
         self.__limit_filename_size = limit_filename_size
         self.__colors = colors_dict
+
+
+        self.__terminal = Terminal()
+
         if self.__colors is None:
             self.__colors = {}
-            self.__colors['DEBUG'] = functools.partial(colors.color, fg='cyan')
+            self.__colors['DEBUG'] = self.__terminal.cyan
             self.__colors['INFO'] = self.__standard_print
-            self.__colors['WARN'] = functools.partial(colors.color, fg='yellow')
-            self.__colors['ERROR'] = functools.partial(colors.color, fg='red')
-            self.__colors['CRITICAL'] = functools.partial(colors.color, fg='red')
+            self.__colors['WARN'] = self.__terminal.yellow
+            self.__colors['ERROR'] = self.__terminal.red
+            self.__colors['CRITICAL'] = self.__terminal.red
 
     def __standard_print(self, x: str) -> str:
         return x
