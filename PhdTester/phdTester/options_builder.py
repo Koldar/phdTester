@@ -151,6 +151,8 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
                 return False
             elif in_edge.payload.priority() == Priority.NORMAL:
                 pass
+            elif in_edge.payload.priority() == Priority.ESSENTIAL_TO_RUN:
+                pass
             else:
                 raise ValueError(f"invalid priority {in_edge.payload.priority()}!")
         return True
