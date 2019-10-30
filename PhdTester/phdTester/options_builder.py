@@ -436,9 +436,11 @@ class OptionBuilder(abc.ABC):
     # CONDITIONS
     #################################################
 
-    def option_value_needs_other_option(self, enabling_option: str, enabling_values: List[Any], enabled_option: str) -> "OptionBuilder":
         """
         if `option1` value is within the given set, then `option2` can't left set to None but it is required to
+    def constraint_option_value_needs_option(self, enabling_option: str, enabling_values: List[Any], enabled_option: str) -> "OptionBuilder":
+        """
+        if `enabling_option` value is within the given set, then `enabled_option` can't left set to None but it is required to
         be set as well. `None` cannot be inside `enabling_values`.
         If `option1` value is not in the given set, then everything is fine.
 
@@ -462,8 +464,8 @@ class OptionBuilder(abc.ABC):
         ))
         return self
 
-    def option_can_be_used_only_when_other_satisfy(self, option1_name: str, option2_name: str,
-                                                   condition: Callable[[Any, Any], bool]) -> "OptionBuilder":
+    def constraint_option_usable_only_when_other_satisfy(self, option1_name: str, option2_name: str,
+                                                         condition: Callable[[Any, Any], bool]) -> "OptionBuilder":
         """
         Express the fact that there is a mandatory relationship between the 2 option values.
 
@@ -485,7 +487,7 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    def constraint_needs_to_happen(self, options_involved: List[str], condition: Callable[[List[Tuple[str, Any]]], bool]) -> "OptionBuilder":
+    def constraint_multiple_needs_to_happen(self, options_involved: List[str], condition: Callable[[List[Tuple[str, Any]]], bool]) -> "OptionBuilder":
         """
         Represents a contraint between several options which needs to be verified in order for the ITestContext
         to be compliant. The constraints won't be used to discover relevant options in the OptionGraph
@@ -504,7 +506,7 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    def constraint_cant_happen(self, options_involved: List[str], condition: Callable[[List[Tuple[str, Any]]], bool]):
+    def constraint_multiple_cant_happen(self, options_involved: List[str], condition: Callable[[List[Tuple[str, Any]]], bool]):
         """
         Represents a contraint between several options which can't happen if you want the ITestContext
         to be compliant. The constraints won't be used to discover relevant options in the OptionGraph
@@ -523,7 +525,48 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    def prohibit_combination(self, options_involved: Dict[str, Any]) -> "OptionBuilder":
+    def constraint_needs_to_happen(self, option1: str, option2: str, condition: Callable[[str, Any, str, Any], bool]):
+        """
+        Represents a contraint between 2 options which needs to be verified in order for the ITestContext
+        to be compliant. The constraints won't be used to discover relevant options in the OptionGraph
+
+        :param option1: name of the first option
+        :param option2: name of the second options
+        :param condition: condition that needs to be satisfied in order for a test to be compliant
+        :return: self
+        """
+
+        self.option_graph.add_edge(option1, [option2], conditions.NeedsToHappen(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.NORMAL,
+            condition=lambda list_of_tuples: condition(list_of_tuples[0][0], list_of_tuples[0][1], list_of_tuples[1][0], list_of_tuples[1][1]),
+        ))
+
+        return self
+
+    def constraint_cannot_happen(self, option1: str, option2: str, condition: Callable[[str, Any, str, Any], bool]):
+        """
+        Represents a contraint between several options which can't happen if you want the ITestContext
+        to be compliant. The constraints won't be used to discover relevant options in the OptionGraph
+
+        :param option1: name of the first option
+        :param option2: name of the second options
+        :param condition: condition that needs to be falsified in order for a test to be compliant
+        :return: self
+        """
+
+        self.option_graph.add_edge(option1, [option2], conditions.CantHappen(
+            is_required=True,
+            enable_sink_visit=False,
+            priority=Priority.NORMAL,
+            condition=lambda list_of_tuples: condition(list_of_tuples[0][0], list_of_tuples[0][1], list_of_tuples[1][0],
+                                                       list_of_tuples[1][1]),
+        ))
+
+        return self
+
+    def constraint_prohibit_combination(self, options_involved: Dict[str, Any]) -> "OptionBuilder":
         """
         Remove a certain combination of values. If a test context has such combination of option vlaues,
         it's not compliant
@@ -545,7 +588,7 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    def ensure_combination(self, options_involved: Dict[str, Any]) -> "OptionBuilder":
+    def constraint_ensure_combination(self, options_involved: Dict[str, Any]) -> "OptionBuilder":
         """
         Assert that a certain combination of values needs to **always** happen.
         If a test context do not have such combination of option values,
@@ -568,7 +611,7 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    def prohibits_independent_constraints(self, options_involved: Dict[str, "ITestContextMaskOption"]) -> "OptionBuilder":
+    def constraint_prohibits_independent_constraints(self, options_involved: Dict[str, "ITestContextMaskOption"]) -> "OptionBuilder":
         """
         Declare that the ITestContext under analysis is uncompliant when all the conditions are satisfied
 
@@ -579,7 +622,7 @@ class OptionBuilder(abc.ABC):
         If you need to say: "test context is valid when option X is alpha and option Y is not beta" this is your
         function (notice how the 2 conditions are **independent** one from another.
         If you need to say "test context is valid when option X plus option Y is less than option Z" this
-        function won't cut for you. Use :constraint_cant_happen: instead.
+        function won't cut for you. Use :constraint_multiple_cant_happen: instead.
 
         :param options_involved: a dictionary of options. Keys of the dicitonary are the option names. Each
         option is associated to a condition, returning true if the condition is satisfied, false otherwise
@@ -598,7 +641,7 @@ class OptionBuilder(abc.ABC):
 
         return self
 
-    def ensure_independent_constraints(self, options_involved: Dict[str, "ISimpleTestContextMaskOption"]) -> "OptionBuilder":
+    def constraint_ensure_independent_constraints(self, options_involved: Dict[str, "ISimpleTestContextMaskOption"]) -> "OptionBuilder":
         """
         Declare that the ITestContext under analysis is uncompliant when even one of the conditions is not satisfied
 
@@ -609,7 +652,7 @@ class OptionBuilder(abc.ABC):
         If you need to say: "test context is valid when option X is alpha and option Y is not beta" this is your
         function (notice how the 2 conditions are **independent** one from another.
         If you need to say "test context is valid when option X plus option Y is less than option Z" this
-        function won't cut for you. Use :constraint_cant_happen: instead.
+        function won't cut for you. Use :constraint_multiple_cant_happen: instead.
 
         :param options_involved: a dictionary of options. Keys of the dicitonary are the option names. Each
         option is associated to a condition, returning true if the condition is satisfied, false otherwise
