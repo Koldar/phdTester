@@ -9,6 +9,10 @@ RegexStr = str
 """
 A string representing a python3.6 regular expression
 """
+PythonEvalStr = str
+"""
+A python string which can be inject into eval function
+"""
 
 
 class SlottedClass(object):
