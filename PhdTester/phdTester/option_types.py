@@ -34,6 +34,21 @@ class Str(IOptionType):
         return str(value)
 
 
+class PathStr(IOptionType):
+    """
+    An option representing a path in the file system
+    """
+
+    def __init__(self):
+        IOptionType.__init__(self)
+
+    def to_argparse(self) -> type:
+        return str
+
+    def convert(self, value: Any) -> Any:
+        return str(value)
+
+
 class Float(IOptionType):
     """
     An option represents a decimal value
