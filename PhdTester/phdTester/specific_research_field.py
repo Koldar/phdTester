@@ -554,7 +554,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 # this tests need to be sorted by test environment. In this way for every test enviroment we test in pack
                 # all the algorithms under test
                 for r in commons.distinct(self._generate_test_contexts_from_option_graph(self.__option_graph, self.__under_test_dict_values, self.__test_environment_dict_values)):
-                    logging.critical(f"new test! {r}")
+                    logging.critical(f"new test! {r} (type is {type(r)})or with ut and te UT={r.ut}, TE={r.te}")
                     self.__tests_repository.append(r)
                 logging.critical(f"DONE with {len(self.tests_repository)} tests")
 
@@ -1184,6 +1184,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
             for useless in set(test_context_to_add.options()) - followed_vertices:
                 test_context_to_add.set_option(useless, None)
 
+            logging.debug(f"test context to add is {test_context_to_add}")
             yield test_context_to_add
 
     def generate_plot_from_template(self,
