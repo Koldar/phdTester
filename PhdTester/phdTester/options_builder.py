@@ -44,7 +44,7 @@ class OptionGraph(DefaultMultiDirectedHyperGraph):
 
     def add_edge(self, source: Any, sinks: Iterable[Any], payload: "IDependencyCondition") -> "IMultiDirectedHyperGraph.HyperEdge":
         result = IMultiDirectedHyperGraph.HyperEdge(source=source, sinks=list(sinks), payload=payload)
-        self.__edges.append(result)
+        self._edges.append(result)
         if payload.priority() == Priority.ESSENTIAL_TO_RUN:
             self._essential_to_run_edges.append(result)
         return result

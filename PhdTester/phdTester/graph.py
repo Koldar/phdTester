@@ -720,8 +720,8 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
     next_id = 0
 
     def __init__(self):
-        self.__vertices: Dict[Any, Any] = {}
-        self.__edges: List["IMultiDirectedHyperGraph.HyperEdge"] = []
+        self._vertices: Dict[Any, Any] = {}
+        self._edges: List["IMultiDirectedHyperGraph.HyperEdge"] = []
         """
         List of hyper edges.
         """
@@ -739,35 +739,35 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
     def add_vertex(self, payload, aid: Any = None) -> Any:
         if aid is None:
             aid = DefaultMultiDirectedHyperGraph._generate_vertex_id()
-        if aid in self.__vertices:
+        if aid in self._vertices:
             raise KeyError(f"key {aid} is already an id of a vertex in this hypergraph!")
-        self.__vertices[aid] = payload
+        self._vertices[aid] = payload
         return aid
 
     def get_vertex(self, aid: Any) -> Any:
-        return self.__vertices[aid]
+        return self._vertices[aid]
 
     def contains_vertex(self, aid: Any) -> bool:
-        return aid in self.__vertices
+        return aid in self._vertices
 
     def vertices(self) -> Iterable[Tuple[Any, Any]]:
-        yield from self.__vertices.items()
+        yield from self._vertices.items()
 
     def size(self) -> int:
-        return len(self.__vertices)
+        return len(self._vertices)
 
     def add_edge(self, source: Any, sinks: Iterable[Any], payload) -> "IMultiDirectedHyperGraph.HyperEdge":
         result = IMultiDirectedHyperGraph.HyperEdge(source=source, sinks=list(sinks), payload=payload)
-        self.__edges.append(result)
+        self._edges.append(result)
         return result
 
     def get_edge(self, source: Any, sinks: Iterable[Any]) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
-        for edge in self.__edges:
+        for edge in self._edges:
             if edge.is_compliant(source, sinks):
                 yield edge
 
     def contains_edge(self, source: Any, sinks: Iterable[Any]) -> bool:
-        for edge in self.__edges:
+        for edge in self._edges:
             if edge.is_compliant(source, sinks):
                 return True
         else:
@@ -775,7 +775,7 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
 
     def successors(self, source: Any) -> Iterable[Any]:
         visited = set()
-        for edge in self.__edges:
+        for edge in self._edges:
             if edge.source == source:
                 for sink in edge.sinks:
                     if sink not in visited:
@@ -784,21 +784,21 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
 
     def predecessors(self, sink: Any) -> Iterable[Any]:
         visited = set()
-        for edge in self.__edges:
+        for edge in self._edges:
             if sink in edge.sinks and edge.source not in visited:
                 visited.add(sink)
                 yield edge.source
 
     def edges(self) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
-        yield from self.__edges
+        yield from self._edges
 
     def out_edges(self, source: Any) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
-        for edge in self.__edges:
+        for edge in self._edges:
             if edge.source == source:
                 yield edge
 
     def in_edges(self, source: Any) -> Iterable[IMultiDirectedHyperGraph.HyperEdge]:
-        for edge in self.__edges:
+        for edge in self._edges:
             if source in edge.sinks:
                 yield edge
 
@@ -809,17 +809,17 @@ class DefaultMultiDirectedHyperGraph(IMultiDirectedHyperGraph):
             dotfile.write("\trankdir=\"TB\";\n")
 
             # add all edges
-            for index, hyperedge in enumerate(self.__edges):
+            for index, hyperedge in enumerate(self._edges):
                 dotfile.write(f"\tN{hyperedge.source} -> HE{index:04d} [arrowhead=\"none\"];\n")
                 for sink in hyperedge.sinks:
                     dotfile.write(f"\tHE{index:04d} -> N{sink};\n")
 
             # add all vertices  of graph
-            for index, vertex in self.__vertices.items():
+            for index, vertex in self._vertices.items():
                 dotfile.write(f"\tN{index} [label=\"{index}\"];\n")
 
             # add all vertices of hyper edges
-            for index, hyperedge in enumerate(self.__edges):
+            for index, hyperedge in enumerate(self._edges):
                 dotfile.write(f"\tHE{index:04d} [shape=\"point\", label=\"\"];\n")
 
             dotfile.write("}\n")
