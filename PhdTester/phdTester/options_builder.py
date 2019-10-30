@@ -472,7 +472,7 @@ class OptionBuilder(abc.ABC):
     # CONDITIONS
     #################################################
 
-    def constraint_quick_which_has_to_happen(self, option1: str, option2: str, condition: Callable[[str, Any, str, Any], bool]):
+    def constraint_quick_which_has_to_happen(self, option1: str, option2: str, condition: Callable[[Any, Any], bool]):
         """
         A condition that it's easy to verify and is required to generate compliant test contexts.
         Use this constraints when you want to remove something that is for sure wrong. We will check this condition first.
@@ -490,8 +490,7 @@ class OptionBuilder(abc.ABC):
             is_required=True,
             enable_sink_visit=False,
             priority=Priority.ESSENTIAL_TO_RUN,
-            condition=lambda list_of_tuples: condition(list_of_tuples[0][0], list_of_tuples[0][1], list_of_tuples[1][0],
-                                                       list_of_tuples[1][1]),
+            condition=lambda list_of_tuples: condition(list_of_tuples[0][1], list_of_tuples[1][1]),
         ))
 
         return self
