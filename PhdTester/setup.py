@@ -41,6 +41,7 @@ def load_requirements() -> Iterable[str]:
 
     with open("requirements.txt", "r") as fh:
         for l in fh.readlines():
+            print(f"handling {l}")
             l = l.strip()
             name = l.split("==")[0]
             version = semantic_version.Version.coerce(l.split("==")[1])

@@ -6,7 +6,7 @@ from typing import Iterable, List, Any, Tuple, Dict, Callable
 import numpy as np
 import pandas as pd
 import string_utils
-from colors import colors
+from colours import colour
 
 from phdTester.ks001.ks001 import KS001
 from phdTester import commons
