@@ -127,6 +127,23 @@ class NeedsToHappen(AbstractDependencyCondition):
         return ConditionOutcome.SUCCESS if valid else ConditionOutcome.REJECT
 
 
+class NeedsToHappenWithContext(AbstractDependencyCondition):
+
+    def __init__(self, enable_sink_visit: bool, is_required: bool, priority: Priority,
+                 condition: Callable[[List[Tuple[str, Any]], Any], bool], **condition_args):
+        AbstractDependencyCondition.__init__(self, enable_sink_visit, is_required, priority)
+        self.__condition = condition
+        self.__condition_args = condition_args
+
+    def accept(self, graph: "IMultiDirectedHyperGraph", tc: "ITestContext", source_name: str,
+               source_option: "AbstractOptionNode", source_value: Any,
+               sinks: List[Tuple[str, "AbstractOptionNode", Any]]) -> ConditionOutcome:
+        values = [(source_name, source_value)]
+        values.extend([(x[0], x[2]) for x in sinks])
+        valid = self.__condition(values, **self.__condition_args)
+        return ConditionOutcome.SUCCESS if valid else ConditionOutcome.REJECT
+
+
 class RequiresMapping(AbstractDependencyCondition):
     """
     The dependency is compliant when all endpoints of the hyperedge are not null and when the sink values are equal to

@@ -28,6 +28,10 @@ def _options_all_compliant_with_masks(name_values: List[Tuple[str, Any]],
     return True
 
 
+def _options_constraint_quick_which_has_to_happen(name_values: List[Tuple[str, Any]], internal_condition: Callable[[Any, Any], bool]) -> bool:
+    return internal_condition(name_values[0][1], name_values[1][1])
+
+
 class OptionGraph(DefaultMultiDirectedHyperGraph):
     """
     A graph which represents which allows us to understand if a test context represents a valid tests or not
@@ -489,16 +493,17 @@ class OptionBuilder(abc.ABC):
         :return: self
         """
 
-        self.option_graph.add_edge(option1, [option2], conditions.NeedsToHappen(
+        self.option_graph.add_edge(option1, [option2], conditions.NeedsToHappenWithContext(
             is_required=True,
             enable_sink_visit=False,
             priority=Priority.ESSENTIAL_TO_RUN,
-            condition=lambda list_of_tuples: condition(list_of_tuples[0][1], list_of_tuples[1][1]),
+            condition=_options_constraint_quick_which_has_to_happen,
+            internal_condition=condition,
         ))
 
         return self
 
-    def constraint_quick_which_cannot_to_happen(self, option1: str, option2: str, condition: Callable[[str, Any, str, Any], bool]):
+    def constraint_quick_which_cannot_to_happen(self, option1: str, option2: str, condition: Callable[[Any, Any], bool]):
         """
         A condition that it's easy to verify and is required to generate compliant test contexts.
         Use this constraints when you want to remove something that is for sure wrong. We will check this condition first.
