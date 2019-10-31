@@ -515,10 +515,10 @@ class SortAll(ICurvesChanger):
     def require_same_xaxis(self) -> bool:
         return True
 
-    def alter_curves(self, curves: "IFunctionsDict") -> "IFunctionsDict":
+    def alter_curves(self, curves: "IFunctionsDict") -> Tuple[XAxisStatus, "IFunctionsDict"]:
         df = curves.to_dataframe()
         df = df.apply(lambda x: x.sort_values().values)
-        return DataFrameFunctionsDict.from_dataframe(df)
+        return XAxisStatus.SAME_X, DataFrameFunctionsDict.from_dataframe(df)
 
 
 class QuantizeXAxis(ICurvesChanger):
