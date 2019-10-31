@@ -460,6 +460,18 @@ def get_file_extension(f: str) -> str:
 
 
 def list_with_extension(path: str, extension: str) -> List[str]:
+    """
+    List the files in a directory (not recursively) which satisfy a certain extension
+
+    example
+    -------
+
+    list_with_extension("my/awesome/dir", "csv") will yield "a.csv" and  "b.csv"
+
+    :param path: the path whose children files we need to look at
+    :param extension: the extension involved
+    :return: a list of children files. The files returned will be just the filesnames, without the `path`.
+    """
     return [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)) and get_file_extension(f) == extension]
 
 
