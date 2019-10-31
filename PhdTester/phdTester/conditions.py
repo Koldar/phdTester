@@ -109,6 +109,28 @@ class CantHappen(AbstractDependencyCondition):
         return ConditionOutcome.REJECT if valid else ConditionOutcome.SUCCESS
 
 
+class CantHappenWithContext(AbstractDependencyCondition):
+    """
+    Like CantHappen, but the condition input requires some additional variables only known a construction time.
+
+    You can view this class as a general case of needsToHappen
+    """
+
+    def __init__(self, enable_sink_visit: bool, is_required: bool, priority: Priority,
+                 condition: Callable[[List[Tuple[str, Any]], Any], bool], **condition_args):
+        AbstractDependencyCondition.__init__(self, enable_sink_visit, is_required, priority)
+        self.__condition = condition
+        self.__condition_args = condition_args
+
+    def accept(self, graph: "IMultiDirectedHyperGraph", tc: "ITestContext", source_name: str,
+               source_option: "AbstractOptionNode", source_value: Any,
+               sinks: List[Tuple[str, "AbstractOptionNode", Any]]) -> ConditionOutcome:
+        values = [(source_name, source_value)]
+        values.extend([(x[0], x[2]) for x in sinks])
+        valid = self.__condition(values, **self.__condition_args)
+        return ConditionOutcome.REJECT if valid else ConditionOutcome.SUCCESS
+
+
 class NeedsToHappen(AbstractDependencyCondition):
     """
     Says that a test context is required to satisfy this condition to be compliant
@@ -128,6 +150,11 @@ class NeedsToHappen(AbstractDependencyCondition):
 
 
 class NeedsToHappenWithContext(AbstractDependencyCondition):
+    """
+    Like NeedsToHappen, but the condition input requires some additional variables only known a construction time.
+
+    You can view this class as a general case of needsToHappen
+    """
 
     def __init__(self, enable_sink_visit: bool, is_required: bool, priority: Priority,
                  condition: Callable[[List[Tuple[str, Any]], Any], bool], **condition_args):

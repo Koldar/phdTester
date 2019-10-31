@@ -32,6 +32,10 @@ def _options_constraint_quick_which_has_to_happen(name_values: List[Tuple[str, A
     return internal_condition(name_values[0][1], name_values[1][1])
 
 
+def _options_constraint_quick_which_cannot_happen(name_values: List[Tuple[str, Any]], internal_condition: Callable[[Any, Any], bool]) -> bool:
+    return internal_condition(name_values[0][1], name_values[1][1])
+
+
 class OptionGraph(DefaultMultiDirectedHyperGraph):
     """
     A graph which represents which allows us to understand if a test context represents a valid tests or not
@@ -517,12 +521,13 @@ class OptionBuilder(abc.ABC):
         :return: self
         """
 
-        self.option_graph.add_edge(option1, [option2], conditions.CantHappen(
+        self.option_graph.add_edge(option1, [option2], conditions.CantHappenWithContext(
             is_required=True,
             enable_sink_visit=False,
             priority=Priority.ESSENTIAL_TO_RUN,
-            condition=lambda list_of_tuples: condition(list_of_tuples[0][0], list_of_tuples[0][1], list_of_tuples[1][0],
-                                                       list_of_tuples[1][1]),
+            condition=_options_constraint_quick_which_cannot_happen,
+
+            internal_condition=condition,
         ))
 
         return self
