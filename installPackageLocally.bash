@@ -44,7 +44,4 @@ function createDist {
 
 createDist ${PROJECT_LOCATION} venv
 whlFile=$(ls ${PROJECT_LOCATION}/dist/ | grep whl | head -n 1)
-
-echo "wheel file to install is ${whlFile}"
-sudo pip3 install ${PROJECT_LOCATION}/dist/phd_tester-0.4a0-py3-none-any.whl
 echo "DONE!!!!"
