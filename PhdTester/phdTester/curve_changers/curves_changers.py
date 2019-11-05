@@ -502,6 +502,19 @@ class RemoveSmallFunction(SlottedClass, ICurvesChanger):
         return XAxisStatus.UNALTERED, curves
 
 
+class MultiplyY(AbstractTransformY):
+    """
+    Multiply each y of each function with a number
+    """
+
+    def _mapping(self, name: str, x: float, y: float) -> float:
+        return self.__v * y
+
+    def __init__(self, v: float):
+        ICurvesChanger.__init__(self)
+        self.__v = v
+
+
 class SortAll(ICurvesChanger):
     """
     The changer picks all the curves and just sort each cof them monotonically independently
