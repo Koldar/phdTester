@@ -567,7 +567,7 @@ class AbstractSpecificResearchFieldFactory(abc.ABC):
                 for i, tc in enumerate(sorted(self.tests_repository, key=lambda t: t.te.get_order_key())):
                     percentage = (i*100.)/len(self.tests_repository)
                     logging.critical("performing {} over {} ({}%)".format(i, len(self.tests_repository), percentage))
-                    logging.critical(f"test environment is {tc.te}")
+                    logging.critical(f"test is {tc}")
                     self.perform_test(tc, self.__global_settings)
                 self.end_perform_test(self.under_test_dict_values, self.test_environment_dict_values, self.__global_settings)
 
