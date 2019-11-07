@@ -21,6 +21,23 @@ from phdTester.common_types import Interval
 from phdTester.exceptions import ExternalProgramFailureError
 
 
+def gimplies(anteponents: Iterable[Any], postnents: Iterable[Any]) -> bool:
+    """
+        Logical implication
+
+        P_1 ^ P2 ^ P3 ^ ... P^N => Q1 ^ Q2 ^ Q3 ^ ... ^ QM
+
+        The formula is false only when P is true and Q is false
+        :param anteponents: the left hand side of the implication. Implicitly concatenatied by "and"
+        :param postnents: the right hand side of the implication. Implicitly concatenated by "and"
+        :return:
+        """
+    if all(anteponents) and not all(postnents):
+        return False
+    else:
+        return True
+
+
 def implies(*terms) -> bool:
     """
     Logical implication
