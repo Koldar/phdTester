@@ -1,4 +1,5 @@
 PROJECT_LOCATION=$1
+PIP="pip3"
 
 
 function installIn {
@@ -6,10 +7,18 @@ function installIn {
 	local wheelFile=$2
 	local venvLocation=$3
 	source ${pythonProject}/${venvLocation}/bin/activate
-	sudo pip install ${wheelFile}
+	sudo ${PIP} install ${wheelFile}
 	deactivate
 }
 
+function uninstall {
+	local pythonPackage=$1
+	if test `${PIP} freeze | grep ${pythonPackage} | wc -l` -gt 0
+	then
+		echo "Uninstall ${pythonPackage}..."
+		sudo ${PIP} uninstall --yes ${pythonPackage}
+	fi
+}
 
 # Create dist file
 # @param 1 path of the python project location
@@ -24,11 +33,11 @@ function createDist {
 	source ${venvLocation}/bin/activate
 
 	echo "Installing setuptools in venv"
-	pip install setuptools
+	${PIP} install setuptools
 	echo "Installing wheel in venv"
-	pip install wheel
+	${PIP} install wheel
 	echo "Installing twine in venv"
-	pip install twine
+	${PIP} install twine
 	rm -rfv dist/
 	echo "python version is"
 	python --version
@@ -42,6 +51,15 @@ function createDist {
 #pip install --user --upgrade setuptools wheel
 #pip install --user --upgrade twine
 
+# create wheel file
 createDist ${PROJECT_LOCATION} venv
-whlFile=$(ls ${PROJECT_LOCATION}/dist/ | grep whl | head -n 1)
+
+#uninstall package phdTester, if present
+uninstall "phd-tester"
+
+# install the package
+whlFile=dist/$(ls --reverse dist/ | grep whl | head -n 1)
+
+echo "Install ${whlFile}..."
+sudo ${PIP} install ${whlFile}
 echo "DONE!!!!"

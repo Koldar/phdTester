@@ -35,6 +35,17 @@ You may need to do this other step as well:
 pip install dask[dataframe] --upgrade
 ```
 
+Development Installation
+========================
+
+Assuming virtual env `venv` folder is inside `PhdTester`.
+If you want to locally use the project, go to the pycharm project folder (i.e., `PhdTester`):
+
+```
+cd PhdTester
+../installPackageLocally.bash PhdTester
+```
+
 Requirements
 ============
 
