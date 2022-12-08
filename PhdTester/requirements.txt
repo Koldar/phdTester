@@ -25,5 +25,5 @@ semantic-version==2.8.5
 six==1.15.0
 tqdm==4.50.2
 twine==3.2.0
-urllib3==1.25.11
+urllib3==1.26.5
 webencodings==0.5.1
